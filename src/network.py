@@ -3,11 +3,9 @@ Generate network with given size (nwsize), node-event ratio (node_event_ratio),
 number of event types (num_eventtypes), event rate skew (eventskew)-
 """
 
-import pickle
 import numpy as np
 import random
 from Node import Node
-import argparse
 import pandas as pd
 
 #sys.setrecursionlimit(200000)
@@ -125,99 +123,6 @@ def create_random_tree(nwsize, eventrates, node_event_ratio, max_parents: int = 
         # post_order_sum_events(root)
         return root, nw
 
-def parse_arguments():
-    # Create the argument parser
-    parser = argparse.ArgumentParser(description="Simulation parameters")
-
-    # Add arguments with default values
-    parser.add_argument('--nwsize', '-nw', type=int, default=10, help='Network size (default: 10)')
-    parser.add_argument('--node_event_ratio', '-ner', type=float, default=0.5, help='Node event ratio (default: 0.5)')
-    parser.add_argument('--num_eventtypes', '-ne', type=int, default=6, help='Number of event types (default: 20)')
-    parser.add_argument('--eventskew', '-es', type=float, default=1.3, help='Event skew (default: 1.3)')
-    parser.add_argument('--swaps', '-sw', type=int, default=0, help='Number of swaps (default: 0)')
-    parser.add_argument('--toFile', '-tf', action='store_true', help='Write event types to file')
-    parser.add_argument('--max_parents', '-mp', type=int, default=1, help='Maximum number of parents per node (default: 1)')
-    parser.add_argument('--eventtype', '-et', type=str, default=None, help='Event type for experiments')
-    parser.add_argument('--param', '-p', type=str, default=None, help='Parameter for event type (max/min) in experiments')
-
-    # Parse the arguments
-    args = parser.parse_args()
-
-    # Return parsed arguments as a dictionary for convenience
-    return vars(args)
-
-def main():
-        # Parse command-line arguments
-    args = parse_arguments()
-
-    # Getting access to the Arguments
-    nwsize = args['nwsize']
-    node_event_ratio = args['node_event_ratio']
-    num_eventtypes = args['num_eventtypes']
-    eventskew = args['eventskew']
-    toFile = args['toFile']
-    swaps = args['swaps']
-    max_parents = args['max_parents']
-    eventtype = args['eventtype']
-    param = args['param']
-
-    # The rest of your simulation logic goes here
-    print(f"Max parents for nodes: {max_parents}")
-    print(f"Network size: {nwsize}, Node event ratio: {node_event_ratio}, Event skew: {eventskew}")
-    print(f"Number of event types: {num_eventtypes}, Swaps: {swaps}, To file: {toFile}")
-    print(f"Event type: {eventtype}, Param: {param}")
-
-    #eventrates = sorted(generate_eventrates(eventskew,num_eventtypes))
-    eventrates =  generate_eventrates(eventskew,num_eventtypes)
-    
-    print(f"Eventrates: {eventrates}")
-    
-    
-    
-    nw = []
-    root, nw = create_random_tree(nwsize, eventrates, node_event_ratio, max_parents)
-    # for node in range(nwsize):
-    #     no = Node(node, 0, 0, generate_events(eventrates, node_event_ratio))
-    #     nw.append(no)
-        
-    #print(nw)     
-    
-    """
-    TODO Rebuild the check for allEvents again
-    """
-    # print(allEvents(nw))
-    # while not allEvents(nw):
-    #     nw = []    
-
-    #     for node in range(nwsize):
-    #         nw.append(generate_events(eventrates, node_event_ratio))
-
-
-    ## INSERT NETWORK HERE
-    #nw = [[2970, 2000, 322, 600, 960, 458, 2, 2, 40],[2970, 2000, 322, 600, 960, 458, 2, 2, 40],[2970, 2000, 322, 600, 960, 458, 2, 2, 40],[2970, 2000, 322, 600, 960, 458, 2, 2, 40],[2970, 2000, 322, 600, 960, 458, 2, 2, 40],[2970, 2000, 322, 600, 960, 458, 2, 2, 40],[2970, 2000, 322, 600, 960, 458, 2, 2, 40],[2970, 2000, 322, 600, 960, 458, 2, 2, 40],[2970, 2000, 322, 600, 960, 458, 2, 2, 40],[2970, 2000, 322, 600, 960, 458, 2, 2, 40]]
-
-    networkExperimentData = [eventskew, num_eventtypes, node_event_ratio, nwsize, min(eventrates)/max(eventrates)]
-    with open('networkExperimentData', 'wb') as networkExperimentDataFile:
-        pickle.dump(networkExperimentData, networkExperimentDataFile)
-    
-    with open('network', 'wb') as network_file:
-          pickle.dump(nw, network_file)      
-          
-         
-    
-   
-    print("NETWORK")  
-    print("--------") 
-    for i in range(len(nw)):
-        print(nw[i])
-    print("\n")
-    
-    # nw[0].visualize_tree(nw[0])
-    
-    
-        
-# if __name__ == "__main__":
-#     main()
 
 
         

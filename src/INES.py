@@ -6,6 +6,8 @@ class INES():
     allPais: int
     network: list[Node]
     eventrates: list[list[int]]
+
+    
     primitiveEvents: list[int]
     def __init__(self, nwSize: int, node_event_ratio: float, num_eventtypes: int, eventskew: float, max_partens: int):
         self.eventrates = generate_eventrates(eventskew,num_eventtypes)
