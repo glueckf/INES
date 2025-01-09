@@ -8,8 +8,6 @@ import random
 from Node import Node
 import pandas as pd
 
-#sys.setrecursionlimit(200000)
-
 
 def generate_eventrates(eventskew, numb_eventtypes,total_count=10000):
         # Ensure all eventrates are greater than 0
@@ -30,8 +28,6 @@ def generate_eventrates(eventskew, numb_eventtypes,total_count=10000):
     
     return eventrates
     
-    # eventrates[eventrates < 1] = 1
-    # return eventrates
 
 # At one Node show in Array the Events which are generated at each node
 # Looping through all Eventrates 
@@ -122,10 +118,3 @@ def create_random_tree(nwsize, eventrates, node_event_ratio, max_parents: int = 
                 print("Still 0 ")
         # post_order_sum_events(root)
         return root, nw
-
-
-
-        
-
-
-
