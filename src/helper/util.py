@@ -18,7 +18,7 @@ def column1s(mylist):
 def reverseDict(myDict):
     MyReversed = {}
     for i in myDict.keys():
-        if not myDict[i] in MyReversed.keys():
+        if myDict[i] not in MyReversed.keys():
             MyReversed[myDict[i]] = [i]
         else:
             MyReversed[myDict[i]].append(i)

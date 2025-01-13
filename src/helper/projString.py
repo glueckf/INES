@@ -125,14 +125,3 @@ def combinationUtil2(arr, n, r,
 
     combinationUtil(arr, n, r, index, data, i + 1, b1) 
   
-  
-
-# def printcombination2(arr): 
-#     r = 2
-#     n = len(arr)
-#     data = list(range(r)) 
-#     twosets = []
-
-#     combinationUtil(arr, n, r, 0, data, 0, b1) 
-#     return twosets
-

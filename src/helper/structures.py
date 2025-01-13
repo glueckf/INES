@@ -5,13 +5,13 @@ Created on Thu Aug 19 11:45:00 2021
 
 @author: samira
 """
-from util import *
+from helper.util import column1s,column
+from helper.parse_network import get_nodes
 
 from network import *
-import copy
 import numpy as np
 import pickle
-from tree import *
+from Tree import *
 from helper import *
 from parse_network import *
 from network import *
@@ -38,6 +38,7 @@ eventNodeDict =  {} # {0: ["B1", "A3", "E0"], 1: ["A1B2", "A1B3", "B1"]} which i
 def initEventNodes():  #matrice: comlumn indices are node ids, row indices correspond to etbs, for a given etb use IndexEventNodes to get row ID for given ETB
     #Storign all nodes producing a given event type with a 1 in the corresponding list
     # Node generating event type A would have: [1,0,0,0,...]
+    nodes = get_nodes("NETWORK DATA")
     myEventNodes = []
     #Storing a dictionary with the event type and node id as key and the index in the myEventNodes type for the list.
     myIndexEventNodes = {}
