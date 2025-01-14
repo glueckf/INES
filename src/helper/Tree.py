@@ -317,10 +317,10 @@ class AND(Tree):
         s = s + ")"
         return s
     
-    def evaluate(self): 
+    def evaluate(self,rates): 
         rate = 1         
         for i in self.children:
-            rate *= i.evaluate()
+            rate *= i.evaluate(rates)
         rate *= len(self.children)
         return rate
     
@@ -338,10 +338,10 @@ class SEQ(Tree):
         s = s + ")"            
         return s
     
-    def evaluate(self): 
+    def evaluate(self,rates): 
         rate = 1
         for i in self.children:
-            rate *= i.evaluate()
+            rate *= i.evaluate(rates)
         return rate
     
 class KL(Tree):
@@ -357,12 +357,12 @@ class KL(Tree):
         s = s + ")"            
         return s
     
-    def evaluate(self): 
+    def evaluate(self,rates): 
         # rate = 1
         # for i in self.children:
         #     rate *= 2^(i.evaluate())
         print(self.stripKL_simple())
-        return self.stripKL_simple().evaluate()
+        return self.stripKL_simple().evaluate(rates)
     
 class NSEQ(Tree):
     def __init__ (self, *children):        
@@ -377,11 +377,11 @@ class NSEQ(Tree):
         s = s + ")"            
         return s
     
-    def evaluate(self): 
+    def evaluate(self,rates): 
         if len(self.children) != 3:
             return np.inf
         else:
-            return self.children[0].evaluate() * self.children[2].evaluate()
+            return self.children[0].evaluate(rates) * self.children[2].evaluate(rates)
 
 
 class PrimEvent(Tree):
@@ -396,7 +396,7 @@ class PrimEvent(Tree):
         self.evtype = value
         return self
     
-    def evaluate(self,network_data):
-        rates = get_rates(network_data)
+    def evaluate(self,rates):
+        "rates needs to be supplied by INES"
         return rates[filter_numbers(self.evtype)]
 

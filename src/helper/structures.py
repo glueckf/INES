@@ -8,28 +8,28 @@ Created on Thu Aug 19 11:45:00 2021
 from helper.util import column1s,column
 from helper.parse_network import get_nodes
 
-from network import *
+#from network import *
 import numpy as np
 import pickle
-from Tree import *
-from helper import *
-from parse_network import *
-from network import *
+#from Tree import *
+#from helper import *
+# from parse_network import *
+# from network import *
 
 #import matplotlib.pyplot as plt
 import networkx as nx 
-from networkx.algorithms.approximation import steiner_tree
-from networkx.algorithms.components import is_connected
-from EvaluationPlan import *
-import time
-import numpy as np
+# from networkx.algorithms.approximation import steiner_tree
+# from networkx.algorithms.components import is_connected
+# # from EvaluationPlan import *
+# import time
+# import numpy as np
 #G = nx.Graph()
 
-with open("allPairs", "rb") as allPairs_file:
-    allPairs = pickle.load(allPairs_file)
+# with open("allPairs", "rb") as allPairs_file:
+#     allPairs = pickle.load(allPairs_file)
 
-with open('graph',  'rb') as graph_file:
-    G = pickle.load(graph_file)
+# with open('graph',  'rb') as graph_file:
+#     G = pickle.load(graph_file)
 ETB = {} # {"A": {"A1": [2,3], "A3" = [3]}, "B" {"B1:[1,3]} ....}
 placementTreeDict = {} # {("D", "A1"): (5,[2,3,4], steinerTree(5234)} show steiner tree to connect all D's with A1 -> problem: what about multiple recipient event types? what about single sink placements=
 eventNodeDict =  {} # {0: ["B1", "A3", "E0"], 1: ["A1B2", "A1B3", "B1"]} which instances of events/projections are generated or sent to/via node x -> maybe reuse network dict, but atm used for other stuff
@@ -59,13 +59,13 @@ def initEventNodes():  #matrice: comlumn indices are node ids, row indices corre
             index += 1
             myetbs.append(etype+str(node))
         myIndexEventNodes[etype] = myetbs
-        offset = index
+        #offset = index
     return(myEventNodes, myIndexEventNodes)
 
-init_EventNodes = initEventNodes()        
-EventNodes = init_EventNodes[0]
-IndexEventNodes = init_EventNodes[1]
-projFilterDict = {}
+# init_EventNodes = initEventNodes()        
+# EventNodes = init_EventNodes[0]
+# IndexEventNodes = init_EventNodes[1]
+# projFilterDict = {}
 
 
 def getETBs(node):
@@ -106,7 +106,7 @@ def MSManageETBs(projection, parttype):
 
 def genericETB(partType, projection):
     ETBs = []   
-    if len(partType) == 0 or not partType in projection.leafs():
+    if len(partType) == 0 or partType not in projection.leafs():
         myID = ""
         for etype in projection.leafs():
             myID += etype
@@ -143,14 +143,14 @@ def NumETBsByKey(etb, projection):
         num = num / len(IndexEventNodes[etype])
     return num
 
-def getLongest():
+def getLongest(allPairs):
     avs  = []
     for i in allPairs:
         avs.append(np.average(i))
     return np.median(avs)
 
 
-longestPath = getLongest()
-maxDist = max(sum(allPairs,[]))
+# longestPath = getLongest()
+# maxDist = max(sum(allPairs,[]))
 
    

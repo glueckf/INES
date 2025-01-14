@@ -42,7 +42,7 @@ def initialize_globals(network_data):
     # Populate instances dictionary
     for i in _primEvents:
         _instances[i] = len(_nodes[i])
-
+    return _network,_rates,_primEvents,_instances,_nodes
 # Getter functions with lazy initialization
 def get_network(network_data):
     if _network is None:
