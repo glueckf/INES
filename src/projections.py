@@ -322,7 +322,7 @@ def isBeneficial(self,projection, rate):
     """ determines for a projection based on the if it is beneficial """
     rates = self.h_rates_data
     nodes = self.h_nodes
-    totalProjrate = rate * getNumETBs(projection)
+    totalProjrate = rate * getNumETBs(projection,self.h_IndexEventNodes)
     sumrates = sum(map(lambda x: rates[x] * float(len(nodes[x])), projection.leafs()))
     if sumrates > totalProjrate:
         return True
@@ -377,12 +377,6 @@ def generate_projections(self,query):
 										mycontext = query.get_context(neg) 
 										if not set(mycontext).issubset(set(mysubop.getleafs())): # if conext of negated event not in projection, exclude projection
 											nseq_violated = True
-							print(type(mysubop))
-
-							# If mysubp is an instance of PrimEvent, evaluate with self.h_rates_data
-							print("IN HERE")
-
-							print(self.h_rates_data)
 							outrate = mysubop.evaluate(self.h_rates_data)
 
 							#outrate = mysubop.evaluate(self.h_rates_data)                          
@@ -394,7 +388,7 @@ def generate_projections(self,query):
 											projrates[mysubop] = (selectivity, rate)         
 											projections.append(mysubop) # do something to prevent a1a2b and a2a3b to be appended to dictionary
 		projections.append(query)
-		outrate = query.evaluate()                          
+		outrate = query.evaluate(self.h_rates_data)                          
 		selectivity =  return_selectivity(self,query.leafs())
 		rate = outrate * selectivity                            
 		projrates[query] = (selectivity, rate) 

@@ -8,7 +8,7 @@ from selectivity import initialize_selectivities
 from write_config_single import generate_config_buffer
 from singleSelectivities import initializeSingleSelectivity
 from helper.parse_network import initialize_globals
-
+from helper.structures import initEventNodes
 
 class INES():
     allPais: list
@@ -32,7 +32,8 @@ class INES():
     h_projsPerQuery = None
     h_sharedProjectionsDict = None
     h_sharedProjectionsList = None
-
+    h_eventNodes = None
+    h_IndexEventNodes = None
 
     def __init__(self, nwSize: int, node_event_ratio: float, num_eventtypes: int, eventskew: float, max_partens: int, query_size: int, query_length:int):
         from projections import generate_all_projections
@@ -48,6 +49,7 @@ class INES():
 
         #This is important to variious files afterwards
         self.h_network_data,self.h_rates_data,self.h_primEvents,self.h_instances,self.h_nodes = initialize_globals(self.network)
+        self.h_eventNodes,self.h_IndexEventNodes = initEventNodes(self.h_nodes,self.h_network_data)
         self.h_projlist,self.h_projrates,self.h_projsPerQuery,self.h_sharedProjectionsDict,self.h_sharedProjectionsList = generate_all_projections(self)
 
 my_ines = INES(12,0.5,6,0.3,2,3,5)

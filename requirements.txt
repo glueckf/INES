@@ -2,6 +2,7 @@ importlib-metadata==8.0.0
 importlib-resources==6.4.0
 jaraco.collections==5.1.0
 networkx==2.5
+numpy==1.23.5
 packaging==24.1
 pandas==2.2.3
 pip-chill==1.0.3
