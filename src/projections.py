@@ -147,7 +147,7 @@ def NEW_isPartitioning_customRates(self, element, combi, proj, myrates):
 		G = self.graph
 		wl = self.query_workload
 		projrates = self.h_projrates
-
+		IndexEventNodes = self.h_IndexEventNodes
 		etbs = IndexEventNodes[element]
 		myNodes = [getNodes(x)[0] for x in etbs]   
 		if element not in MSTrees.keys():
@@ -232,6 +232,7 @@ def NEW_isPartitioning(self ,element, combi, proj,projrates:dict):
 	nodes = self.h_nodes
 	wl = self.query_workload
 	G = self.graph
+	IndexEventNodes = self.h_IndexEventNodes
 	longestPath = getLongest(self.allPais)
 		
 	etbs = IndexEventNodes[element]
