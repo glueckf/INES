@@ -31,14 +31,14 @@ if TYPE_CHECKING:
 
 # structures for speedup in partInput function
 
-DistMatrices =  {}
+
 
 
 def optimisticTotalRate(self ,projection): # USE FILTERED RATE FOR ESTIMATION 
     rates = self.h_rates_data
     nodes = self.h_nodes
     projlist = self.h_projlist
-
+    projFilterDict = self.h_projFilterDict
 
     if projection in projlist: # is complex event        
         for i in projFilterDict.keys():
@@ -56,6 +56,8 @@ def optimisticTotalRate_single(self , projection): # USE FILTERED RATE FOR ESTIM
 		rates = self.h_rates_data
 		nodes = self.h_nodes
 		projrates = self.h_projrates	
+		projFilterDict = self.h_projFilterDict
+
 		for i in projFilterDict.keys():
 				if i  == projection: 
 						myproj = i
@@ -136,7 +138,7 @@ def isPartitioning_customRates(self, element, combi, proj, myrates):
 		else: 
 			return False          
 
-
+""" 
 def NEW_isPartitioning_customRates(self, element, combi, proj, myrates):
 		''' returns true if element partitioning input of proj generated with combi '''
 		from networkx.algorithms.approximation import steiner_tree
@@ -183,7 +185,7 @@ def NEW_isPartitioning_customRates(self, element, combi, proj, myrates):
 			return [costs]
 
 		else: 
-			return False 
+			return False  """
 
 
 def minimum_subgraph(G, nodes_list):
@@ -228,6 +230,7 @@ def minimum_subgraph(G, nodes_list):
 def NEW_isPartitioning(self ,element, combi, proj,projrates:dict):
 	''' returns true if element partitioning input of proj generated with combi '''
 	MSTrees  = {}
+	DistMatrices =  {}
 	rates = self.h_rates_data
 	nodes = self.h_nodes
 	wl = self.query_workload
