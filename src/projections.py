@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 #     selectivities = pickle.load(selectivity_file) 
 
 # structures for speedup in partInput function
-MSTrees  = {}
+
 DistMatrices =  {}
 
 
@@ -143,7 +143,7 @@ def NEW_isPartitioning_customRates(self, element, combi, proj, myrates):
 
 		rates = self.h_rates_data
 		nodes = self.h_nodes
-		longestPath = getLongest(self.allPais)
+		longestPath = getLongest(self.allPairs)
 		G = self.graph
 		wl = self.query_workload
 		projrates = self.h_projrates
@@ -227,13 +227,14 @@ def minimum_subgraph(G, nodes_list):
 
 def NEW_isPartitioning(self ,element, combi, proj,projrates:dict):
 	''' returns true if element partitioning input of proj generated with combi '''
-       
+	MSTrees  = {}
 	rates = self.h_rates_data
 	nodes = self.h_nodes
 	wl = self.query_workload
 	G = self.graph
 	IndexEventNodes = self.h_IndexEventNodes
-	longestPath = getLongest(self.allPais)
+	
+	longestPath = getLongest(self.allPairs)
 		
 	etbs = IndexEventNodes[element]
 	myNodes = [getNodes(x)[0] for x in etbs]   

@@ -7,29 +7,8 @@ Created on Thu Aug 19 11:45:00 2021
 """
 from helper.util import column1s,column
 from helper.parse_network import get_nodes
-
-#from network import *
 import numpy as np
-import pickle
-#from Tree import *
-#from helper import *
-# from parse_network import *
-# from network import *
 
-#import matplotlib.pyplot as plt
-import networkx as nx 
-# from networkx.algorithms.approximation import steiner_tree
-# from networkx.algorithms.components import is_connected
-# # from EvaluationPlan import *
-# import time
-# import numpy as np
-#G = nx.Graph()
-
-# with open("allPairs", "rb") as allPairs_file:
-#     allPairs = pickle.load(allPairs_file)
-
-# with open('graph',  'rb') as graph_file:
-#     G = pickle.load(graph_file)
 ETB = {} # {"A": {"A1": [2,3], "A3" = [3]}, "B" {"B1:[1,3]} ....}
 placementTreeDict = {} # {("D", "A1"): (5,[2,3,4], steinerTree(5234)} show steiner tree to connect all D's with A1 -> problem: what about multiple recipient event types? what about single sink placements=
 eventNodeDict =  {} # {0: ["B1", "A3", "E0"], 1: ["A1B2", "A1B3", "B1"]} which instances of events/projections are generated or sent to/via node x -> maybe reuse network dict, but atm used for other stuff
@@ -38,7 +17,6 @@ eventNodeDict =  {} # {0: ["B1", "A3", "E0"], 1: ["A1B2", "A1B3", "B1"]} which i
 def initEventNodes(nodes,network):  #matrice: comlumn indices are node ids, row indices correspond to etbs, for a given etb use IndexEventNodes to get row ID for given ETB
     #Storign all nodes producing a given event type with a 1 in the corresponding list
     # Node generating event type A would have: [1,0,0,0,...]
-    #nodes = get_nodes("NETWORK DATA")
     myEventNodes = []
     #Storing a dictionary with the event type and node id as key and the index in the myEventNodes type for the list.
     myIndexEventNodes = {}
@@ -61,12 +39,6 @@ def initEventNodes(nodes,network):  #matrice: comlumn indices are node ids, row 
         myIndexEventNodes[etype] = myetbs
         #offset = index
     return(myEventNodes, myIndexEventNodes)
-
-# init_EventNodes = initEventNodes()        
-# EventNodes = init_EventNodes[0]
-# IndexEventNodes = init_EventNodes[1]
-# projFilterDict = {}
-
 
 def getETBs(node,EventNodes,IndexEventNodes):
 

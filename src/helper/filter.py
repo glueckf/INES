@@ -7,16 +7,6 @@ Created on Fri Aug 20 13:03:07 2021
 
 Output selector related methods.
 """
-# from structures import *
-
-# with open('singleSelectivities',  'rb') as  singleSelectivities_file:
-#     singleSelectivities = pickle.load(singleSelectivities_file)
-    
-# with open('projrates',  'rb') as projratesfile:
-#     projrates = pickle.load(projratesfile)
-    
-# with open('singleSelectivities',  'rb') as singleSelectivities_file:
-#     singleSelectivities = pickle.load(singleSelectivities_file)
 
 def computePromisingType(projection):
     promisingEvent = "X"

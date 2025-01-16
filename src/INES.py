@@ -9,9 +9,11 @@ from write_config_single import generate_config_buffer
 from singleSelectivities import initializeSingleSelectivity
 from helper.parse_network import initialize_globals
 from helper.structures import initEventNodes
+from combigen import populate_projFilterDict,removeFilters
+from helper.structures import getLongest
 
 class INES():
-    allPais: list
+    allPairs: list
     network: list[Node]
     eventrates: list[list[int]]
     query_workload = None
@@ -33,15 +35,18 @@ class INES():
     h_sharedProjectionsDict = None
     h_sharedProjectionsList = None
     h_eventNodes = None
-    h_IndexEventNodes = None
-
+    h_IndexEventNodes = None    
+    h_projFilterDict = None
+    h_longestPath = None
+    
     def __init__(self, nwSize: int, node_event_ratio: float, num_eventtypes: int, eventskew: float, max_partens: int, query_size: int, query_length:int):
         from projections import generate_all_projections
         self.eventrates = generate_eventrates(eventskew,num_eventtypes)
         self.primitiveEvents= generate_events(self.eventrates,node_event_ratio)
         root, self.network = create_random_tree(nwSize,self.eventrates,node_event_ratio,max_partens) 
         self.graph = create_fog_graph(self.network)
-        self.allPais = populate_allPairs(self.graph)
+        self.allPairs = populate_allPairs(self.graph)
+        self.h_longestPath = getLongest(self.allPairs)
         self.query_workload = generate_workload(query_size,query_length,self.primitiveEvents)
         self.selectivities,self.selectivitiesExperimentData = initialize_selectivities(self.primitiveEvents)
         self.config_single = generate_config_buffer(self.network,self.query_workload,self.selectivities)
@@ -51,6 +56,9 @@ class INES():
         self.h_network_data,self.h_rates_data,self.h_primEvents,self.h_instances,self.h_nodes = initialize_globals(self.network)
         self.h_eventNodes,self.h_IndexEventNodes = initEventNodes(self.h_nodes,self.h_network_data)
         self.h_projlist,self.h_projrates,self.h_projsPerQuery,self.h_sharedProjectionsDict,self.h_sharedProjectionsList = generate_all_projections(self)
+        self.h_projFilterDict = populate_projFilterDict(self)
+        self.h_projFilterDict= removeFilters(self)
+
 
 my_ines = INES(12,0.5,6,0.3,2,3,5)
 
