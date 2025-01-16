@@ -85,11 +85,11 @@ def returnPartitioning(self ,proj, combi,projrates:dict, *args):
 						return []
 		
 		if myevents:
-			res = NEW_isPartitioning(myevents[0], combi, proj,projrates)
+			res,DistMatrices,MSTrees = NEW_isPartitioning(myevents[0], combi, proj,projrates)
 			#res = NEW_isPartitioning_alt(myevents[0], combi, proj, myprojFilterDict)
 			if res:   
-				return [myevents[0], res[0]]
-		return []
+				return [myevents[0], res[0]],DistMatrices,MSTrees
+		return [],DistMatrices,MSTrees
 
 def isPartitioning(self, element, combi, proj):
 		''' returns true if element partitioning input of proj generated with combi '''
@@ -271,14 +271,14 @@ def NEW_isPartitioning(self ,element, combi, proj,projrates:dict):
 
 	if totalRate(element,projrates) * longestPath > (mysum * costs) + myproj * longestPath :  
 		
-		return [costs]
+		return [costs],MSTrees,DistMatrices
 
 	else: 
-		return False 
+		return False,MSTrees,DistMatrices
 		
        
 
-def fillMyMatrice(myNodes, myEdges, me):  
+def fillMyMatrice(myNodes, myEdges, me): 
     import networkx as nx
     myG = nx.Graph()
     myG.add_nodes_from(myNodes)
