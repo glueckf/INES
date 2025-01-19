@@ -1,19 +1,19 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Aug 18 16:32:53 2021
-
-@author: samira
-"""
-from helper.placement_aug import *
+from helper.placement_aug import returnPartitioning,totalRate,NEWcomputeCentralCosts,compute_dependencies,ComputeSingleSinkPlacement
 import time
 import csv
 import sys
 import argparse
+from EvaluationPlan import EvaluationPlan
+import numpy as np
 
-maxDist = max([max(x) for x in allPairs])
+#maxDist = max([max(x) for x in allPairs])
 
-def getLowerBound(query): # lower bound -> for multiple projections, keep track of events sent as single sink and do not add up
+def getLowerBound(query,self): # lower bound -> for multiple projections, keep track of events sent as single sink and do not add up
+
+    projsPerQuery = self.h_projsPerQuery
+    rates = self.h_rates_data
+    longestPath = self.h_longestPath
+
     MS = []
     for e in query.leafs():        
         myprojs= [p for p in list(set(projsPerQuery[query]).difference(set([query]))) if totalRate(p)<rates[e] and not e in p.leafs()]
@@ -33,35 +33,25 @@ def getLowerBound(query): # lower bound -> for multiple projections, keep track 
         minimalRate +=  sum(minimalProjs) * longestPath
     return minimalRate#, nonMS) 
 
+def calculate_operatorPlacement(self,file_path: str, max_parents: int):
+     
+    wl = self.query_workload
+    allPairs = self.allPairs
+    #getNetworkParameters, selectivityParameters, combigenParameters
+    networkParams = self.networkParams
+    selectivityParams = self.selectivitiesExperimentData
+    combigenParams = self.h_combiExperimentData   
+    longestPath = self.h_longestPath
 
-
-def parse_arguments():
-    # Initialize the parser
-    parser = argparse.ArgumentParser(description="Process filename and number of parents.")
-
-    # Add the parameters
-    parser.add_argument('--file', type=str, required=True, default="test", help="Filename to process")
-    parser.add_argument('--number_parents', type=int, default=1, help="Number of parents (default: 1)")
-
-    # Parse the arguments and return the results
-    return parser.parse_args()
-
-
-def main():
-    
-  
     Filters = []
     writeExperimentData = 0
     
     filename = "results"
     noFilter = 0 # NO FILTER
     
-    #only write experiment data for shared costs, use ID and total costs for writing results of shared/seperate window
-    args = parse_arguments()
-
     # Access the arguments
-    filename = args.file
-    number_parents = args.number_parents
+    filename = file_path
+    number_parents = max_parents
 
     print(filename)
     ccosts = NEWcomputeCentralCosts(wl)
@@ -78,9 +68,9 @@ def main():
     hopLatency = {}
     
     #Reduce calls of initEventNodes
-    init_eventNodes = initEventNodes()   
-    EventNodes = init_eventNodes[0]
-    IndexEventNodes = init_eventNodes[1]    
+    #init_eventNodes = initEventNodes()   
+    EventNodes = self.h_eventNodes
+    IndexEventNodes = self.h_IndexEventNodes
     
     myPlan = EvaluationPlan([], [])
     
@@ -89,7 +79,8 @@ def main():
     myPlan.initInstances(IndexEventNodes) # init with instances for primitive event types
     
     #mycombi = removeSisChains()
-    unfolded = mycombi
+    unfolded = self.h_mycombi
+    criticalMSTypes = self.h_criticalMSTypes
  
     dependencies = compute_dependencies(unfolded)
     processingOrder = sorted(compute_dependencies(unfolded).keys(), key = lambda x : dependencies[x] ) # unfolded enthält kombi   
@@ -125,16 +116,13 @@ def main():
         lowerBound = 0
     else:
       for query in wl:
-        lowerBound= getLowerBound(query)
+        lowerBound= getLowerBound(query,self)
     print("Lower Bound: " + str(lowerBound / ccosts[0]))
 
     print("Transmission Ratio: " + str(mycosts))
     print("INEv Depth: " + str(float(max(list(dependencies.values()))+1)/2))
     
     ID = int(np.random.uniform(0,10000000))
-    
-    with open('EvaluationPlan',  'wb') as EvaluationPlan_file:
-        pickle.dump([myPlan, ID, MSPlacements], EvaluationPlan_file)
     
     totaltime = str(round(time.time() - start_time, 2))
 
@@ -144,19 +132,9 @@ def main():
     print("Finished in " + totaltime + " seconds")
     
             
-    #getNetworkParameters, selectivityParameters, combigenParameters
-        
-    with open('networkExperimentData', 'rb') as networkExperimentData_file: 
-          networkParams = pickle.load(networkExperimentData_file)   
-    with open('selectivitiesExperimentData', 'rb') as selectivities_file: 
-          selectivityParams  = pickle.load(selectivities_file)   
-    with open('combiExperimentData', 'rb') as combiExperimentData_file: 
-          combigenParams = pickle.load(combiExperimentData_file) 
-    with open('processingLatency', 'rb') as processingLatency_file: 
-          processingLatencyParams = pickle.load(processingLatency_file)            
+      
                       
     ID = int(np.random.uniform(0,10000000))
-    hopfactor = processingLatencyParams[2]
 
    
     hoplatency = max([hopLatency[x] for x in hopLatency.keys()])   
@@ -176,18 +154,9 @@ def main():
        if new:
            writer.writerow(schema)              
        writer.writerow(myResult)
-      
-
-    with open('CentralEvaluationPlan',  'wb') as CentralEvaluationPlan_file:
-        pickle.dump([ccosts[1],ccosts[3], wl], CentralEvaluationPlan_file)
-    
-    with open('ExperimentID',  'wb') as ExperimentID_file:
-        pickle.dump([ID,ccosts[0]], ExperimentID_file)
-    
-    if writeExperimentData:
-        with open('ExperimentResults',  'wb') as ExperimentID_file: 
-            pickle.dump([ID,costs], ExperimentID_file)  # write only INEv Costs and ID for timewindow exp
-
-
-if __name__ == "__main__":
-    main()                    
+    #with open('EvaluationPlan',  'wb') as EvaluationPlan_file:
+       # pickle.dump([myPlan, ID, MSPlacements], EvaluationPlan_file)
+    eval_Plan = [myPlan, ID, MSPlacements]
+    central_eval_plan = [ccosts[1],ccosts[3], wl]
+    experiment_result = [ID,costs]
+    return eval_Plan,central_eval_plan,experiment_result

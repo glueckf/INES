@@ -9,7 +9,7 @@ from write_config_single import generate_config_buffer
 from singleSelectivities import initializeSingleSelectivity
 from helper.parse_network import initialize_globals
 from helper.structures import initEventNodes
-from combigen import populate_projFilterDict,removeFilters
+from combigen import populate_projFilterDict,removeFilters,generate_combigen
 from helper.structures import getLongest
 
 class INES():
@@ -22,7 +22,15 @@ class INES():
     primitiveEvents: list[int]
     config_single: None
     single_selectivity = None
-
+    nwSize: int
+    node_event_ratio: float
+    number_eventtypes: int
+    eventskew: float
+    max_parents: int
+    query_size:int 
+    query_length: int
+    networkParams: list
+    
     "Helper Variables from different Files - namespace issues"
     h_network_data = None
     h_rates_data = None
@@ -38,10 +46,25 @@ class INES():
     h_IndexEventNodes = None    
     h_projFilterDict = None
     h_longestPath = None
-    
+    h_mycombi = None
+    h_combiDict = None
+    h_criticalMSTypes_criticalMSProjs = None
+    h_combiExperimentData = None
+    h_criticalMSTypes = None
+    h_criticalMSProjs = None
+
     def __init__(self, nwSize: int, node_event_ratio: float, num_eventtypes: int, eventskew: float, max_partens: int, query_size: int, query_length:int):
+        self.nwSize = nwSize
+        self.node_event_ratio = node_event_ratio
+        self.number_eventtypes = num_eventtypes
+        self.eventskew = eventskew
+        self.max_parents = max_partens
+        self.query_size = query_size
+        self.query_length = query_length
+
         from projections import generate_all_projections
         self.eventrates = generate_eventrates(eventskew,num_eventtypes)
+        self.networkParams = [self.eventskew,self.number_eventtypes,self.node_event_ratio,self.nwSize,min(self.eventrates)/max(self.eventrates)]
         self.primitiveEvents= generate_events(self.eventrates,node_event_ratio)
         root, self.network = create_random_tree(nwSize,self.eventrates,node_event_ratio,max_partens) 
         self.graph = create_fog_graph(self.network)
@@ -58,6 +81,10 @@ class INES():
         self.h_projlist,self.h_projrates,self.h_projsPerQuery,self.h_sharedProjectionsDict,self.h_sharedProjectionsList = generate_all_projections(self)
         self.h_projFilterDict = populate_projFilterDict(self)
         self.h_projFilterDict= removeFilters(self)
+        self.h_mycombi, self.h_mycombi, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(self)
+        self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
+        
+
 
 
 my_ines = INES(12,0.5,6,0.3,2,3,5)
