@@ -6,10 +6,15 @@ Created on Tue Aug 10 13:16:11 2021
 @author: samira
 """
 import multiprocessing
-from helper.processCombination_aug import *
+#from helper.processCombination_aug import *
+from helper.filter import getMaximalFilter,getDecomposedTotal
+from helper.structures import getNodes,NumETBsByKey,setEventNodes,SiSManageETBs
+from projections import returnPartitioning
 from functools import partial
 from allPairs import find_shortest_path_or_ancestor
-
+import copy
+from EvaluationPlan import Instance,Projection
+import numpy as np
 
 def NEWcomputeMSplacementCosts(projection, sourcetypes, destinationtypes, noFilter): #we need tuples, (C, [E,A]) C should be sent to all e and a nodes ([D,E], [A]) d and e should be sent to all a nodes etc
     #print(projection, sourcetypes)
@@ -44,7 +49,7 @@ def NEWcomputeMSplacementCosts(projection, sourcetypes, destinationtypes, noFilt
                     node = findBestSource(getNodes(etb), MydestinationNodes) #best source is node closest to a node of destinationNodes
                     treenodes = copy.deepcopy(MydestinationNodes) 
                     treenodes.append(node)
-                    
+                    from networkx.algorithms.approximation import steiner_tree
                     mytree = steiner_tree(G, treenodes)
                     
                     myInstance = Instance(etype, etb, [node], {projection: list(mytree.edges)}) #! #append routing tree information for instance/etb                    
@@ -108,7 +113,7 @@ def getDestinationsUpstream(projection):
     else:        
         return  range(len(allPairs))      
         
-def ComputeSingleSinkPlacement(projection, combination, noFilter):
+def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,IndexEventNodes,network,allPairs,mycombi,rates,singleSelectivities,projrates):
     from allPairs import create_routing_dict
     routingDict = create_routing_dict()
     costs = np.inf
@@ -225,7 +230,7 @@ def costsAt(eventtype, node):
                 mycosts += rates[eventtype] * allPairs[node][mySource] 
     return mycosts
 
-def NEWcomputeCentralCosts(workload):
+def NEWcomputeCentralCosts(workload,IndexEventNodes,allPairs,rates):
     #Adding all Eventtypes (simple events) to the list
     eventtypes = []
     for i in workload:

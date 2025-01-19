@@ -1,10 +1,12 @@
-from helper.placement_aug import returnPartitioning,totalRate,NEWcomputeCentralCosts,compute_dependencies,ComputeSingleSinkPlacement
+from helper.placement_aug import NEWcomputeCentralCosts,ComputeSingleSinkPlacement
+from helper.processCombination_aug import compute_dependencies
 import time
 import csv
 import sys
 import argparse
 from EvaluationPlan import EvaluationPlan
 import numpy as np
+from projections import returnPartitioning,totalRate
 
 #maxDist = max([max(x) for x in allPairs])
 
@@ -42,6 +44,15 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     selectivityParams = self.selectivitiesExperimentData
     combigenParams = self.h_combiExperimentData   
     longestPath = self.h_longestPath
+    projFilterDict = self.h_projFilterDict
+    IndexEventNodes = self.h_IndexEventNodes
+    allPairs = self.allPairs 
+    rates = self.h_rates_data
+    network = self.network 
+    mycombi = self.h_mycombi
+    singleSelectivities = self.single_selectivity
+    projrates = self.h_projrates
+    
 
     Filters = []
     writeExperimentData = 0
@@ -54,7 +65,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     number_parents = max_parents
 
     print(filename)
-    ccosts = NEWcomputeCentralCosts(wl)
+    ccosts = NEWcomputeCentralCosts(wl,IndexEventNodes,allPairs,rates)
     #print("central costs : " + str(ccosts))
     centralHopLatency = max(allPairs[ccosts[1]])
     numberHops = sum(allPairs[ccosts[1]])
@@ -82,8 +93,8 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     unfolded = self.h_mycombi
     criticalMSTypes = self.h_criticalMSTypes
  
-    dependencies = compute_dependencies(unfolded)
-    processingOrder = sorted(compute_dependencies(unfolded).keys(), key = lambda x : dependencies[x] ) # unfolded enthält kombi   
+    dependencies = compute_dependencies(unfolded,criticalMSTypes)
+    processingOrder = sorted(compute_dependencies(unfolded,criticalMSTypes).keys(), key = lambda x : dependencies[x] ) # unfolded enthält kombi   
     costs = 0
 
     for projection in processingOrder:  #parallelize computation for all projections at the same level
@@ -96,7 +107,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
             partType = returnPartitioning(projection, unfolded[projection], criticalMSTypes)
 
                 
-            result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter)
+            result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter,projFilterDict,IndexEventNodes,network,allPairs,mycombi,rates,singleSelectivities,projrates)
             additional = result[0]
             costs += additional
             hopLatency[projection] += result[2]

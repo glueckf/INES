@@ -25,6 +25,11 @@ def optimisticTotalRate(self,projection, *noFilterParam): # USE FILTERED RATE FO
     projFilterDict = self.h_projFilterDict
     rates = self.h_rates_data
     nodes = self.h_nodes
+    IndexEventNodes = self.h_IndexEventNodes
+
+    singleSelectivities = self.single_selectivity
+    instances = self.h_instances
+
     if noFilterParam:
         noFilter = noFilter[0]
     if projection in projlist: # is complex event        
@@ -33,10 +38,10 @@ def optimisticTotalRate(self,projection, *noFilterParam): # USE FILTERED RATE FO
                 myproj = i
                
                 if getMaximalFilter(projFilterDict, myproj):                                                
-                        return getDecomposedTotal(getMaximalFilter(projFilterDict, myproj, noFilter), myproj)    
+                        return getDecomposedTotal(getMaximalFilter(projFilterDict, myproj, noFilter), myproj,singleSelectivities,rates,instances)    
                 else:
                         #return projrates[myproj][1]
-                        return projFilterDict[myproj][getMaximalFilter(projFilterDict, myproj, noFilter)][0] * getNumETBs(myproj) #TODO change
+                        return projFilterDict[myproj][getMaximalFilter(projFilterDict, myproj, noFilter)][0] * getNumETBs(myproj,IndexEventNodes) #TODO change
     else:
         return rates[projection.leafs()[0]] * len(nodes[projection.leafs()[0]])
 
@@ -50,7 +55,7 @@ def removeFilters(self):
             
                
             
-def cheapRest(upstreamprojection, projection, partEvent, restRate): # this is not correct -> all partitionings of cheap rest must be investigated! also remaining events muss in teillisten aufgeteilt werden etc. 
+def cheapRest(self,upstreamprojection, projection, partEvent, restRate): # this is not correct -> all partitionings of cheap rest must be investigated! also remaining events muss in teillisten aufgeteilt werden etc. 
     ''' checks if the rest of primitve events that must be provided to match upstream projection with projection and a multisink placement of partEvent allows the multi-sink placement at partEvent '''
     remainingEvents = list(set(upstreamprojection.leafs()).difference(set(projection.leafs() + [partEvent])))
     remainingEventsQ = [PrimEvent(x) for x in remainingEvents]
@@ -60,7 +65,7 @@ def cheapRest(upstreamprojection, projection, partEvent, restRate): # this is no
        #cheapestProj =  sorted([x for x in (projlist + remainingEventsQ) if partEvent not in x.leafs() and not set(projection.leafs()).issubset(set(x.leafs())) and event in x.leafs() and len(x.leafs()) < len(upstreamprojection.leafs()) and set(x.leafs()).issubset(set(upstreamprojection.leafs()))], key = lambda x: optimisticTotalRate(x))[0]
        cheapestProj = PrimEvent(event[0]) # only MS combinations with exactly one complex event as input investigates
        remainingEvents = list(set(remainingEventsQ).difference(set(remainingEventsQ).intersection(set(cheapestProj.leafs()))))
-       restRate -= optimisticTotalRate(cheapestProj)
+       restRate -= optimisticTotalRate(self,cheapestProj)
     if restRate > 0 :
         return True
     else: 
@@ -69,12 +74,16 @@ def cheapRest(upstreamprojection, projection, partEvent, restRate): # this is no
        
 def promisingChainProjection(self,projection):
     ''' outputs for a projection a dictionary having potential partitioning event types as keys and the potential multisink projections in which projection is part of the combination '''
-    optimisticRate =  optimisticTotalRate(projection)
+    optimisticRate =  optimisticTotalRate(self,projection)
     combinationdict = {}
     projFilterDict = self.h_projFilterDict
     rates = self.h_rates_data
     projlist = self.h_projlist
     query = self.query_workload[-1]
+
+    singleSelectivities = self.single_selectivity
+    instances = self.h_instances
+
     cheapRests = {}
     for eventtype in query.leafs():   
         if not eventtype in projection.leafs():     
@@ -85,7 +94,7 @@ def promisingChainProjection(self,projection):
                     break
             usingfilter = []
             for myfilter in filters:                
-                if getDecomposedTotal(myfilter, projection) < rates[eventtype]:
+                if getDecomposedTotal(myfilter, projection,singleSelectivities,rates,instances) < rates[eventtype]:
                     usingfilter.append(myfilter)
             if usingfilter:     # always true...                
                     events = [x for x in projection.leafs()]
@@ -93,7 +102,7 @@ def promisingChainProjection(self,projection):
 
                     curprojlist = [x for x in projlist if len(x.leafs())>=len(events) and set(events).issubset(x.leafs())] # get possible upstream projs   
                     
-                    curprojlist = [x for x in curprojlist if cheapRest(x, projection, eventtype,  rates[eventtype] - optimisticRate)] #OLD and SLOW     
+                    curprojlist = [x for x in curprojlist if cheapRest(self,x, projection, eventtype,  rates[eventtype] - optimisticRate)] #OLD and SLOW     
                     if curprojlist:                         
                         combinationdict[eventtype] = curprojlist + usingfilter  
                     #else:
@@ -146,13 +155,13 @@ def getSavings(self,partType, combination, projection,DistMatrices,MSTrees): #OP
     #TODO: it is not totalRate but only local Rate that we save for PartType
     if not projection.get_original(wl) in wl: #some intermediate projection
       #  return totalRate(partType) - (len(MSTrees[partType].edges())*  ((sum(list(map(lambda x: totalRate(x), [y for y in combination if not y == partType])))) + optimisticTotalRate(projection)))
-         return longestPath * totalRate(partType) - (len(MSTrees[partType].edges())*  (sum(list(map(lambda x: totalRate(x), [y for y in combination if not y == partType])))) + longestPath * optimisticTotalRate(projection))
+         return longestPath * totalRate(self,partType,self.h_projrates) - (len(MSTrees[partType].edges())*  (sum(list(map(lambda x: totalRate(self,x,self.h_projrates), [y for y in combination if not y == partType])))) + longestPath * optimisticTotalRate(projection))
     
     elif projection.get_original(wl) in wl and not partType in list(map(lambda x: str(x), projection.get_original(wl).kleene_components())): #sink projection
-        return  longestPath * totalRate(partType) - (len(MSTrees[partType].edges())*  sum(list(map(lambda x: totalRate(x), [y for y in combination if not y == partType])))) 
+        return  longestPath * totalRate(self,partType,self.h_projrates,self.h_projrates) - (len(MSTrees[partType].edges())*  sum(list(map(lambda x: totalRate(self,partType,self.h_projrates,self.h_projrates), [y for y in combination if not y == partType])))) 
    
     elif projection.get_original(wl) in wl and partType in list(map(lambda x: str(x), projection.get_original(wl).kleene_components())): # ms sink query at kleene type 
-        return longestPath * totalRate(partType) - (len(MSTrees[partType].edges())*  (sum(list(map(lambda x: totalRate(x), [y for y in combination if not y == partType])))) + longestPath * optimisticTotalRate(projection))
+        return longestPath * totalRate(self,partType,self.h_projrates,self.h_projrates) - (len(MSTrees[partType].edges())*  (sum(list(map(lambda x: totalRate(self,partType,self.h_projrates,self.h_projrates), [y for y in combination if not y == partType])))) + longestPath * optimisticTotalRate(projection))
 
 def getBestChainCombis(self,query, shared, criticalMSTypes, noFilter):         
     projsPerQuery = self.h_projsPerQuery
@@ -161,13 +170,13 @@ def getBestChainCombis(self,query, shared, criticalMSTypes, noFilter):
     myprojlist = [x for x in projsPerQuery[query]] # HERE WE NEED TO RESPECT OPERATOR SEMANTIC -> new function
 
     for projection in [x for x in myprojlist]: #trivial combination and ms placement for projections containing two prim events only
-            partType,DistMatrices,MSTrees = returnPartitioning(projection, projection.leafs(), criticalMSTypes)  
+            partType,DistMatrices,MSTrees = returnPartitioning(self,projection, projection.leafs(), self.h_projrates,criticalMSTypes)  
             if partType:                
                 rest = [x for x in projection.leafs() if not x in partType]
                 costs = getSavings(self,partType[0],[partType[0]] + rest, projection,DistMatrices,MSTrees)
                 combiDict[projection] = (projection.leafs(), partType, costs)
             else:
-                costs = sum(list(map(lambda x: totalRate(x), projection.leafs()))) * longestPath
+                costs = sum(list(map(lambda x: totalRate(self,x,self.h_projrates), projection.leafs()))) * longestPath
                 combiDict[projection] = (projection.leafs(), [], 0 - costs)
                     
     
@@ -178,7 +187,7 @@ def getBestChainCombis(self,query, shared, criticalMSTypes, noFilter):
                     if projection == mytuple[1]: 
                         remainingEvents = list(set(mytuple[1].leafs()).difference(set(mytuple[0].leafs())))
                         mycombination = [mytuple[0]] + remainingEvents
-                        res,DistMatrices,MSTrees = returnPartitioning(projection, mycombination, criticalMSTypes)
+                        res,DistMatrices,MSTrees = returnPartitioning(self,projection, mycombination, self.h_projrates,criticalMSTypes)
                         curMSTypes = [eventtype]
                         if res:     
                             curcosts = getSavings(self, eventtype, mycombination, projection,DistMatrices,MSTrees)                           
@@ -264,13 +273,13 @@ def costsOfCombination(self,projection, mycombi, shared, criticalMSTypes,DistMat
            mycosts += combiDict[proj][2]
    
        # check if it has a multi-sink placement and add costs/savings
-       partEvent = returnPartitioning(projection, mycombi, criticalMSTypes)
+       partEvent = returnPartitioning(self,projection, mycombi, self.h_projrates,criticalMSTypes)
        
        if partEvent:           
            mycosts += getSavings(self,partEvent[0], mycombi, projection,DistMatrices,MSTrees)
        
        else: #projection has a single sink placement, such that we need to send th total rates of all inputs of the combination average path length at least once
-          mycosts -= (sum(list(map(lambda x: totalRate(x), [y for y in mycombi if y in combiDict.keys() and not combiDict[y][1]])))) * longestPath 
+          mycosts -= (sum(list(map(lambda x: totalRate(self,x,self.h_projrates), [y for y in mycombi if y in combiDict.keys() and not combiDict[y][1]])))) * longestPath 
            
        # reduce by primitive events and shared subprojection
        mycosts -= sharedAncestorsCost(self,projection, mycombi, partEvent,DistMatrices,MSTrees)
@@ -300,7 +309,7 @@ def eventSharing(self,projection, mycombi, mycosts, shared):
     myInputs = set(sum(list(myInputsMSProjs.values()),[]))
     totalInputs = sum(list(myInputsMSProjs.values()),[])
     for event in myInputs:
-            costs += totalRate(event) * longestPath * totalInputs.count(event)   
+            costs += totalRate(self,event,self.h_projrates) * longestPath * totalInputs.count(event)   
     return costs
 
 
@@ -332,7 +341,7 @@ def sharedAncestorsCost(self,projection, mycombi, partEvent,DistMatrices,MSTrees
     for partProj in partTypeDict.keys():
         myAllPairs = DistMatrices[MSTrees[partProj]]      
         # bestNodeValue = min([sum(x) for x in myAllPairs if x])
-        costs += (partTypeDict[partProj] - 1) * totalRate(partProj) * longestPath 
+        costs += (partTypeDict[partProj] - 1) * totalRate(self,partProj,self.h_projrates) * longestPath 
     
     return costs
 
@@ -395,7 +404,7 @@ def getExpensiveProjs(self,criticals):  # only on criticalTypes
     myMSProjs = [x for x in combiDict.keys() if set(allMSProjs).intersection(set(combiDict[x][0])).issubset(set(allMSProjs)) and combiDict[x][1] ]
     #the inputs are already part of other multi-sink placements (or if at least some of the inputs are already disseminated)
     for proj in allMSProjs:
-        print(str(proj) +  " : " +  str(totalRate(proj)))
+        print(str(proj) +  " : " +  str(totalRate(self,proj,self.h_projrates)))
     print(list(map(lambda x: str(x), myMSProjs)))
     
     #
@@ -433,8 +442,6 @@ def generate_combigen(self):
     criticalMSTypes= []
     noFilter = 0
     shared = 1
-    if len(sys.argv) > 1: 
-        noFilter = int(sys.argv[1])
 
     wl = self.query_workload
     projsPerQuery = self.h_projsPerQuery
@@ -444,7 +451,7 @@ def generate_combigen(self):
     #random.shuffle(wl)
     for query in sorted(wl, key = (lambda x: len(projsPerQuery[x.stripKL_simple()])), reverse = True):
         query = query.stripKL_simple()
-        getBestChainCombis(query, shared, criticalMSTypes, noFilter)
+        getBestChainCombis(self,query, shared, criticalMSTypes, noFilter)
         criticalMSTypes += allSiSEvents(query)
     end_time = time.time()
     

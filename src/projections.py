@@ -75,6 +75,8 @@ def returnPartitioning(self ,proj, combi,projrates:dict, *args):
     
 		''' returns list containing partitioning input type of proj generated with combi, args contains critical eventtypes, if potential eventtype in critical events, return False '''
 		
+		DistMatrices = None
+		MSTrees =None
 		rates = self.h_rates_data
 		myevents = [x for x in combi if len(x) == 1]
 		myevents = sorted(myevents, key = lambda x: rates[x], reverse = True)
@@ -85,7 +87,7 @@ def returnPartitioning(self ,proj, combi,projrates:dict, *args):
 						return []
 		
 		if myevents:
-			res,DistMatrices,MSTrees = NEW_isPartitioning(myevents[0], combi, proj,projrates)
+			res,DistMatrices,MSTrees = NEW_isPartitioning(self,myevents[0], combi, proj,projrates)
 			#res = NEW_isPartitioning_alt(myevents[0], combi, proj, myprojFilterDict)
 			if res:   
 				return [myevents[0], res[0]],DistMatrices,MSTrees
@@ -236,11 +238,12 @@ def NEW_isPartitioning(self ,element, combi, proj,projrates:dict):
 	wl = self.query_workload
 	G = self.graph
 	IndexEventNodes = self.h_IndexEventNodes
+	EventNodes = self.h_eventNodes
 	
 	longestPath = getLongest(self.allPairs)
 		
 	etbs = IndexEventNodes[element]
-	myNodes = [getNodes(x)[0] for x in etbs]   
+	myNodes = [getNodes(x,EventNodes,IndexEventNodes)[0] for x in etbs]   
 	if element not in MSTrees.keys():
 		myTree = minimum_subgraph(G, myNodes)
 		MSTrees[element] = myTree
@@ -262,14 +265,14 @@ def NEW_isPartitioning(self ,element, combi, proj,projrates:dict):
 			additional = rates[i] * len(nodes[i])              
 			mysum += additional              
 		else:
-			additional = projrates[i][1] * getNumETBs(i)             
+			additional = projrates[i][1] * getNumETBs(i,IndexEventNodes)             
 			mysum += additional
 
 	myproj  = 0 #costs for outputrates
 	if proj.get_original(wl) not in wl:
-		myproj =  projrates[proj][1] * (getNumETBs(proj)) # additional constraint about ratio of partitioning event type and outputrate of projection
+		myproj =  projrates[proj][1] * (getNumETBs(proj,IndexEventNodes)) # additional constraint about ratio of partitioning event type and outputrate of projection
 
-	if totalRate(element,projrates) * longestPath > (mysum * costs) + myproj * longestPath :  
+	if totalRate(self,element,projrates) * longestPath > (mysum * costs) + myproj * longestPath :  
 		
 		return [costs],MSTrees,DistMatrices
 
