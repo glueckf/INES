@@ -65,6 +65,8 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     number_parents = max_parents
 
     print(filename)
+    print("Here")
+    print(IndexEventNodes)
     ccosts = NEWcomputeCentralCosts(wl,IndexEventNodes,allPairs,rates,EventNodes,self.graph)
     #print("central costs : " + str(ccosts))
     centralHopLatency = max(allPairs[ccosts[1]])
@@ -92,7 +94,8 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     #mycombi = removeSisChains()
     unfolded = self.h_mycombi
     criticalMSTypes = self.h_criticalMSTypes
- 
+    print(unfolded)
+    print(criticalMSTypes)
     dependencies = compute_dependencies(unfolded,criticalMSTypes)
     processingOrder = sorted(compute_dependencies(unfolded,criticalMSTypes).keys(), key = lambda x : dependencies[x] ) # unfolded enthält kombi   
     costs = 0
