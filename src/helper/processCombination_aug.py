@@ -309,12 +309,8 @@ def augmentProjFilters(old, additional, mylist):
 
 #mycombi = removeLayer(mycombi, [0])
 
-projFilterDict =  {}      
-
-for proj in projlist:
-    projFilterDict.update(returnProjFilterDict(proj))   
-    
-additionalProjFilter = returnAdditionalFilterDict()
-additionalInputs = getMSInputs()
+   
+#additionalProjFilter = returnAdditionalFilterDict()
+#additionalInputs = getMSInputs()
        
 #projFilterDict = augmentProjFilters(projFilterDict, additionalProjFilter, additionalInputs) #TODO!!! MUST BE INCLUDED IN ORIGINAL VERSION!

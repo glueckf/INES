@@ -230,8 +230,9 @@ def costsAt(eventtype, node):
                 mycosts += rates[eventtype] * allPairs[node][mySource] 
     return mycosts
 
-def NEWcomputeCentralCosts(workload,IndexEventNodes,allPairs,rates):
+def NEWcomputeCentralCosts(workload,IndexEventNodes,allPairs,rates,EventNodes,G):
     #Adding all Eventtypes (simple events) to the list
+    import networkx as nx
     eventtypes = []
     for i in workload:
         myevents = i.leafs()
@@ -252,7 +253,7 @@ def NEWcomputeCentralCosts(workload,IndexEventNodes,allPairs,rates):
         oldcosts = mycosts
         for etb in IndexEventNodes[eventtype]:
 
-            possibleSources = getNodes(etb)
+            possibleSources = getNodes(etb,EventNodes,IndexEventNodes)
             mySource = possibleSources[0]
             for source in possibleSources:
                 
@@ -268,7 +269,7 @@ def NEWcomputeCentralCosts(workload,IndexEventNodes,allPairs,rates):
     for e in eventtypes:        
         routingDict[e] = {}
         for etb in IndexEventNodes[e]:
-            possibleSources = getNodes(etb)
+            possibleSources = getNodes(etb,EventNodes,IndexEventNodes)
             mySource = possibleSources[0]
             shortestPath = nx.shortest_path(G, mySource, node, method='dijkstra')  
             routingDict[e][etb] = shortestPath
@@ -276,7 +277,7 @@ def NEWcomputeCentralCosts(workload,IndexEventNodes,allPairs,rates):
     for eventtype in eventtypes:    
         thiscosts = 0
         for etb in IndexEventNodes[eventtype]:
-                    mySource = getNodes(etb)[0]         
+                    mySource = getNodes(etb,EventNodes,IndexEventNodes)[0]         
                     thiscosts += rates[eventtype] * allPairs[node][mySource]
                   #  print(allPairs[node][mySource])
       #  print(eventtype, thiscosts )    

@@ -52,7 +52,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     mycombi = self.h_mycombi
     singleSelectivities = self.single_selectivity
     projrates = self.h_projrates
-    
+    EventNodes = self.h_eventNodes
 
     Filters = []
     writeExperimentData = 0
@@ -65,7 +65,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     number_parents = max_parents
 
     print(filename)
-    ccosts = NEWcomputeCentralCosts(wl,IndexEventNodes,allPairs,rates)
+    ccosts = NEWcomputeCentralCosts(wl,IndexEventNodes,allPairs,rates,EventNodes,self.graph)
     #print("central costs : " + str(ccosts))
     centralHopLatency = max(allPairs[ccosts[1]])
     numberHops = sum(allPairs[ccosts[1]])

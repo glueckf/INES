@@ -11,6 +11,7 @@ from helper.parse_network import initialize_globals
 from helper.structures import initEventNodes
 from combigen import populate_projFilterDict,removeFilters,generate_combigen
 from helper.structures import getLongest
+from operatorplacement import calculate_operatorPlacement
 
 class INES():
     allPairs: list
@@ -30,6 +31,9 @@ class INES():
     query_size:int 
     query_length: int
     networkParams: list
+    eval_plan = None
+    central_eval_plan = None
+    experiment_result = None
     
     "Helper Variables from different Files - namespace issues"
     h_network_data = None
@@ -83,6 +87,7 @@ class INES():
         self.h_projFilterDict= removeFilters(self)
         self.h_mycombi, self.h_mycombi, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
+        self.eval_plan,self.central_eval_plan,self.experiment_result = calculate_operatorPlacement(self,'test',self.max_parents)
         
 
 

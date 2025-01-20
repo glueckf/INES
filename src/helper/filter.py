@@ -1,12 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Aug 20 13:03:07 2021
-
-@author: samira
-
-Output selector related methods.
-"""
 from helper.structures import getNumETBs
 
 def computePromisingType(self,projection):
@@ -99,12 +90,13 @@ def getPMs(projection, myfilter):
     return 0
 
 
-def returnAdditionalFilterDict():
+def returnAdditionalFilterDict(self):
+    projrates = self.h_projrates
     additional = {}
     for i in projrates.keys():
       additional[i] = {}
       myrate = projrates[i][1] * getNumETBs(i)
       for k in i.leafs():
-          if getDecomposedTotal([k], i) < myrate:
-              additional[i][k] = getDecomposed([k], i)
+          if getDecomposedTotal([k], i,self.single_selectivity,self.h_rates_data,self.h_instances) < myrate:
+              additional[i][k] = getDecomposed([k], i),self.single_selectivity,self.h_rates_data
     return additional
