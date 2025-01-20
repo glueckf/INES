@@ -18,21 +18,6 @@ from helper.projString import filter_numbers,sepnumbers,rename_without_numbers,g
 from helper.Tree import PrimEvent
 
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from INES import INES
-# with open('current_wl',  'rb') as  wl_file:
-#     wl = pickle.load(wl_file)
-    
-# #wl = [wl[0]]   
-# with open('selectivities', 'rb') as selectivity_file:
-#     selectivities = pickle.load(selectivity_file) 
-
-# structures for speedup in partInput function
-
-
-
 
 def optimisticTotalRate(self ,projection): # USE FILTERED RATE FOR ESTIMATION 
     rates = self.h_rates_data
@@ -84,7 +69,8 @@ def returnPartitioning(self ,proj, combi,projrates:dict, *args):
 			args = args[0]
 			if myevents:
 				if myevents[0] in args:
-						return []
+						res,DistMatrices,MSTrees = NEW_isPartitioning(self,myevents[0], combi, proj,projrates)
+						return [],DistMatrices,MSTrees
 		
 		if myevents:
 			res,DistMatrices,MSTrees = NEW_isPartitioning(self,myevents[0], combi, proj,projrates)
