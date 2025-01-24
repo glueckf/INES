@@ -476,7 +476,6 @@ def generate_combigen(self):
     criticalMSProjs = [x for x in mycombi.keys() if combiDict[x][1] and combiDict[x][1][0] in criticalMSTypes]
 
     
-    
     for pro in curcombi.keys():
         print(str(pro) + " " + str(list(map(lambda x: str(x), curcombi[pro]))))
     print("time: " + str(end_time - start_time))   

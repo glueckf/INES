@@ -96,8 +96,8 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     criticalMSTypes = self.h_criticalMSTypes
     print(unfolded)
     print(criticalMSTypes)
-    dependencies = compute_dependencies(unfolded,criticalMSTypes)
-    processingOrder = sorted(compute_dependencies(unfolded,criticalMSTypes).keys(), key = lambda x : dependencies[x] ) # unfolded enthält kombi   
+    dependencies = compute_dependencies(self,unfolded,criticalMSTypes)
+    processingOrder = sorted(compute_dependencies(self,unfolded,criticalMSTypes).keys(), key = lambda x : dependencies[x] ) # unfolded enthält kombi   
     costs = 0
 
     for projection in processingOrder:  #parallelize computation for all projections at the same level
@@ -107,10 +107,10 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
                 hopLatency[projection] = max([hopLatency[x] for x in unfolded[projection] if x in hopLatency.keys()])
 
           
-            partType = returnPartitioning(projection, unfolded[projection], criticalMSTypes)
+            partType = returnPartitioning(self,projection, unfolded[projection], self.h_projrates,criticalMSTypes)
 
                 
-            result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter,projFilterDict,IndexEventNodes,network,allPairs,mycombi,rates,singleSelectivities,projrates)
+            result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter,projFilterDict,EventNodes,IndexEventNodes,self.h_network_data,allPairs,mycombi,rates,singleSelectivities,projrates,self.graph)
             additional = result[0]
             costs += additional
             hopLatency[projection] += result[2]

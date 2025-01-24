@@ -9,14 +9,15 @@ Initialize all pair shortest paths for graph.
 import multiprocessing
 import networkx as nx 
 
-routingDict = None
+
 G = None
 
-def find_shortest_path_or_ancestor(routingDict ,me, j):
+def find_shortest_path_or_ancestor( routingDict,me, j):
     """Find the shortest path between nodes `me` and `j`.
        If no direct path exists, calculate the combined distance via common ancestors or fallback to node 0.
        Returns the list of nodes representing the path.
     """
+
     try:
         # Attempt to find the direct shortest path and return the path (list of nodes)
         return routingDict[me][j] #nx.shortest_path(G, me, j, method='dijkstra')

@@ -15,6 +15,8 @@ from allPairs import find_shortest_path_or_ancestor
 import copy
 from EvaluationPlan import Instance,Projection
 import numpy as np
+from helper.filter import getKeySingleSelect
+import networkx as nx
 
 def NEWcomputeMSplacementCosts(projection, sourcetypes, destinationtypes, noFilter): #we need tuples, (C, [E,A]) C should be sent to all e and a nodes ([D,E], [A]) d and e should be sent to all a nodes etc
     #print(projection, sourcetypes)
@@ -113,13 +115,14 @@ def getDestinationsUpstream(projection):
     else:        
         return  range(len(allPairs))      
         
-def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,IndexEventNodes,network,allPairs,mycombi,rates,singleSelectivities,projrates):
+def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,EventNodes,IndexEventNodes,network,allPairs,mycombi,rates,singleSelectivities,projrates,Graph):
     from allPairs import create_routing_dict
     routingDict = create_routing_dict()
     costs = np.inf
     node = 0
     Filters  = []    
-    
+    routingDict = dict(nx.all_pairs_shortest_path(Graph))
+    print(routingDict)
      
     # add filters of projections to eventtpes in combi, if filters added, use costs of filter -> compute costs for single etbs of projrates 
     intercombi = []
@@ -143,7 +146,7 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
         skip_destination = False  # Flag to determine if we should skip this destination
         for eventtype in combination:
             for etb in IndexEventNodes[eventtype]:
-                possibleSources = getNodes(etb)
+                possibleSources = getNodes(etb,EventNodes,IndexEventNodes)
                 for source in possibleSources:
                     # Use the routing_dict to get the common ancestor
                     common_ancestor = routingDict[destination][source]['common_ancestor']
@@ -163,7 +166,7 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
 
                 for etb in IndexEventNodes[eventtype]: #check for all sources #here iterated over length of IndesEventNodes to get all sources for etb Instances
                         
-                        possibleSources = getNodes(etb)
+                        possibleSources = getNodes(etb,EventNodes,IndexEventNodes)
                         mySource = possibleSources[0]
                         for source in possibleSources:
                             if allPairs[destination][source] < allPairs[destination][mySource]:                               
@@ -193,13 +196,13 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
     for eventtype in combination:
             curInstances = [] #!
             for etb in IndexEventNodes[eventtype]:
-                possibleSources = getNodes(etb)
+                possibleSources = getNodes(etb,EventNodes,IndexEventNodes)
                 mySource = possibleSources[0] #??
                 for source in possibleSources:                    
                     if allPairs[node][source] < allPairs[node][mySource]:
                        mySource  = source     
-
-                shortestPath = find_shortest_path_or_ancestor(G, mySource, node) 
+                
+                shortestPath = find_shortest_path_or_ancestor(routingDict, mySource, node) 
               
                 if len(shortestPath) - 1 > longestPath:
                     longestPath = len(shortestPath) - 1                    
@@ -207,14 +210,14 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
                 curInstances.append(newInstance) #!    
                 
                 for stop in shortestPath:
-                    if not stop in getNodes(etb):                        
-                        setEventNodes(stop, etb) 
+                    if not stop in getNodes(etb,EventNodes,IndexEventNodes):                        
+                        setEventNodes(stop, etb,EventNodes,IndexEventNodes) 
                         
             newInstances += curInstances          #!   
             myProjection.addInstances(eventtype, curInstances)     #!        
                         
     SiSManageETBs(projection, node)
-    hops = len(find_shortest_path_or_ancestor(G, 0, node)) - 1 if len(find_shortest_path_or_ancestor(G, 0, node)) > 1 else 0
+    hops = len(find_shortest_path_or_ancestor(routingDict, 0, node)) - 1 if len(find_shortest_path_or_ancestor(routingDict, 0, node)) > 1 else 0
     myProjection.addSpawned([IndexEventNodes[projection][0]]) #!
     costs += hops
     return costs, node, longestPath, myProjection, newInstances, Filters

@@ -30,7 +30,7 @@ import numpy as np
 #criticalMSProjections = criticalMSTypes[1]
 #criticalMSTypes = criticalMSTypes[0]
 
-def compute_dependencies(combiDict,criticalMSTypes):# has as input a final combination
+def compute_dependencies(self,combiDict,criticalMSTypes):# has as input a final combination
     ''' outputs a dictionary which has as keys the projections of a final combination and as corresponding key the level of the projection in the muse graph, for sis and ms projections having the same level, level for msp is increased as placements can be exploited here'''         
     levels = {}
     for proj in combiDict.keys():
@@ -45,7 +45,7 @@ def compute_dependencies(combiDict,criticalMSTypes):# has as input a final combi
     for proj in levels.keys():
         levels[proj] = levels[proj] * 2
     for proj in levels.keys():
-        if not returnPartitioning(proj, combiDict[proj], criticalMSTypes):
+        if not returnPartitioning(self,proj, combiDict[proj], self.h_projrates,criticalMSTypes):
             levels[proj] = levels[proj]  + 1
 
     return levels    
