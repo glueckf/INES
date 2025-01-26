@@ -92,7 +92,7 @@ class INES():
 
 
 
-my_ines = INES(12,0.5,6,0.3,2,3,5)
+my_ines = INES(12,0.5,6,0.3,10,3,5)
 
 print(my_ines.query_workload)
 print(my_ines.config_single)

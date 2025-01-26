@@ -159,11 +159,11 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
  
     new = False
     try:
-         f = open("../res/"+str(filename)+".csv")   
+         f = open("./res/"+str(filename)+".csv")   
     except FileNotFoundError:
          new = True           
         
-    with open("../res/"+str(filename)+".csv", "a") as result:
+    with open("./res/"+str(filename)+".csv", "a") as result:
        writer = csv.writer(result)  
        if new:
            writer.writerow(schema)              

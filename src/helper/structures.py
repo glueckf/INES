@@ -55,7 +55,7 @@ def setEventNodes(node, etb,EventNodes,IndexEventNodes):
 def unsetEventNodes(node, etb,EventNodes,IndexEventNodes):
     EventNodes[IndexEventNodes[etb]][node] = 0    
     
-def addETB(etb, etype,EventNodes,IndexEventNodes):
+def addETB(etb, etype,EventNodes,IndexEventNodes,network):
     mylist = [0 for x in range(len(network.keys()))]
     EventNodes.append(mylist)
     index = len(EventNodes)-1
@@ -65,10 +65,10 @@ def addETB(etb, etype,EventNodes,IndexEventNodes):
     else:
         IndexEventNodes[etype].append(etb)
     
-def SiSManageETBs(projection, node):
-    etbID = genericETB("", projection)[0]
-    addETB(etbID, projection)           
-    setEventNodes(node, etbID)       
+def SiSManageETBs(projection, node,IndexEventNodes,EventNodes,network):
+    etbID = genericETB("", projection,node)[0]
+    addETB(etbID, projection,EventNodes,IndexEventNodes,network)           
+    setEventNodes(node, etbID,EventNodes,IndexEventNodes)       
 
 def MSManageETBs(projection, parttype,nodes):
     etbIDs = genericETB(parttype, projection)

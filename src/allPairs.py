@@ -10,14 +10,14 @@ import multiprocessing
 import networkx as nx 
 
 
-G = None
+#G = None
 
 def find_shortest_path_or_ancestor( routingDict,me, j):
     """Find the shortest path between nodes `me` and `j`.
        If no direct path exists, calculate the combined distance via common ancestors or fallback to node 0.
        Returns the list of nodes representing the path.
     """
-
+    
     try:
         # Attempt to find the direct shortest path and return the path (list of nodes)
         return routingDict[me][j] #nx.shortest_path(G, me, j, method='dijkstra')
@@ -108,13 +108,14 @@ def get_common_ancestor_and_steps(G, source, destination):
     hops = steps_from_source + steps_from_destination
     return common_ancestor, hops
 
-def create_routing_dict():
+def create_routing_dict(graph):
     """Create the routing dictionary for the graph."""
+    
     routing_dict = {}
-    for destination in G.nodes():
+    for destination in graph.nodes():
         routing_dict[destination] = {}
-        for source in G.nodes():
-            common_ancestor, hops = get_common_ancestor_and_steps(G, source, destination)
+        for source in graph.nodes():
+            common_ancestor, hops = get_common_ancestor_and_steps(graph, source, destination)
             routing_dict[destination][source] = {
                 'common_ancestor': common_ancestor,
                 'hops': hops

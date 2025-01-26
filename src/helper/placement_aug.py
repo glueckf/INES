@@ -117,12 +117,13 @@ def getDestinationsUpstream(projection):
         
 def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,EventNodes,IndexEventNodes,network,allPairs,mycombi,rates,singleSelectivities,projrates,Graph):
     from allPairs import create_routing_dict
-    routingDict = create_routing_dict()
+    routingDict = create_routing_dict(Graph)
     costs = np.inf
     node = 0
     Filters  = []    
-    routingDict = dict(nx.all_pairs_shortest_path(Graph))
+   # routingDict = dict(nx.all_pairs_shortest_path(Graph))
     print(routingDict)
+    routingAlgo = dict(nx.all_pairs_shortest_path(Graph))
      
     # add filters of projections to eventtpes in combi, if filters added, use costs of filter -> compute costs for single etbs of projrates 
     intercombi = []
@@ -202,7 +203,7 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
                     if allPairs[node][source] < allPairs[node][mySource]:
                        mySource  = source     
                 
-                shortestPath = find_shortest_path_or_ancestor(routingDict, mySource, node) 
+                shortestPath = find_shortest_path_or_ancestor(routingAlgo, mySource, node) 
               
                 if len(shortestPath) - 1 > longestPath:
                     longestPath = len(shortestPath) - 1                    
@@ -216,8 +217,8 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
             newInstances += curInstances          #!   
             myProjection.addInstances(eventtype, curInstances)     #!        
                         
-    SiSManageETBs(projection, node)
-    hops = len(find_shortest_path_or_ancestor(routingDict, 0, node)) - 1 if len(find_shortest_path_or_ancestor(routingDict, 0, node)) > 1 else 0
+    SiSManageETBs(projection, node,IndexEventNodes,EventNodes,network)
+    hops = len(find_shortest_path_or_ancestor(routingAlgo, 0, node)) - 1 if len(find_shortest_path_or_ancestor(routingAlgo, 0, node)) > 1 else 0
     myProjection.addSpawned([IndexEventNodes[projection][0]]) #!
     costs += hops
     return costs, node, longestPath, myProjection, newInstances, Filters
