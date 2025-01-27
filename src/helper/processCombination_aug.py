@@ -15,20 +15,6 @@ from helper.Tree import Tree
 from helper.structures import getNumETBs
 import numpy as np
 
-#with open('curcombi',  'rb') as  combi_file:
- #       mycombi = pickle.load(combi_file)
-        
-#with open('originalCombiDict', 'rb') as combiDict_file:
-#        originalDict = pickle.load(combiDict_file)
-        
-#with open('criticalMSTypes', 'rb') as critical:
-#      criticalMSTypes = pickle.load(critical)
-        
-#with open('filterDict', 'rb') as filterDict_file:
- #       filterDict = pickle.load(filterDict_file)    
-
-#criticalMSProjections = criticalMSTypes[1]
-#criticalMSTypes = criticalMSTypes[0]
 
 def compute_dependencies(self,combiDict,criticalMSTypes):# has as input a final combination
     ''' outputs a dictionary which has as keys the projections of a final combination and as corresponding key the level of the projection in the muse graph, for sis and ms projections having the same level, level for msp is increased as placements can be exploited here'''         
@@ -303,14 +289,3 @@ def augmentProjFilters(old, additional, mylist):
         old[proj][newFilter] = getDecomposed(additionalFilters, proj)
     return old
         
-
-### this is for removing layers to save hops
-#mycombi = removeSisChains()
-
-#mycombi = removeLayer(mycombi, [0])
-
-   
-#additionalProjFilter = returnAdditionalFilterDict()
-#additionalInputs = getMSInputs()
-       
-#projFilterDict = augmentProjFilters(projFilterDict, additionalProjFilter, additionalInputs) #TODO!!! MUST BE INCLUDED IN ORIGINAL VERSION!
