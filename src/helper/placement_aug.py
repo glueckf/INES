@@ -98,22 +98,7 @@ def findBestSource(sources, actualDestNodes): #this is only a heuristic, as the 
     return bestSource
         
 def getDestinationsUpstream(projection):
-    return  range(len(allPairs))    
-    myPartTypes = []
-    nodes = []
-    for i in mycombi.keys():
-        if projection in mycombi[i]:
-            partType = originalDict[i][1]
-            if partType:
-                myPartTypes.append(partType[0])
-    if myPartTypes:
-        for k in myPartTypes:
-            for etb in IndexEventNodes[k]:
-                nodes.append(getNodes(etb)[0])
-        
-        return nodes
-    else:        
-        return  range(len(allPairs))      
+    return  range(len(allPairs))       
         
 def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,EventNodes,IndexEventNodes,network,allPairs,mycombi,rates,singleSelectivities,projrates,Graph):
     from allPairs import create_routing_dict
