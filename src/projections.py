@@ -326,6 +326,7 @@ def isBeneficial(self,projection, rate):
 def totalRate(self, projection,projrates:dict):
     rates = self.h_rates_data
     nodes = self.h_nodes
+    print(projrates)
     if projection in projrates.keys(): # is complex event
        # print(projection, projrates[projection][1], getNumETBs(projection))
         return projrates[projection][1] * getNumETBs(projection)
