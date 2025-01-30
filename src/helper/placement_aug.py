@@ -157,7 +157,7 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
                         for source in possibleSources:
                             if allPairs[destination][source] < allPairs[destination][mySource]:                               
                                    mySource  = source
-                        
+                        "check for computing power"
                         #print(hops)
                         if eventtype in projFilterDict.keys() and  getMaximalFilter(projFilterDict, eventtype, noFilter): #case filter 
                             mycosts +=  allPairs[destination][mySource] * getDecomposedTotal(getMaximalFilter(projFilterDict, eventtype, noFilter), eventtype)                    
