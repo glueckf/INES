@@ -12,6 +12,8 @@ from helper.structures import initEventNodes
 from combigen import populate_projFilterDict,removeFilters,generate_combigen
 from helper.structures import getLongest
 from operatorplacement import calculate_operatorPlacement
+from generateEvalPlan import generate_eval_plan
+
 
 class INES():
     allPairs: list
@@ -88,7 +90,7 @@ class INES():
         self.h_mycombi, self.h_combiDict,self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
         self.eval_plan,self.central_eval_plan,self.experiment_result = calculate_operatorPlacement(self,'test',self.max_parents)
-        
+        self.plan=generate_eval_plan(self.network,self.selectivities,self.eval_plan,self.central_eval_plan,self.query_workload)
 
 
 

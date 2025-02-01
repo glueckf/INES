@@ -45,7 +45,7 @@ def traverseListTuples(source, mytuples):
         mytuples = [x for x in mytuples if not x in toRemove]
     return myPairs  
    
-def processInstance(instance):
+def processInstance(instance,forwardingDict):
     
     routingTuples = []
     instanceDict = forwardingDict[instance.projname][instance.name]
@@ -66,7 +66,7 @@ def processInstance(instance):
             instanceDict[mytuple[0]].append(mytuple[1])        
     return instanceDict        
 
-def getSelectionRate(projection, combination):
+def getSelectionRate(projection, combination,selectivities):
     
     subsProj = set(sbs.printcombination(projection.leafs(),2))
     subsCombi = set(sum([sbs.printcombination(x.leafs(), 2) for x in combination if len(x)>1],[]))
@@ -75,32 +75,6 @@ def getSelectionRate(projection, combination):
     for i in [selectivities[x] for x in subsProj]:
         res *= i
     return res
-
-for i in myplan.projections: 
-    myproj = i.name
-    for filterTuple in myproj.Filters:
-        filterDict[filterTuple[0]] = filterTuple[1]     
-    for node in myproj.sinks:
-            evaluationDict[node].append(str(myproj.name))
-    # Operator as Key and Prim Values as Value                  
-    combinationDict[str(myproj.name)] = list(map(lambda x: str(x), myproj.combination.keys()))    # remove events used as filters
-    selectionRate[str(myproj.name)] = getSelectionRate(myproj.name, myproj.combination.keys())
-    sinkDict[str(myproj.name)] = [myproj.sinks,""]
-    if len(myproj.sinks):
-        for proj in myproj.combination.keys():
-             for instance in myproj.combination[proj]:                  
-                 if instance.sources == myproj.sinks:
-                     sinkDict[str(myproj.name)][1] = instance.projname
-    for instancelist in myproj.combination.keys():
-        for instance in myproj.combination[instancelist]: 
-                if not instance.projname in forwardingDict.keys():
-                    forwardingDict[instance.projname] = {}
-                if instance.projname in forwardingDict.keys() and not instance.name in forwardingDict[instance.projname].keys():   
-                    forwardingDict[instance.projname][instance.name] = {}
-                if list(instance.routingDict.keys()):    
-                    forwardingDict[instance.projname][instance.name] = processInstance(instance)
-                    
-                    
 
 # filterdict: proj: [filter, remainingproj, resultingcombination]
 def newFilterDict():
@@ -228,7 +202,7 @@ def adjustRoutingCentral(mydict, source):
    
  
 
-def processingText():
+def processingText(combinationDict,sinkDict,selectionRate):
     text = "muse graph\n"
     for projection in combinationDict.keys():
             text += "SELECT " + projection + " FROM "
@@ -244,30 +218,30 @@ def processingText():
 
 
 
-def networkText():
+def networkText(nw):
     mystr = "network\n"
     for i in range(len(nw)): 
         mystr += "Node " + str(i) + " " + str(nw[i])
         mystr  +="\n"
     return mystr
 
-def selectivitiesText():
+def selectivitiesText(selectivities):
     return "selectivities\n" + str(selectivities) + " \n"
 
-def queriesText():
+def queriesText(wl):
     mystr = "queries\n"
     for i in wl:
         mystr += str(i) + "\n"
     return mystr
 
-def generatePlan():
+def generatePlan(network,selectivities,workload,combinationDict,sinkDict,selectionRate):
     text  = ""
-    text += networkText() + "\n"
-    text += selectivitiesText() + "\n"
-    text += queriesText() + "\n"
+    text += networkText(network) + "\n"
+    text += selectivitiesText(selectivities) + "\n"
+    text += queriesText(workload) + "\n"
 #    text +="Randomized Rate-Based Primitive Event Generation\n"
 #    text +="-----------\n"
-    text += processingText()
+    text += processingText(combinationDict,sinkDict,selectionRate)
     return text
 
 
@@ -275,11 +249,13 @@ def generatePlan():
 
 
 
-def generate_eval_plan(nw,selectivities,myPlan,centralPlan):
+def generate_eval_plan(nw,selectivities,myPlan,centralPlan,workload):
     import io
     ID = "curr"
-    MSPlacements = myplan[2]
-    myplan = myplan[0]
+    MSPlacements = myPlan[2]
+    myplan = myPlan[0]
+
+    print(f"Myplan is {myplan}")
             
     cdict = centralPlan[1]
     csource = centralPlan[0]
@@ -292,10 +268,34 @@ def generate_eval_plan(nw,selectivities,myPlan,centralPlan):
     filterDict = {}
     sinkDict = {}
 
+    for i in myplan.projections: 
+        myproj = i.name
+        for filterTuple in myproj.Filters:
+            filterDict[filterTuple[0]] = filterTuple[1]     
+        for node in myproj.sinks:
+                evaluationDict[node].append(str(myproj.name))
+        # Operator as Key and Prim Values as Value                  
+        combinationDict[str(myproj.name)] = list(map(lambda x: str(x), myproj.combination.keys()))    # remove events used as filters
+        selectionRate[str(myproj.name)] = getSelectionRate(myproj.name, myproj.combination.keys(),selectivities)
+        sinkDict[str(myproj.name)] = [myproj.sinks,""]
+        if len(myproj.sinks):
+            for proj in myproj.combination.keys():
+                for instance in myproj.combination[proj]:                  
+                    if instance.sources == myproj.sinks:
+                        sinkDict[str(myproj.name)][1] = instance.projname
+        for instancelist in myproj.combination.keys():
+            for instance in myproj.combination[instancelist]: 
+                    if not instance.projname in forwardingDict.keys():
+                        forwardingDict[instance.projname] = {}
+                    if instance.projname in forwardingDict.keys() and not instance.name in forwardingDict[instance.projname].keys():   
+                        forwardingDict[instance.projname][instance.name] = {}
+                    if list(instance.routingDict.keys()):    
+                        forwardingDict[instance.projname][instance.name] = processInstance(instance,forwardingDict)
 
+                        
     config_buffer = io.StringIO()
 
-    config_buffer.write(generatePlan()) 
+    config_buffer.write(generatePlan(nw,selectivities,workload,combinationDict,sinkDict,selectionRate)) 
     config_buffer.seek(0)
 
     return config_buffer
