@@ -13,7 +13,7 @@ from combigen import populate_projFilterDict,removeFilters,generate_combigen
 from helper.structures import getLongest
 from operatorplacement import calculate_operatorPlacement
 from generateEvalPlan import generate_eval_plan
-
+from prepp import generate_prePP
 
 class INES():
     allPairs: list
@@ -59,6 +59,8 @@ class INES():
     h_criticalMSTypes = None
     h_criticalMSProjs = None
 
+    schema_csv = ["ID", "TransmissionRatio", "Transmission","INEvTransmission","FilterUsed", "Nodes", "EventSkew", "EventNodeRatio", "WorkloadSize", "NumberProjections", "MinimalSelectivity", "MedianSelectivity","CombigenComputationTime", "Efficiency", "PlacementComputationTime", "centralHopLatency", "Depth",  "CentralTransmission", "LowerBound", "EventTypes", "MaximumParents", "exact_costs","TransmissionRatioOperatorPlacement","TransmissionRatioCentral","PushPullTime","MaxPushPullLatency"] 
+
     def __init__(self, nwSize: int, node_event_ratio: float, num_eventtypes: int, eventskew: float, max_partens: int, query_size: int, query_length:int):
         self.nwSize = nwSize
         self.node_event_ratio = node_event_ratio
@@ -89,17 +91,14 @@ class INES():
         self.h_projFilterDict= removeFilters(self)
         self.h_mycombi, self.h_combiDict,self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
-        self.eval_plan,self.central_eval_plan,self.experiment_result = calculate_operatorPlacement(self,'test',self.max_parents)
+        self.eval_plan,self.central_eval_plan,self.experiment_result,self.results = calculate_operatorPlacement(self,'test',self.max_parents)
         self.plan=generate_eval_plan(self.network,self.selectivities,self.eval_plan,self.central_eval_plan,self.query_workload)
-
-
+        self.results += generate_prePP(self.plan,'ppmuse','e',0,0,1,False,self.allPairs)
+        
 
 my_ines = INES(12,0.5,6,0.3,10,3,5)
 
-print(my_ines.query_workload)
-print(my_ines.config_single)
-print(my_ines.single_selectivity)
-print(my_ines.h_projlist)
+print(my_ines.results)
 #print(my_ines.allPais)
 #draw_graph(my_ines.graph)
 

@@ -8,7 +8,7 @@ import random
 
 import copy
 
-import helper.push_pull_plan_generator
+import helper.push_pull_plan_generator as push_pull_plan_generator
 import pickle
 import sys
 
@@ -21,32 +21,14 @@ QUERIES = 'queries'
 MUSE_GRAPH = 'muse graph'
 SELECTIVITIES = 'selectivities'
 
-CURRENT_SECTION = ''
 
-network = []
 
-queries_to_process = []
-
-query_network = []
-
-eventtype_pair_to_selectivity = {}
-
-eventtypes_single_selectivities = {}
-
-single_selectivity_of_eventtype_within_projection = {}
-
-projection_dependencies_map = {}
-
-all_event_combinations = []
-
-all_eventtype_output_rates = {}
-
-eventtype_to_sources_map = {}
-
-eventtype_to_nodes = {}
-
-with open('allPairs', 'rb') as aP:
-    allPairs = pickle.load(aP)
+SECTION_HEADERS = {
+    'network': NETWORK,
+    'queries': QUERIES,
+    'muse graph': MUSE_GRAPH,
+    'selectivities': SELECTIVITIES
+}
 
 
 class Query_fragment():
@@ -57,16 +39,9 @@ class Query_fragment():
         self.forbidden_event_types = forbidden_event_types
 
 
-def get_current_section(line):
-    if line == 'network\n':
-        return NETWORK
-    elif line == 'queries\n':
-        return QUERIES
-    elif line == 'muse graph\n':
-        return MUSE_GRAPH
-    elif line == 'selectivities\n':
-        return SELECTIVITIES
-    return CURRENT_SECTION
+
+def get_current_section(line,CURRENT_SECTION):
+    return SECTION_HEADERS.get(line, CURRENT_SECTION)
 
 
 def extract_network_node(line):
@@ -74,7 +49,7 @@ def extract_network_node(line):
         return list(map(float, line[line.find('[')+1:line.find(']')].split(", ")))
 
 
-def extract_node_events_produced(output_rates, current_node):
+def extract_node_events_produced(output_rates, current_node,all_eventtype_output_rates,eventtype_to_sources_map):
     if output_rates is None:
         return 0
     char_counter = 0
@@ -143,7 +118,7 @@ def get_all_query_components(query):
 def is_complex_eventtype(eventtype):
     return len(eventtype) > 1
 
-def determine_query_output_rate(query, multi_sink_placement_eventtype, is_single_sink_placement):
+def determine_query_output_rate(query, multi_sink_placement_eventtype, is_single_sink_placement,all_eventtype_output_rates,eventtype_to_sources_map):
     query = re.sub(r'[0-9]+', '', query)
     
     if not is_complex_eventtype(query):
@@ -157,7 +132,7 @@ def determine_query_output_rate(query, multi_sink_placement_eventtype, is_single
     first_operator = query[0:3]
     all_query_components = get_all_query_components(query)
     for eventtype in all_query_components:
-        output_rate *= determine_query_output_rate(eventtype, multi_sink_placement_eventtype, is_single_sink_placement)
+        output_rate *= determine_query_output_rate(eventtype, multi_sink_placement_eventtype, is_single_sink_placement,all_eventtype_output_rates,eventtype_to_sources_map)
 
     if first_operator == 'SEQ':
         return output_rate
@@ -178,7 +153,7 @@ def determine_all_primitive_events_of_projection(projection):
     return given_predicates.split(',')
 
 
-def determine_total_query_selectivity(query):
+def determine_total_query_selectivity(query,eventtype_pair_to_selectivity):
     selectivity = 1.0
     
     for i in range(0,len(query)-1):
@@ -188,7 +163,7 @@ def determine_total_query_selectivity(query):
     return selectivity 
 
  
-def determine_total_query_outputrate(query):
+def determine_total_query_outputrate(query,all_eventtype_output_rates,eventtype_to_sources_map):
     outputrate = 1.0
     
     for eventtype in query:
@@ -197,7 +172,7 @@ def determine_total_query_outputrate(query):
     
     return outputrate 
 
-def determine_query_selectivity(query):
+def determine_query_selectivity(query,eventtype_pair_to_selectivity):
     query = query.replace('AND','')
     query = query.replace('SEQ','')
     query = query.replace('(','')
@@ -217,12 +192,12 @@ def determine_query_selectivity(query):
 
 
 
-def determine_total_query_rate(query):
-    return determine_query_output_rate(query.query, query.forbidden_event_types, is_single_sink_placement(query))*determine_query_selectivity(query.query)
+def determine_total_query_rate(query,all_eventtype_output_rates,eventtype_to_sources_map,eventtype_pair_to_selectivity):
+    return determine_query_output_rate(query.query, query.forbidden_event_types, is_single_sink_placement(query),all_eventtype_output_rates,eventtype_to_sources_map)*determine_query_selectivity(query.query,eventtype_pair_to_selectivity)
 
 
 
-def extract_queries(line):
+def extract_queries(line,queries_to_process):
     if line != "queries" and len(line)>1:
         queries_to_process.append(line[0:len(line)-1])
         return line
@@ -251,7 +226,7 @@ def extract_muse_graph_forbidden(line):
             return line[line.find('/n(')+3:len(line)-2]
 
 
-def extract_muse_graph_selectivities(line):
+def extract_muse_graph_selectivities(line,all_event_combinations,eventtype_pair_to_selectivity):
     all_positions_of_eventcombinations = [m.start() for m in re.finditer("'", line)]
     all_positions_of_eventproducts = [m.start() for m in re.finditer(",", line)]
     all_positions_of_eventproducts = all_positions_of_eventproducts + [m.start() for m in re.finditer("}", line)]
@@ -281,11 +256,7 @@ def is_single_sink_placement(query):
 
 
 
-def determine_randomized_distribution_push_pull_costs(queries, eventtype_combinations, highest_primitive_eventtype_to_be_processed, algorithm, samples, k, plan_print):
-    total_costs_before = 0
-    all_costs = []
-
-    from_projection_to_best_push_pull_plan = {}
+def determine_randomized_distribution_push_pull_costs(queries, eventtype_combinations, highest_primitive_eventtype_to_be_processed, algorithm, samples, k, plan_print,allPairs,eventtype_pair_to_selectivity, eventtype_to_sources_map, all_eventtype_output_rates, eventtypes_single_selectivities, single_selectivity_of_eventtype_within_projection,):
 
     total_greedy_costs = 0
     total_exact_costs = 0
@@ -317,13 +288,13 @@ def determine_randomized_distribution_push_pull_costs(queries, eventtype_combina
 
             if algorithm == "e":
                 start_exact = timer()
-                exact_push_pull_plan_for_a_projection = push_pull_plan_generator_exact.determine_exact_push_pull_plan(query, current_node)
+                exact_push_pull_plan_for_a_projection = push_pull_plan_generator_exact.determine_exact_push_pull_plan(query, current_node,allPairs)
                 
                 end_exact = timer()
                 exact_exec_times.append(end_exact-start_exact)
                 query.primitive_operators = copy.deepcopy(old_copy)
 
-                exact_costs, used_eventtypes_to_pull,latency = push_pull_plan_generator_exact.determine_costs_for_projection_on_node(exact_push_pull_plan_for_a_projection, query, current_node, already_received_eventtypes)
+                exact_costs, used_eventtypes_to_pull,latency = push_pull_plan_generator_exact.determine_costs_for_projection_on_node(exact_push_pull_plan_for_a_projection, query, current_node, already_received_eventtypes,allPairs)
                 max_latency = max(max_latency, latency)
                 if plan_print == "t":
                     print("exact_push_pull_plan_for_a_projection:", exact_push_pull_plan_for_a_projection)
@@ -337,7 +308,7 @@ def determine_randomized_distribution_push_pull_costs(queries, eventtype_combina
 
 
 #return the current upper bound for a given eventtype based on all possible lower bounds of size n-1
-def return_minimum_upper_bound(upper_bounds, eventtype):
+def return_minimum_upper_bound(upper_bounds, eventtype,single_selectivity_of_eventtype_within_projection):
     lowest_upper_bound = 1.0
 
     for _list in upper_bounds:
@@ -352,17 +323,17 @@ def return_minimum_upper_bound(upper_bounds, eventtype):
                 
 
 
-def no_better_option_found_handling(query, upper_bounds_keys):
+def no_better_option_found_handling(query, upper_bounds_keys,single_selectivity_of_eventtype_within_projection):
     for idx in range(0,len(query)):
-        upper_bound = return_minimum_upper_bound(upper_bounds_keys, query[idx])
+        upper_bound = return_minimum_upper_bound(upper_bounds_keys, query[idx],single_selectivity_of_eventtype_within_projection)
         key = str(query[idx]) + '|' + str(query)
         single_selectivity_of_eventtype_within_projection[key] = upper_bound
 
 
 
-def determine_randomized_single_selectivities_within_all_projections(query, upper_bounds_keys):  
-    projection_selectivity = determine_total_query_selectivity(query)
-    projection_outputrate = determine_total_query_outputrate(query)
+def determine_randomized_single_selectivities_within_all_projections(query, upper_bounds_keys,eventtype_pair_to_selectivity,all_eventtype_output_rates,eventtype_to_sources_map,single_selectivity_of_eventtype_within_projection):  
+    projection_selectivity = determine_total_query_selectivity(query,eventtype_pair_to_selectivity)
+    projection_outputrate = determine_total_query_outputrate(query,all_eventtype_output_rates,eventtype_to_sources_map)
     total_outputrate = projection_outputrate * projection_selectivity
     
     outputrates = []
@@ -388,11 +359,11 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
 
         for n in range(0,len(chosen_indices)-1):
             if delta == 2000:
-                no_better_option_found_handling(query, upper_bounds_keys)
+                no_better_option_found_handling(query, upper_bounds_keys,single_selectivity_of_eventtype_within_projection)
                 return
 
             lower_bound = total_sel
-            upper_bound = return_minimum_upper_bound(upper_bounds_keys, query[chosen_indices[n]])
+            upper_bound = return_minimum_upper_bound(upper_bounds_keys, query[chosen_indices[n]],single_selectivity_of_eventtype_within_projection)
             
             first_n_random_values.append(random.uniform(lower_bound, upper_bound))
             product *= first_n_random_values[n]
@@ -440,7 +411,7 @@ def determine_next_smaller_dependencies(eventtypes):
         
     return result
 
-def get_all_distinct_eventtypes_of_used_queries_and_largest_query():
+def get_all_distinct_eventtypes_of_used_queries_and_largest_query(queries_to_process):
     total_list = []
     biggest_query_length = 0
     for query in queries_to_process:
@@ -454,8 +425,8 @@ def get_all_distinct_eventtypes_of_used_queries_and_largest_query():
     return list(''.join(sorted(total_list))), biggest_query_length
 
 
-def determine_all_single_selectivities_for_every_possible_projection():
-    all_needed_eventtypes, max_needed_query_length = get_all_distinct_eventtypes_of_used_queries_and_largest_query()
+def determine_all_single_selectivities_for_every_possible_projection(eventtype_pair_to_selectivity,all_eventtype_output_rates,eventtype_to_sources_map,single_selectivity_of_eventtype_within_projection,queries_to_process):
+    all_needed_eventtypes, max_needed_query_length = get_all_distinct_eventtypes_of_used_queries_and_largest_query(queries_to_process)
     
     all_possible_projections = determine_permutations_of_all_relevant_lengths(all_needed_eventtypes, 2, max_needed_query_length+1)
 
@@ -483,54 +454,53 @@ def determine_all_single_selectivities_for_every_possible_projection():
             if len(projection) > 2:
                 upper_bound_keys = determine_next_smaller_dependencies(projection)
                 
-            determine_randomized_single_selectivities_within_all_projections(projection, upper_bound_keys)
+            determine_randomized_single_selectivities_within_all_projections(projection, upper_bound_keys,eventtype_pair_to_selectivity,all_eventtype_output_rates,eventtype_to_sources_map,single_selectivity_of_eventtype_within_projection)
 
-
-    
-
-def load_args():
-    # Create argument parser
-    parser = argparse.ArgumentParser(description="Process command-line arguments.")
-
-    # Define arguments with default values
-    parser.add_argument("--input_file", help="Input file name (without extension).", type=str, default="plans/curr_MS")
-    parser.add_argument("--method", help="Method to use.", type=str, default="ppmuse")
-    parser.add_argument("--algorithm", help="Algorithm to use.", type=str, default="e")
-    parser.add_argument("--samples", help="Number of samples.", type=int, default=0)
-    parser.add_argument("--topk", help="Top K value.", type=int, default=0)
-    parser.add_argument("--runs", help="Number of runs.", type=int, default=5)
-    parser.add_argument("--plan_print", help="Plan print flag.", type=bool, default=False)
-    parser.add_argument("--output_file", help="Output file name (without extension).", type=str, default="output", required=False)
-
-    # Parse arguments
-    return parser.parse_args()
-
-if __name__ == "__main__":
-    args = load_args()
-
+def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,allPairs):
     # Accessing the arguments
-    input_file_name = args.input_file
-    method = args.method
-    algorithm = args.algorithm
-    samples = args.samples
-    topk = args.topk
-    runs = args.runs
-    plan_print = args.plan_print
-    output_csv = f"../res/{args.output_file}.csv"
+    #print(input_buffer.getvalue())
+    method = method
+    algorithm = algorithm
+    samples = samples
+    topk = top_k
+    runs = runs
+    plan_print = plan_print
+    #output_csv = f"../res/{args.output_file}.csv"
     start_time = time.time()
     #NEW Variables for the new approach
     query_node_dict = {}
     node_prim_events_dict = {}
     # input_file_name = sys.argv[1]
-    input_file = open(input_file_name+".txt", "r")
     single_sink_evaluation_node = []
     single_sink_query_network = []
     current_node = 0
     current_highest = 0
     total_sum = 0
-    for line in input_file:
+
+    NETWORK = 'network'
+    QUERIES = 'queries'
+    MUSE_GRAPH = 'muse graph'
+    SELECTIVITIES = 'selectivities'
+
+    CURRENT_SECTION = ''
+
+    network = []
+
+    queries_to_process = []
+
+    query_network = []
+
+    eventtype_pair_to_selectivity = {}
+
+    all_eventtype_output_rates = {}
+
+    eventtype_to_sources_map = {}
+    print(input_buffer.getvalue())
+    input_buffer.seek(0)
+    for line in input_buffer:
+        line=line.strip()
         OLD_SECTION = CURRENT_SECTION
-        CURRENT_SECTION = get_current_section(line)
+        CURRENT_SECTION = get_current_section(line,CURRENT_SECTION)
         if OLD_SECTION != CURRENT_SECTION:
             continue
         
@@ -542,18 +512,19 @@ if __name__ == "__main__":
             if sum(output_rates) > current_highest:
                 single_sink_evaluation_node = current_node
                 current_highest = sum(output_rates)
-            result = extract_node_events_produced(output_rates, current_node)
+            result = extract_node_events_produced(output_rates, current_node,all_eventtype_output_rates,eventtype_to_sources_map)
             current_node += 1
             if result != 0:
                 network.append(result)
 
         if CURRENT_SECTION == QUERIES:
-            extract_queries(line)
+            extract_queries(line,queries_to_process)
 
             
         if CURRENT_SECTION == MUSE_GRAPH:
             if "SELECT" in line and "ON" in line:
                 # Split the line at "SELECT" and "FROM"
+                print("SPlitting")
                 select_split = line.split("SELECT")[1].split("FROM")
                 query = select_split[0].strip()  # Extract the query, it's the part between SELECT and FROM
                 
@@ -628,9 +599,9 @@ if __name__ == "__main__":
 
 
             query_network.append(query)
-
+        all_event_combinations = []
         if CURRENT_SECTION == SELECTIVITIES:
-            extract_muse_graph_selectivities(line)
+            extract_muse_graph_selectivities(line,all_event_combinations,eventtype_pair_to_selectivity)
 
 
     """Calculating Total Costs:
@@ -675,7 +646,7 @@ if __name__ == "__main__":
         multi_sink_placement = is_single_sink_placement(query_network[i])
                 
         eventtype_to_sources_map[query_network[i].query] = query_network[i].node_placement
-        all_eventtype_output_rates[query_network[i].query] = determine_total_query_rate(query_network[i])
+        all_eventtype_output_rates[query_network[i].query] = determine_total_query_rate(query_network[i],all_eventtype_output_rates,eventtype_to_sources_map,eventtype_pair_to_selectivity)
     for query in query_network:
         print(query.query)
     print("~~")
@@ -683,18 +654,10 @@ if __name__ == "__main__":
     for query in single_sink_query_network:
         print(query.query)
 
-    all_needed_primitive_events, biggest_query_length_to_be_processed = get_all_distinct_eventtypes_of_used_queries_and_largest_query()
+    all_needed_primitive_events, biggest_query_length_to_be_processed = get_all_distinct_eventtypes_of_used_queries_and_largest_query(queries_to_process)
     number_of_samples = int(runs)
     all_exact_costs = 0
-    all_sampling_costs = 0
-    all_factorial_costs = 0
-    all_greedy_costs = 0
-
-    all_exact_costs_single_sink = 0
-    all_sampling_costs_single_sink = 0
-    all_factorial_costs_single_sink = 0
-    all_greedy_costs_single_sink = 0
-    
+    print(queries_to_process)
     old_eventtype_pair_to_selectivity = eventtype_pair_to_selectivity.copy()
     
     query_network_copy = copy.deepcopy(query_network)
@@ -705,42 +668,10 @@ if __name__ == "__main__":
     all_eventtypes = [chr(i) for i in range(ord('A'),ord(highest_primitive_eventtype_to_be_processed)+1)]
     eventtype_combinations = determine_permutations_of_all_relevant_lengths(all_eventtypes, 2, biggest_query_length_to_be_processed)
 
-    error_counter = 0
-
-    greedy_accumulated_exec_time = 0
-    greedy_worst_generated_costs = 0
-    greedy_best_generated_costs = float('inf')
-
     exact_accumulated_exec_time = 0
     exact_worst_generated_costs = 0
     exact_best_generated_costs = float('inf')
 
-    factorial_accumulated_exec_time = 0
-    factorial_worst_generated_costs = 0
-    factorial_best_generated_costs = float('inf')
-
-    sampling_accumulated_exec_time = 0
-    sampling_worst_generated_costs = 0
-    sampling_best_generated_costs = float('inf')
-
-
-    greedy_accumulated_exec_time_single_sink = 0
-    greedy_worst_generated_costs_single_sink = 0
-    greedy_best_generated_costs_single_sink = float('inf')
-
-    exact_accumulated_exec_time_single_sink = 0
-    exact_worst_generated_costs_single_sink = 0
-    exact_best_generated_costs_single_sink = float('inf')
-
-    factorial_accumulated_exec_time_single_sink = 0
-    factorial_worst_generated_costs_single_sink = 0
-    factorial_best_generated_costs_single_sink = float('inf')
-
-    sampling_accumulated_exec_time_single_sink = 0
-    sampling_worst_generated_costs_single_sink = 0
-    sampling_best_generated_costs_single_sink = float('inf')
-    # central_push_costs = total_sum - current_highest
-    # print("Central push costs:", central_push_costs)
     
     greedy_costs_avg = []
     sampling_costs_avg = []
@@ -751,12 +682,12 @@ if __name__ == "__main__":
         eventtype_pair_to_selectivity = old_eventtype_pair_to_selectivity.copy()
         eventtypes_single_selectivities = {}
         single_selectivity_of_eventtype_within_projection = {}
-        determine_all_single_selectivities_for_every_possible_projection()
+        determine_all_single_selectivities_for_every_possible_projection(eventtype_pair_to_selectivity,all_eventtype_output_rates,eventtype_to_sources_map,single_selectivity_of_eventtype_within_projection,queries_to_process)
 
         q_network = query_network_copy if method == "ppmuse" else single_sink_query_network_copy
 
         if method == "ppmuse":
-            greedy_costs, sampling_costs, factorial_costs, exact_costs, greedy_algo_time, exact_algo_time, factorial_algo_time, sampling_algo_time,max_latency = determine_randomized_distribution_push_pull_costs(q_network, eventtype_combinations, highest_primitive_eventtype_to_be_processed, algorithm, samples, topk, plan_print)
+            greedy_costs, sampling_costs, factorial_costs, exact_costs, greedy_algo_time, exact_algo_time, factorial_algo_time, sampling_algo_time,max_latency = determine_randomized_distribution_push_pull_costs(q_network, eventtype_combinations, highest_primitive_eventtype_to_be_processed, algorithm, samples, topk, plan_print,allPairs,eventtype_pair_to_selectivity, eventtype_to_sources_map, all_eventtype_output_rates, eventtypes_single_selectivities, single_selectivity_of_eventtype_within_projection)
             
             greedy_costs_avg.append(greedy_costs)
             sampling_costs_avg.append(sampling_costs)
@@ -794,48 +725,7 @@ if __name__ == "__main__":
     print(exact_costs_avg)      
     end_time = time.time()
     total_time = end_time - start_time
-    import csv
-    # Open the CSV file in read mode to get the existing rows and fieldnames
-    with open(output_csv, mode='r', newline='') as file:
-        reader = list(csv.DictReader(file))
-        fieldnames = reader[0].keys() if reader else []  # Handle empty CSV case
-
-    # Columns to append
-    new_columns = [ "exact_costs","TransmissionRatioOperatorPlacement","TransmissionRatioCentral","PushPullTime","MaxPushPullLatency"]  # New column names
-
-    # Update fieldnames only if new columns don't already exist
-    updated_fieldnames = list(fieldnames)
-    if not all(col in fieldnames for col in new_columns):
-        updated_fieldnames += [col for col in new_columns if col not in fieldnames]
-
-    # Modify the last row with new data
-    if reader:  # If the CSV is not empty
-        last_row = reader[-1]
-        transmission_value = float(last_row["Transmission"])
-        inev_transmission_value = float(last_row["INEvTransmission"])
-        # Add or update new data to the last row
-        exact_cost = sum(exact_costs_avg) / len(exact_costs_avg)
-        last_row["exact_costs"] = exact_cost
-
-        last_row["TransmissionRatioOperatorPlacement"] = exact_cost / inev_transmission_value
-        last_row["TransmissionRatioCentral"] = exact_cost / transmission_value
-        last_row["PushPullTime"] = total_time
-        last_row["MaxPushPullLatency"] = max_latency
-        # Replace the last row with the updated one
-        reader[-1] = last_row
-
-    # Ensure all rows have the updated fieldnames (missing fields are set to empty string)
-    for row in reader:
-        for field in updated_fieldnames:
-            if field not in row:
-                row[field] = ''  # Add missing field with empty value
-
-    # Write back all the rows including the updated last row
-    with open(output_csv, mode='w', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=updated_fieldnames)
-
-        # Write the headers once
-        writer.writeheader()
-
-        # Write all rows including the updated last row
-        writer.writerows(reader)
+    exact_cost = sum(exact_costs_avg) / len(exact_costs_avg)
+    pushPullTime = total_time
+    maxPushPullLatency = max_latency
+    return [exact_cost,pushPullTime,maxPushPullLatency]

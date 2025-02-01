@@ -10,9 +10,6 @@ import random
 import re
 from itertools import permutations, combinations, chain
 
-with open('allPairs', 'rb') as aP:
-    allPairs = pickle.load(aP)
-
 class CachedOptimalStep():
     def __init__(self, lowest_costs, best_step,highest_latency):
         self.lowest_costs = lowest_costs
@@ -195,7 +192,7 @@ class Initiate():
 
 
 
-    def get_push_costs(self, projection_to_process, node):
+    def get_push_costs(self, projection_to_process, node,allPairs):
         push_costs = 0
         for eventtype_to_acquire in projection_to_process:
             
@@ -434,7 +431,7 @@ class Initiate():
 
     
     
-    def determine_optimal_pull_strategy_for_step_in_plan(self, acquired_eventtypes, eventtype_to_acquire, node):
+    def determine_optimal_pull_strategy_for_step_in_plan(self, acquired_eventtypes, eventtype_to_acquire, node,allPairs):
         acquired_eventtypes = self.get_sorted_primitive_eventtypes_from_projection_string(acquired_eventtypes)
         #determine the latency which will be caused by the request
         #### Pull step caching ###
@@ -475,7 +472,7 @@ class Initiate():
         return lowest_costs_for_step, best_step,latency
 
 
-    def determine_costs_of_push_pull_plan(self,plan,projection_to_process, node = 1337):
+    def determine_costs_of_push_pull_plan(self,plan,projection_to_process, allPairs,node = 1337):
         push = True
         costs = 0
 
@@ -489,7 +486,7 @@ class Initiate():
                         if key not in self.source_sent_this_type_to_node and source is not node:
                             costs += self.outputrate_map[eventtype] * allPairs[node][source]#self.determine_correct_number_of_sources(node, eventtype)
                 else:
-                    lowest_costs_for_this_step, used_eventtypes,latency = self.determine_optimal_pull_strategy_for_step_in_plan(available_predicates, eventtype, node)
+                    lowest_costs_for_this_step, used_eventtypes,latency = self.determine_optimal_pull_strategy_for_step_in_plan(available_predicates, eventtype, node,allPairs)
                     costs += lowest_costs_for_this_step
 
             for eventtype in eventtype_group:
@@ -514,12 +511,12 @@ class Initiate():
         return combined_key
 
 
-    def determine_costs_for_projection_on_node(self, plan, projection_to_process, node, node_received_eventtypes):
+    def determine_costs_for_projection_on_node(self, plan, projection_to_process, node, node_received_eventtypes,allPairs):
         push = True
         costs = 0
 
         old_source_sent_this_type_to_node_map = copy.deepcopy(self.source_sent_this_type_to_node)
-        push_plan_costs = self.get_push_costs(projection_to_process.primitive_operators, node)
+        push_plan_costs = self.get_push_costs(projection_to_process.primitive_operators, node,allPairs)
         self.source_sent_this_type_to_node = copy.deepcopy(old_source_sent_this_type_to_node_map)
 
         max_latency = 0
@@ -540,7 +537,7 @@ class Initiate():
                             node_received_eventtypes[node].append(eventtype)
                             
                 else:
-                    lowest_costs_for_this_step, used_eventtype,pull_latency = self.determine_optimal_pull_strategy_for_step_in_plan(available_predicates, eventtype, node)
+                    lowest_costs_for_this_step, used_eventtype,pull_latency = self.determine_optimal_pull_strategy_for_step_in_plan(available_predicates, eventtype, node,allPairs)
                     for source in self.eventtype_to_sources_map[eventtype]:
                         latency = max(latency, allPairs[node][source])
                     latency += pull_latency
@@ -801,7 +798,7 @@ class Initiate():
 
 
     
-    def determine_exact_push_pull_plan(self, projection_to_process, node):
+    def determine_exact_push_pull_plan(self, projection_to_process,node,allPairs):
         best_push_pull_plan = ""
         lowest_normal_costs = float('inf')
 
@@ -813,7 +810,7 @@ class Initiate():
         self.number_of_nodes_producing_this_projection = len(projection_to_process.node_placement)
         
         for plan in self.weak_ordered_plans_generator(projection_to_process.primitive_operators):
-            current_normal_costs = self.determine_costs_of_push_pull_plan(plan, projection_to_process, node)
+            current_normal_costs = self.determine_costs_of_push_pull_plan(plan, projection_to_process, allPairs,node)
             
             self.source_sent_this_type_to_node = copy.deepcopy(old_source_sent_this_type_to_node_map)
             if lowest_normal_costs > current_normal_costs:

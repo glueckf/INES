@@ -1,15 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Dec 10 13:18:01 2021
-
-@author: samira
-"""
-from EvaluationPlan import EvaluationPlan
-import pickle
-import string
-import helper.subsets as sbs 
-
+import helper.subsets as sbs
 
 
 def getCom(mylist):
@@ -297,6 +286,6 @@ def generate_eval_plan(nw,selectivities,myPlan,centralPlan,workload):
 
     config_buffer.write(generatePlan(nw,selectivities,workload,combinationDict,sinkDict,selectionRate)) 
     config_buffer.seek(0)
-
+    #print(config_buffer.getvalue())
     return config_buffer
             

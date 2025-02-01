@@ -157,20 +157,20 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     schema = ["ID", "TransmissionRatio", "Transmission","INEvTransmission","FilterUsed", "Nodes", "EventSkew", "EventNodeRatio", "WorkloadSize", "NumberProjections", "MinimalSelectivity", "MedianSelectivity","CombigenComputationTime", "Efficiency", "PlacementComputationTime", "centralHopLatency", "Depth",  "CentralTransmission", "LowerBound", "EventTypes", "MaximumParents"] 
     
  
-    new = False
-    try:
-         f = open("./res/"+str(filename)+".csv")   
-    except FileNotFoundError:
-         new = True           
+    # new = False
+    # try:
+    #      f = open("./res/"+str(filename)+".csv")   
+    # except FileNotFoundError:
+    #      new = True           
         
-    with open("./res/"+str(filename)+".csv", "a") as result:
-       writer = csv.writer(result)  
-       if new:
-           writer.writerow(schema)              
-       writer.writerow(myResult)
+    # with open("./res/"+str(filename)+".csv", "a") as result:
+    #    writer = csv.writer(result)  
+    #    if new:
+    #        writer.writerow(schema)              
+    #    writer.writerow(myResult)
     #with open('EvaluationPlan',  'wb') as EvaluationPlan_file:
        # pickle.dump([myPlan, ID, MSPlacements], EvaluationPlan_file)
     eval_Plan = [myPlan, ID, MSPlacements]
     central_eval_plan = [ccosts[1],ccosts[3], wl]
     experiment_result = [ID,costs]
-    return eval_Plan,central_eval_plan,experiment_result
+    return eval_Plan,central_eval_plan,experiment_result,myResult
