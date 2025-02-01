@@ -110,7 +110,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
             #partType = returnPartitioning(self,projection, unfolded[projection], self.h_projrates,criticalMSTypes)
 
                 
-            result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter,projFilterDict,EventNodes,IndexEventNodes,self.h_network_data,allPairs,mycombi,rates,singleSelectivities,projrates,self.graph)
+            result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter,projFilterDict,EventNodes,IndexEventNodes,self.h_network_data,allPairs,mycombi,rates,singleSelectivities,projrates,self.graph,self.network)
             additional = result[0]
             costs += additional
             hopLatency[projection] += result[2]

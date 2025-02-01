@@ -100,14 +100,14 @@ def findBestSource(sources, actualDestNodes): #this is only a heuristic, as the 
 def getDestinationsUpstream(projection):
     return  range(len(allPairs))       
         
-def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,EventNodes,IndexEventNodes,network,allPairs,mycombi,rates,singleSelectivities,projrates,Graph):
+def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,EventNodes,IndexEventNodes,network_data,allPairs,mycombi,rates,singleSelectivities,projrates,Graph,network):
     from allPairs import create_routing_dict
     routingDict = create_routing_dict(Graph)
     costs = np.inf
     node = 0
     Filters  = []    
    # routingDict = dict(nx.all_pairs_shortest_path(Graph))
-    print(routingDict)
+    #print(routingDict)
     routingAlgo = dict(nx.all_pairs_shortest_path(Graph))
      
     # add filters of projections to eventtpes in combi, if filters added, use costs of filter -> compute costs for single etbs of projrates 
@@ -123,10 +123,11 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
     combination = list(set(intercombi))
     
     myProjection = Projection(projection, {}, [], [], Filters) #!
-    
-
+    print("Network")
+    print(network)
+    print(network_data)
     # Extract only the keys (nodes) with an empty list of connections
-    non_leaf = [node for node, neighbors in network.items() if not neighbors]
+    non_leaf = [node for node, neighbors in network_data.items() if not neighbors and network[node].computational_power >= projection.computing_requirements]
     
     for destination in non_leaf:
         skip_destination = False  # Flag to determine if we should skip this destination
@@ -202,7 +203,7 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
             newInstances += curInstances          #!   
             myProjection.addInstances(eventtype, curInstances)     #!        
                         
-    SiSManageETBs(projection, node,IndexEventNodes,EventNodes,network)
+    SiSManageETBs(projection, node,IndexEventNodes,EventNodes,network_data)
     hops = len(find_shortest_path_or_ancestor(routingAlgo, 0, node)) - 1 if len(find_shortest_path_or_ancestor(routingAlgo, 0, node)) > 1 else 0
     myProjection.addSpawned([IndexEventNodes[projection][0]]) #!
     costs += hops
