@@ -1,6 +1,6 @@
 # Introduction 
 **Overview:**
-In this simulation we will explore the potential of transmission savings in a CEP Context in a hierarchical fog-cloud environment using two State-of-the-Art approaches from [INEv](lhttps://github.com/samieze/INEv) and [PrePP](https://github.com/spurtzel/PrePP). We expect that the combination of these two appraoches with some adjustments for the fog-cloud environment can enhance performance in Query evaluation. 
+In this simulation we will explore the potential of transmission savings in a CEP Context in a hierarchical fog-cloud environment using two State-of-the-Art approaches from [INEv](https://github.com/samieze/INEv) and [PrePP](https://github.com/spurtzel/PrePP). We expect that the combination of these two appraoches with some adjustments for the fog-cloud environment can enhance performance in Query evaluation. 
 
 **Objective:** Exploring the adjustments needed to make to combine the approach in a hierarchical network topology and proving the potential transmission savings of using both approaches of Operator Placement and Push-Pull communication on a synthetical Dataset. 
 
