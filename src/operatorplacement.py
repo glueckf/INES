@@ -154,7 +154,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     hoplatency = max([hopLatency[x] for x in hopLatency.keys()])   
     totalLatencyRatio = hoplatency / centralHopLatency
     myResult = [ID, mycosts, ccosts[0], costs,Filters, networkParams[3], networkParams[0], networkParams[2], len(wl), combigenParams[3], selectivityParams[0], selectivityParams[1], combigenParams[1], longestPath, totaltime, centralHopLatency, float(max(list(dependencies.values()))/2), ccosts[0], lowerBound / ccosts[0], networkParams[1], number_parents]
-    schema = ["ID", "TransmissionRatio", "Transmission","INEvTransmission","FilterUsed", "Nodes", "EventSkew", "EventNodeRatio", "WorkloadSize", "NumberProjections", "MinimalSelectivity", "MedianSelectivity","CombigenComputationTime", "Efficiency", "PlacementComputationTime", "centralHopLatency", "Depth",  "CentralTransmission", "LowerBound", "EventTypes", "MaximumParents"] 
+    
     
  
     # new = False
