@@ -199,7 +199,7 @@ def getBestChainCombis(self,query, shared, criticalMSTypes, noFilter):
     myprojlist = [x for x in projsPerQuery[query]] # HERE WE NEED TO RESPECT OPERATOR SEMANTIC -> new function
 
     for projection in [x for x in myprojlist]: #trivial combination and ms placement for projections containing two prim events only
-            partType,DistMatrices,MSTrees = returnPartitioning(self,projection, projection.leafs(), self.h_projrates,criticalMSTypes)  
+            partType,MSTrees,DistMatrices = returnPartitioning(self,projection, projection.leafs(), self.h_projrates,criticalMSTypes)  
             if partType:                
                 rest = [x for x in projection.leafs() if not x in partType]
                 costs = getSavings(self,partType[0],[partType[0]] + rest, projection,DistMatrices,MSTrees)
@@ -216,7 +216,7 @@ def getBestChainCombis(self,query, shared, criticalMSTypes, noFilter):
                     if projection == mytuple[1]: 
                         remainingEvents = list(set(mytuple[1].leafs()).difference(set(mytuple[0].leafs())))
                         mycombination = [mytuple[0]] + remainingEvents
-                        res,DistMatrices,MSTrees = returnPartitioning(self,projection, mycombination, self.h_projrates,criticalMSTypes)
+                        res,MSTrees,DistMatrices = returnPartitioning(self,projection, mycombination, self.h_projrates,criticalMSTypes)
                         curMSTypes = [eventtype]
                         if res:     
                             curcosts = getSavings(self, eventtype, mycombination, projection,DistMatrices,MSTrees)                           

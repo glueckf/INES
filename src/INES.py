@@ -111,11 +111,20 @@ class INES():
         
         
 
-my_ines = INES(12,0.5,6,0.3,10,3,5, "test")
+import traceback
+import logging
 
-print(my_ines.results)
-#print(my_ines.allPais)
-#draw_graph(my_ines.graph)
+# Set up logging to capture all errors in a file
+logging.basicConfig(
+    filename="error_log.txt",
+    level=logging.ERROR,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-# for i in my_ines.network:
-#     print(i)
+try:
+    my_ines = INES(12, 0.5, 6, 0.3, 10, 3, 5, "test")
+except Exception as e:
+    error_message = f"❌ Exception: {str(e)}\n"
+    error_message += traceback.format_exc()
+    logging.error(error_message)
+    print(error_message)  # Optional: also print to console

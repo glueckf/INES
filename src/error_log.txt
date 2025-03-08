@@ -1,0 +1,14 @@
+2025-03-08 11:14:09,617 - ERROR - ❌ Exception: 'F'
+Traceback (most recent call last):
+  File "/home/philipp/Projects/INES/INES/src/INES.py", line 125, in <module>
+    my_ines = INES(12, 0.5, 6, 0.3, 10, 3, 5, "test")
+  File "/home/philipp/Projects/INES/INES/src/INES.py", line 94, in __init__
+    self.h_mycombi, self.h_combiDict,self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(self)
+  File "/home/philipp/Projects/INES/INES/src/combigen.py", line 483, in generate_combigen
+    getBestChainCombis(self,query, shared, criticalMSTypes, noFilter)
+  File "/home/philipp/Projects/INES/INES/src/combigen.py", line 205, in getBestChainCombis
+    costs = getSavings(self,partType[0],[partType[0]] + rest, projection,DistMatrices,MSTrees)
+  File "/home/philipp/Projects/INES/INES/src/combigen.py", line 190, in getSavings
+    return  longestPath * totalRate(self,partType,self.h_projrates) - (len(MSTrees[partType].edges())*  sum(list(map(lambda x: totalRate(self,partType,self.h_projrates), [y for y in combination if not y == partType]))))
+KeyError: 'F'
+
