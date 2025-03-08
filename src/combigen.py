@@ -149,19 +149,48 @@ def getSavings(self,partType, combination, projection,DistMatrices,MSTrees): #OP
     longestPath = self.h_longestPath
     wl = self.query_workload
 
-    #myAllPairs = DistMatrices[MSTrees[partType]]      
-    #bestNodeValue = min([sum(x) for x in myAllPairs if x]) #hier lieber average oder global average
-    
+    # Debug partType
+    print(f"getSavings called with partType: {partType}")
+
+    # Debug MSTrees lookup
+    if partType not in MSTrees:
+        print(f"❌ KeyError: partType '{partType}' not found in MSTrees keys: {list(MSTrees.keys())}")
+    else:
+        print(f"✅ Found partType '{partType}' in MSTrees")
+
+    # Debug DistMatrices lookup
+    if partType in MSTrees and MSTrees[partType] not in DistMatrices:
+        print(f"❌ KeyError: MSTrees[{partType}] -> '{MSTrees[partType]}' not found in DistMatrices keys: {list(DistMatrices.keys())}")
+    else:
+        print(f"✅ Found MSTrees[{partType}] in DistMatrices")
+
+    # Debug projection.get_original(wl)
+    proj_original = projection.get_original(wl)
+    if proj_original not in wl:
+        print(f"⚠️ Warning: Projection '{proj_original}' not found in workload (wl)")
+
+    # Debug totalRate calls
+    try:
+        rate = totalRate(self, partType, self.h_projrates)
+    except KeyError as e:
+        print(f"❌ KeyError in totalRate: {e}")
+        print(f"Available projrates keys: {list(self.h_projrates.keys())}")
+
+    try:
+        opt_rate = optimisticTotalRate(self,projection)
+    except KeyError as e:
+        print(f"❌ KeyError in optimisticTotalRate: {e}")
+
     #TODO: it is not totalRate but only local Rate that we save for PartType
-    if not projection.get_original(wl) in wl: #some intermediate projection
+    if projection.get_original(wl) not in wl: #some intermediate projection
       #  return totalRate(partType) - (len(MSTrees[partType].edges())*  ((sum(list(map(lambda x: totalRate(x), [y for y in combination if not y == partType])))) + optimisticTotalRate(projection)))
-         return longestPath * totalRate(self,partType,self.h_projrates) - (len(MSTrees[partType].edges())*  (sum(list(map(lambda x: totalRate(self,x,self.h_projrates), [y for y in combination if not y == partType])))) + longestPath * optimisticTotalRate(projection))
+         return longestPath * totalRate(self,partType,self.h_projrates) - (len(MSTrees[partType].edges())*  (sum(list(map(lambda x: totalRate(self,x,self.h_projrates), [y for y in combination if not y == partType])))) + longestPath * optimisticTotalRate(self,projection))
     
     elif projection.get_original(wl) in wl and not partType in list(map(lambda x: str(x), projection.get_original(wl).kleene_components())): #sink projection
         return  longestPath * totalRate(self,partType,self.h_projrates) - (len(MSTrees[partType].edges())*  sum(list(map(lambda x: totalRate(self,partType,self.h_projrates), [y for y in combination if not y == partType])))) 
    
     elif projection.get_original(wl) in wl and partType in list(map(lambda x: str(x), projection.get_original(wl).kleene_components())): # ms sink query at kleene type 
-        return longestPath * totalRate(self,partType,self.h_projrates) - (len(MSTrees[partType].edges())*  (sum(list(map(lambda x: totalRate(self,partType,self.h_projrates), [y for y in combination if not y == partType])))) + longestPath * optimisticTotalRate(projection))
+        return longestPath * totalRate(self,partType,self.h_projrates) - (len(MSTrees[partType].edges())*  (sum(list(map(lambda x: totalRate(self,partType,self.h_projrates), [y for y in combination if not y == partType])))) + longestPath * optimisticTotalRate(self,projection))
 
 def getBestChainCombis(self,query, shared, criticalMSTypes, noFilter):         
     projsPerQuery = self.h_projsPerQuery

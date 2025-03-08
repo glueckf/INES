@@ -323,19 +323,27 @@ def isBeneficial(self,projection, rate):
     else:
         return False
 
-def totalRate(self, projection,projrates:dict):
+def totalRate(self, projection, projrates: dict):
     rates = self.h_rates_data
     nodes = self.h_nodes
-    print(projrates)
-    if projection in projrates.keys(): # is complex event
-       # print(projection, projrates[projection][1], getNumETBs(projection))
+
+    print("Current projrates:", projrates)
+    print("Type of projection:", type(projection), "Value:", projection)
+
+    # Catch the problematic case early
+    if isinstance(projection, list):
+        print("⚠️ WARNING: projection is a LIST here! Investigating...")
+        import traceback
+        traceback.print_stack()  # Print the call stack to see where this was called
+
+    if projection in projrates.keys():  # is complex event
         return projrates[projection][1] * getNumETBs(projection)
     elif len(projection) == 1:
         return rates[str(projection)] * len(nodes[str(projection)])
     else:
-        outrate = projection.evaluate() *  getNumETBs(projection)  
-        selectivity =  return_selectivity(projection.leafs())
-        myrate = outrate * selectivity  
+        outrate = projection.evaluate() * getNumETBs(projection)
+        selectivity = return_selectivity(projection.leafs())
+        myrate = outrate * selectivity
         return myrate
 
     
