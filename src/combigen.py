@@ -302,7 +302,7 @@ def costsOfCombination(self,projection, mycombi, shared, criticalMSTypes,DistMat
            mycosts += combiDict[proj][2]
    
        # check if it has a multi-sink placement and add costs/savings
-       partEvent = returnPartitioning(self,projection, mycombi, self.h_projrates,criticalMSTypes)
+       partEvent,DistMatrices,MSTrees = returnPartitioning(self,projection, mycombi, self.h_projrates,criticalMSTypes)
        
        if partEvent and not isinstance(partEvent, list):       
            mycosts += getSavings(self,partEvent[0], mycombi, projection,DistMatrices,MSTrees)

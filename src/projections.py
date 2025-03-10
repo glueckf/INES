@@ -70,14 +70,14 @@ def returnPartitioning(self ,proj, combi,projrates:dict, *args):
 			if myevents:
 				if myevents[0] in args:
 						res,DistMatrices,MSTrees = NEW_isPartitioning(self,myevents[0], combi, proj,projrates)
-						return [],DistMatrices,MSTrees
+						return [],DistMatrices,MSTrees #,DistMatrices,MSTrees
 		
 		if myevents:
 			res,DistMatrices,MSTrees = NEW_isPartitioning(self,myevents[0], combi, proj,projrates)
 			#res = NEW_isPartitioning_alt(myevents[0], combi, proj, myprojFilterDict)
 			if res:   
 				return [myevents[0], res[0]],DistMatrices,MSTrees
-		return [],DistMatrices,MSTrees
+		return [] ,DistMatrices,MSTrees
 
 def isPartitioning(self, element, combi, proj):
 		''' returns true if element partitioning input of proj generated with combi '''
