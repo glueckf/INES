@@ -62,7 +62,7 @@ class INES():
 
     
 
-    def __init__(self, nwSize: int, node_event_ratio: float, num_eventtypes: int, eventskew: float, max_partens: int, query_size: int, query_length:int,filename: str):
+    def __init__(self, nwSize: int, node_event_ratio: float, num_eventtypes: int, eventskew: float, max_partens: int, query_size: int, query_length:int):
         self.schema = ["ID", "TransmissionRatio", "Transmission","INEvTransmission","FilterUsed", "Nodes", "EventSkew", "EventNodeRatio", "WorkloadSize", "NumberProjections", "MinimalSelectivity", "MedianSelectivity","CombigenComputationTime", "Efficiency", "PlacementComputationTime", "centralHopLatency", "Depth",  "CentralTransmission", "LowerBound", "EventTypes", "MaximumParents", "exact_costs","PushPullTime","MaxPushPullLatency"] 
         self.nwSize = nwSize
         self.node_event_ratio = node_event_ratio
@@ -96,35 +96,37 @@ class INES():
         self.eval_plan,self.central_eval_plan,self.experiment_result,self.results = calculate_operatorPlacement(self,'test',self.max_parents)
         self.plan=generate_eval_plan(self.network,self.selectivities,self.eval_plan,self.central_eval_plan,self.query_workload)
         self.results += generate_prePP(self.plan,'ppmuse','e',0,0,1,False,self.allPairs)
-        new =False
-        try:
-             f = open("./res/"+str(filename)+".csv")   
-        except FileNotFoundError:
-             new = True           
-            
-        with open("./res/"+str(filename)+".csv", "a") as result:
-           writer = csv.writer(result)  
-           if new:
-               writer.writerow(self.schema)              
-           writer.writerow(self.results)
+        # new =False
+        # try:
+        #      f = open("./res/"+str(filename)+".csv")   
+        # except FileNotFoundError:
+        #      new = True           
+        #      with open("./res/"+str(filename)+".csv", "w")as f:
+        #          pass
+             
+        # with open("./res/"+str(filename)+".csv", "a") as result:
+        #    writer = csv.writer(result)  
+        #    if new:
+        #        writer.writerow(self.schema)              
+        #    writer.writerow(self.results)
         
         
         
 
-import traceback
-import logging
+# import traceback
+# import logging
 
-# Set up logging to capture all errors in a file
-logging.basicConfig(
-    filename="error_log.txt",
-    level=logging.ERROR,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# # Set up logging to capture all errors in a file
+# logging.basicConfig(
+#     filename="error_log.txt",
+#     level=logging.ERROR,
+#     format="%(asctime)s - %(levelname)s - %(message)s"
+# )
 
-try:
-    my_ines = INES(12, 0.5, 6, 0.3, 10, 3, 5, "test")
-except Exception as e:
-    error_message = f"❌ Exception: {str(e)}\n"
-    error_message += traceback.format_exc()
-    logging.error(error_message)
-    print(error_message)  # Optional: also print to console
+# try:
+#     my_ines = INES(12, 0.5, 6, 0.3, 10, 3, 5, "test")
+# except Exception as e:
+#     error_message = f"❌ Exception: {str(e)}\n"
+#     error_message += traceback.format_exc()
+#     logging.error(error_message)
+#     print(error_message)  # Optional: also print to console
