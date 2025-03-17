@@ -24,6 +24,7 @@ def optimisticTotalRate(self ,projection): # USE FILTERED RATE FOR ESTIMATION
     nodes = self.h_nodes
     projlist = self.h_projlist
     projFilterDict = self.h_projFilterDict
+    IndexEventNodes = self.h_IndexEventNodes
 
     if projection in projlist: # is complex event        
         for i in projFilterDict.keys():
@@ -32,7 +33,7 @@ def optimisticTotalRate(self ,projection): # USE FILTERED RATE FOR ESTIMATION
                 if getMaximalFilter(projFilterDict, myproj):                                                
                         return getDecomposedTotal(getMaximalFilter(projFilterDict, myproj), myproj)    
                 else:
-                        return projFilterDict[myproj][getMaximalFilter(projFilterDict, myproj)][0] * getNumETBs(myproj) #TODO change
+                        return projFilterDict[myproj][getMaximalFilter(projFilterDict, myproj)][0] * getNumETBs(myproj,IndexEventNodes) #TODO change
     else:
         return rates[projection.leafs()[0]] * len(nodes[projection.leafs()[0]])
     
@@ -42,14 +43,14 @@ def optimisticTotalRate_single(self , projection): # USE FILTERED RATE FOR ESTIM
 		nodes = self.h_nodes
 		projrates = self.h_projrates	
 		projFilterDict = self.h_projFilterDict
-
+		IndexEventNodes = self.h_IndexEventNodes
 		for i in projFilterDict.keys():
 				if i  == projection: 
 						myproj = i
 						if getMaximalFilter(projFilterDict, myproj):                                                
 								return getDecomposedTotal(getMaximalFilter(projFilterDict, myproj), myproj)    
 						else:
-								return projrates[myproj][1] * getNumETBs(myproj) #TODO change
+								return projrates[myproj][1] * getNumETBs(myproj,IndexEventNodes) #TODO change
 		else:
 			#return 40
 			return rates[projection.leafs()[0]] * len(nodes[projection.leafs()[0]])    
@@ -84,7 +85,7 @@ def isPartitioning(self, element, combi, proj):
 		projrates = self.h_projrates
 		rates = self.h_rates_data
 		instances = self.h_instances
-            
+		IndexEventNodes = self.h_IndexEventNodes
 		mysum =  0    
 		for i in combi:   
 			
@@ -93,11 +94,11 @@ def isPartitioning(self, element, combi, proj):
 				mysum += additional
 				
 			else:
-				additional = projrates[i][1] * getNumETBs(i)              
+				additional = projrates[i][1] * getNumETBs(i,IndexEventNodes)              
 				mysum += additional #  len(returnETBs(projection, network))
 				
 		mysum -= rates[element] * instances[element]
-		mysum += projrates[proj][1] * getNumETBs(proj) # additional constraint about ratio of partitioning event type and outputrate of projection
+		mysum += projrates[proj][1] * getNumETBs(proj,IndexEventNodes) # additional constraint about ratio of partitioning event type and outputrate of projection
 		if rates[element] > mysum : 
 			return True
 
@@ -108,6 +109,8 @@ def isPartitioning_customRates(self, element, combi, proj, myrates):
 		''' returns true if element partitioning input of proj generated with combi '''
 		rates = self.h_rates_data
 		instances = self.h_instances
+		IndexEventNodes = self.h_IndexEventNodes
+  
 		mysum =  0    
 		for i in combi:   
 			
@@ -116,10 +119,10 @@ def isPartitioning_customRates(self, element, combi, proj, myrates):
 				mysum += additional
 				
 			else:
-				additional = myrates[i] * getNumETBs(i)              
+				additional = myrates[i] * getNumETBs(i,IndexEventNodes)              
 				mysum += additional #  len(returnETBs(projection, network))
 		mysum -= rates[element] * instances[element]
-		mysum += myrates[proj] * getNumETBs(proj) # additional constraint about ratio of partitioning event type and outputrate of projection
+		mysum += myrates[proj] * getNumETBs(proj,IndexEventNodes) # additional constraint about ratio of partitioning event type and outputrate of projection
 		if rates[element] > mysum : 
 			return True
 
@@ -326,6 +329,7 @@ def isBeneficial(self,projection, rate):
 def totalRate(self, projection, projrates: dict):
     rates = self.h_rates_data
     nodes = self.h_nodes
+    IndexEventNodes = self.h_IndexEventNodes
 
     print("Current projrates:", projrates)
     print("Type of projection:", type(projection), "Value:", projection)
@@ -337,11 +341,12 @@ def totalRate(self, projection, projrates: dict):
         traceback.print_stack()  # Print the call stack to see where this was called
 
     if projection in projrates.keys():  # is complex event
-        return projrates[projection][1] * getNumETBs(projection)
+        return projrates[projection][1] * getNumETBs(projection,IndexEventNodes)
+    
     elif len(projection) == 1:
         return rates[str(projection)] * len(nodes[str(projection)])
     else:
-        outrate = projection.evaluate() * getNumETBs(projection)
+        outrate = projection.evaluate() * getNumETBs(projection,IndexEventNodes)
         selectivity = return_selectivity(projection.leafs())
         myrate = outrate * selectivity
         return myrate

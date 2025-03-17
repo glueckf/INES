@@ -5,6 +5,7 @@ from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
 import os
 import pandas as pd
+import sys
 
 # logging.basicConfig(
 #     filename="simulation_errors.log",  # Save errors in a .log file
@@ -14,20 +15,24 @@ import pandas as pd
 
 def run_simulation(nodes,node_event_ratio,num_eventtypes,eventskew,max_parents,query_size,query_length,run):
     
-    #file_name = f"INES-simulation_" + datetime.now().strftime("%d%m%Y%H%M%S") + "csv"# datetime stamp 
+    log_file_name = f"simulation_{os.getpid()}.log"  # Unique log per process
+    sys.stdout = open(log_file_name, "a")  # Redirect stdout
     
-
     run_timestamp = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
     log_separator = f"\n{'='*40}\nSimulation Run #{run} - {run_timestamp}\n{'='*40}\n"
-        
+    
+    print(f"\n==== Simulation Run {run} Started ====\n")
+    sys.stdout.flush()  # Force immediate write
     try:
         simulation = INES(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length)
+        sys.stdout.flush()
         return pd.DataFrame([simulation.results], columns=simulation.schema)  # Convert results to DataFrame
 
     except Exception as e:
         error_message = f"❌ Exception: {str(e)}\n{traceback.format_exc()}"
         log_file_name = f"simulation_errors_{os.getpid()}.log"
-
+        print(error_message)
+        sys.stdout.flush()
         # Log with a separator for each simulation run
         with open(log_file_name, "a") as log_file:
             log_file.write(log_separator)
@@ -40,7 +45,8 @@ def run_simulation(nodes,node_event_ratio,num_eventtypes,eventskew,max_parents,q
 def start_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length, runs):
     """Runs multiple simulations in parallel."""
     file_name = f"INES-simulation_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"
-    
+    result = run_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length,0)
+    print(result)
     all_results = []
 
     with ProcessPoolExecutor(max_workers=4) as executor:  # Adjust max_workers as needed
@@ -50,6 +56,7 @@ def start_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_par
         ]
 
         for future in futures:
+            print(f"checking results for {future._state}")
             result = future.result()
             if result is not None:
                 all_results.append(result)  # Collect DataFrames
