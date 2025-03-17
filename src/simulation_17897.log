@@ -1,0 +1,17 @@
+
+==== Simulation Run 0 Started ====
+
+
+==== Initaiting Run 0 Started ====
+
+4
+[1000 1000 1000 1000 1000 1000]
+SEQ(D, B, E)
+
+AND(D, F, B, E)
+
+SEQ(E, F, A)
+
+None
+-----
+-----

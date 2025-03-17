@@ -24,6 +24,7 @@ def run_simulation(nodes,node_event_ratio,num_eventtypes,eventskew,max_parents,q
     print(f"\n==== Simulation Run {run} Started ====\n")
     sys.stdout.flush()  # Force immediate write
     try:
+        print(f"\n==== Initaiting Run {run} Started ====\n")
         simulation = INES(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length)
         sys.stdout.flush()
         return pd.DataFrame([simulation.results], columns=simulation.schema)  # Convert results to DataFrame
@@ -56,10 +57,18 @@ def start_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_par
         ]
 
         for future in futures:
-            print(f"checking results for {future._state}")
-            result = future.result()
-            if result is not None:
-                all_results.append(result)  # Collect DataFrames
+            print(f"🔄 Checking result for run {future}")
+            sys.stdout.flush()  # Ensure logs are visible
+
+            try:
+                result = future.result(timeout=300)  # Set timeout to avoid infinite wait
+                if result is not None:
+                    all_results.append(result)
+            except Exception as e:
+                print(f"⚠️ Error in process: {e}")
+            except TimeoutError:
+                print(f"⏳ Timeout! Process took too long.")
+
 
     # Combine all DataFrames and write to CSV
     if all_results:
@@ -69,4 +78,4 @@ def start_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_par
         print(f"✅ Results saved to: {file_name}")
 
 if __name__ == "__main__":
-    start_simulation(12, 0.5, 6, 0.3, 10, 3, 5, 100)
+    start_simulation(12, 0.5, 6, 0.3, 10, 3, 5, 4)

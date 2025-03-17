@@ -314,7 +314,7 @@ def costsOfCombination(self,projection, mycombi, shared, criticalMSTypes,DistMat
        mycosts -= sharedAncestorsCost(self,projection, mycombi, partEvent,DistMatrices,MSTrees)
                 
        #if multiple projections share the same input, add a little bit of that inputs rate to simulate later sharing oportunities -> extend myMSTypes to dictionary   
-       mycosts += eventSharing(projection, mycombi, mycosts, shared) # rates of event types input to multiple multi-sink placement in the combination are shared, which should be accounted for here
+       mycosts += eventSharing(self,projection, mycombi, mycosts, shared) # rates of event types input to multiple multi-sink placement in the combination are shared, which should be accounted for here
        
        #TODO: this might be stupid in the case of multiquery
        MSChildren = sum([combiDict[x][1] if len(x) > 1 else [x] for x in mycombi ],[])           
