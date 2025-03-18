@@ -76,7 +76,7 @@ def start_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_par
         all_results = [result for result in all_results if result is not None]  # Remove failed runs
         final_df = pd.concat(all_results, ignore_index=True)
         final_df.to_csv(f"./res/{file_name}", index=False)
-        print(f"✅ Results saved to: {file_name}")
+        print(f"Results saved to: {file_name}")
 
 if __name__ == "__main__":
    # start_simulation(12, 0.5, 6, 0.3, 10, 3, 5, 4)
