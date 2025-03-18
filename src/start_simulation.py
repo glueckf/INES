@@ -43,6 +43,7 @@ def run_simulation(nodes,node_event_ratio,num_eventtypes,eventskew,max_parents,q
     
         return None
 
+
 def start_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length, runs):
     """Runs multiple simulations in parallel."""
     file_name = f"INES-simulation_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"
@@ -78,4 +79,18 @@ def start_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_par
         print(f"✅ Results saved to: {file_name}")
 
 if __name__ == "__main__":
-    start_simulation(12, 0.5, 6, 0.3, 10, 3, 5, 4)
+   # start_simulation(12, 0.5, 6, 0.3, 10, 3, 5, 4)
+    file_name = f"INES-simulation_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"  
+    all_results = []
+    for i in range(10):
+       
+        result = run_simulation(12, 0.5, 6, 0.3, 10, 3, 5, i)
+        all_results.append(result)
+        
+        if all_results:
+            all_results = [result for result in all_results if result is not None]  # Remove failed runs
+            final_df = pd.concat(all_results, ignore_index=True)
+            final_df.to_csv(f"./res/{file_name}", index=False)
+            print(f"✅ Results saved to: {file_name}")
+        else:
+            print("Nothing found")
