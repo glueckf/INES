@@ -1,0 +1,23 @@
+
+========================================
+Simulation Run #2 - 18-03-2025 20:26:58
+========================================
+❌ Exception: 'A'
+Traceback (most recent call last):
+  File "/home/philipp/Projects/INES/INES/src/start_simulation.py", line 28, in run_simulation
+    simulation = INES(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length)
+  File "/home/philipp/Projects/INES/INES/src/INES.py", line 94, in __init__
+    self.h_mycombi, self.h_combiDict,self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(self)
+  File "/home/philipp/Projects/INES/INES/src/combigen.py", line 483, in generate_combigen
+    getBestChainCombis(self,query, shared, criticalMSTypes, noFilter)
+  File "/home/philipp/Projects/INES/INES/src/combigen.py", line 236, in getBestChainCombis
+    getBestTreeCombiRec(self,longestPath,query, projection, mylist, [], 0, shared , criticalMSTypes,DistMatrices,MSTrees)
+  File "/home/philipp/Projects/INES/INES/src/combigen.py", line 252, in getBestTreeCombiRec
+    getBestTreeCombiRec(self,longestPath,query, projection, [], _missingEvents, mycosts, shared, criticalMSTypes,DistMatrices,MSTrees)
+  File "/home/philipp/Projects/INES/INES/src/combigen.py", line 288, in getBestTreeCombiRec
+    (mycosts, partEvent) = costsOfCombination(self,projection, mycombi, shared, criticalMSTypes,DistMatrices,MSTrees)
+  File "/home/philipp/Projects/INES/INES/src/combigen.py", line 314, in costsOfCombination
+    mycosts -= sharedAncestorsCost(self,projection, mycombi, partEvent,DistMatrices,MSTrees)
+  File "/home/philipp/Projects/INES/INES/src/combigen.py", line 371, in sharedAncestorsCost
+    myAllPairs = DistMatrices[MSTrees[partProj]]
+KeyError: 'A'
