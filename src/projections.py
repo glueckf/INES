@@ -423,6 +423,7 @@ _projlist = []
 _projrates = {}
 
 def generate_all_projections(self):
+    "TODO no global"
     global _sharedProjectionsDict 
     global _sharedProjectionsList
     global _projsPerQuery

@@ -9,6 +9,7 @@ _PrimitiveEvents = None
 
 # Function to initialize Prim and PrimitiveEvents
 def initialize_prim_and_primitive_events(primitive_events_data):
+    "TODO No global variables"
     global _Prim, _PrimitiveEvents
     
     # Create PrimitiveEvents list

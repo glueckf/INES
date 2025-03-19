@@ -131,6 +131,7 @@ def compute_distances_for_node(node):
 
 
 def populate_allPairs(graph: nx.digraph):
+    "TODO No globals"
     global routingDict
     global G
     G = graph

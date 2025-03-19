@@ -9,6 +9,7 @@ _nodes = None
 
 # Function to initialize global variables
 def initialize_globals(network_data):
+    "TODO no global variables"
     global _network, _rates, _primEvents, _instances, _nodes
     
     # Initialize global variables
