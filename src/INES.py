@@ -123,10 +123,8 @@ class INES():
 #     format="%(asctime)s - %(levelname)s - %(message)s"
 # )
 
-# try:
-#     my_ines = INES(12, 0.5, 6, 0.3, 10, 3, 5, "test")
-# except Exception as e:
-#     error_message = f"❌ Exception: {str(e)}\n"
-#     error_message += traceback.format_exc()
-#     logging.error(error_message)
-#     print(error_message)  # Optional: also print to console
+try:
+    my_ines = INES(12, 0.5, 6, 0.3, 10, 3, 5)
+except Exception as e:
+    error_message = f"❌ Exception: {str(e)}\n"
+    print(error_message)  # Optional: also print to console

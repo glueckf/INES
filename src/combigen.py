@@ -368,7 +368,7 @@ def sharedAncestorsCost(self,projection, mycombi, partEvent,DistMatrices,MSTrees
                 
     # then , we reduce by the savings for all partitioning primitive event types that are part of multiple different projections 
     for partProj in partTypeDict.keys():
-        myAllPairs = DistMatrices[MSTrees[partProj]]      
+       # myAllPairs = DistMatrices[MSTrees[partProj]]      
         # bestNodeValue = min([sum(x) for x in myAllPairs if x])
         costs += (partTypeDict[partProj] - 1) * totalRate(self,partProj,self.h_projrates) * longestPath 
     

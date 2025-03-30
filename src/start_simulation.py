@@ -90,7 +90,7 @@ if __name__ == "__main__":
         if all_results:
             all_results = [result for result in all_results if result is not None]  # Remove failed runs
             final_df = pd.concat(all_results, ignore_index=True)
-            final_df.to_csv(f"./res/{file_name}", index=False)
+           # final_df.to_csv(f"./res/{file_name}", index=False)
             print(f"✅ Results saved to: {file_name}")
         else:
             print("Nothing found")
