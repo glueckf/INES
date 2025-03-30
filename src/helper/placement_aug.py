@@ -170,7 +170,7 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
 
                             mycosts += (rates[eventtype] * allPairs[destination][mySource] )
                         else: # case projection                         
-                             num = NumETBsByKey(etb, eventtype)
+                             num = NumETBsByKey(etb, eventtype,IndexEventNodes)
                              mycosts += projrates[eventtype][1] * allPairs[destination][mySource] * num 
         print(mycosts)
         if mycosts < costs:

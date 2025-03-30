@@ -1,0 +1,39 @@
+
+========================================
+Simulation Run #54 - 30-03-2025 15:59:50
+========================================
+❌ Exception: max() arg is an empty sequence
+Traceback (most recent call last):
+  File "/home/philipp/Projects/INES/INES/src/start_simulation.py", line 28, in run_simulation
+    simulation = INES(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length)
+  File "/home/philipp/Projects/INES/INES/src/INES.py", line 96, in __init__
+    self.eval_plan,self.central_eval_plan,self.experiment_result,self.results = calculate_operatorPlacement(self,'test',self.max_parents)
+  File "/home/philipp/Projects/INES/INES/src/operatorplacement.py", line 157, in calculate_operatorPlacement
+    myResult = [ID, mycosts, ccosts[0], costs,Filters, networkParams[3], networkParams[0], networkParams[2], len(wl), combigenParams[3], selectivityParams[0], selectivityParams[1], combigenParams[1], longestPath, totaltime, centralHopLatency, float(max(list(dependencies.values()))/2), ccosts[0], lowerBound / ccosts[0], networkParams[1], number_parents]
+ValueError: max() arg is an empty sequence
+
+========================================
+Simulation Run #81 - 30-03-2025 15:59:53
+========================================
+❌ Exception: max() arg is an empty sequence
+Traceback (most recent call last):
+  File "/home/philipp/Projects/INES/INES/src/start_simulation.py", line 28, in run_simulation
+    simulation = INES(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length)
+  File "/home/philipp/Projects/INES/INES/src/INES.py", line 96, in __init__
+    self.eval_plan,self.central_eval_plan,self.experiment_result,self.results = calculate_operatorPlacement(self,'test',self.max_parents)
+  File "/home/philipp/Projects/INES/INES/src/operatorplacement.py", line 157, in calculate_operatorPlacement
+    myResult = [ID, mycosts, ccosts[0], costs,Filters, networkParams[3], networkParams[0], networkParams[2], len(wl), combigenParams[3], selectivityParams[0], selectivityParams[1], combigenParams[1], longestPath, totaltime, centralHopLatency, float(max(list(dependencies.values()))/2), ccosts[0], lowerBound / ccosts[0], networkParams[1], number_parents]
+ValueError: max() arg is an empty sequence
+
+========================================
+Simulation Run #90 - 30-03-2025 15:59:54
+========================================
+❌ Exception: max() arg is an empty sequence
+Traceback (most recent call last):
+  File "/home/philipp/Projects/INES/INES/src/start_simulation.py", line 28, in run_simulation
+    simulation = INES(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length)
+  File "/home/philipp/Projects/INES/INES/src/INES.py", line 96, in __init__
+    self.eval_plan,self.central_eval_plan,self.experiment_result,self.results = calculate_operatorPlacement(self,'test',self.max_parents)
+  File "/home/philipp/Projects/INES/INES/src/operatorplacement.py", line 157, in calculate_operatorPlacement
+    myResult = [ID, mycosts, ccosts[0], costs,Filters, networkParams[3], networkParams[0], networkParams[2], len(wl), combigenParams[3], selectivityParams[0], selectivityParams[1], combigenParams[1], longestPath, totaltime, centralHopLatency, float(max(list(dependencies.values()))/2), ccosts[0], lowerBound / ccosts[0], networkParams[1], number_parents]
+ValueError: max() arg is an empty sequence

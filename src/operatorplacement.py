@@ -97,7 +97,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     print(unfolded)
     print(criticalMSTypes)
     dependencies = compute_dependencies(self,unfolded,criticalMSTypes)
-    processingOrder = sorted(compute_dependencies(self,unfolded,criticalMSTypes).keys(), key = lambda x : dependencies[x] ) # unfolded enthält kombi   
+    processingOrder = sorted(dependencies.keys(), key = lambda x : dependencies[x] ) # unfolded enthält kombi   
     costs = 0
 
     for projection in processingOrder:  #parallelize computation for all projections at the same level
@@ -134,7 +134,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     print("Lower Bound: " + str(lowerBound / ccosts[0]))
 
     print("Transmission Ratio: " + str(mycosts))
-    print("INEv Depth: " + str(float(max(list(dependencies.values()))+1)/2))
+    #print("INEv Depth: " + str(float(max(list(dependencies.values()))+1)/2))
     
     ID = int(np.random.uniform(0,10000000))
     
@@ -149,10 +149,11 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
       
                       
     ID = int(np.random.uniform(0,10000000))
+    
+    print(dependencies)
+    #hoplatency = max([hopLatency[x] for x in hopLatency.keys()])   
 
-   
-    hoplatency = max([hopLatency[x] for x in hopLatency.keys()])   
-    totalLatencyRatio = hoplatency / centralHopLatency
+    #totalLatencyRatio = hoplatency / centralHopLatency
     myResult = [ID, mycosts, ccosts[0], costs,Filters, networkParams[3], networkParams[0], networkParams[2], len(wl), combigenParams[3], selectivityParams[0], selectivityParams[1], combigenParams[1], longestPath, totaltime, centralHopLatency, float(max(list(dependencies.values()))/2), ccosts[0], lowerBound / ccosts[0], networkParams[1], number_parents]
     
     

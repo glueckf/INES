@@ -82,7 +82,7 @@ if __name__ == "__main__":
    # start_simulation(12, 0.5, 6, 0.3, 10, 3, 5, 4)
     file_name = f"INES-simulation_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"  
     all_results = []
-    for i in range(10):
+    for i in range(100):
        
         result = run_simulation(12, 0.5, 6, 0.3, 10, 3, 5, i)
         all_results.append(result)
