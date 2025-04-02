@@ -127,6 +127,7 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
     print(network)
     print(network_data)
     # Extract only the keys (nodes) with an empty list of connections
+    # iterate through less nodes if possible
     non_leaf = [node for node, neighbors in network_data.items() if not neighbors and network[node].computational_power >= projection.computing_requirements]
     
     for destination in non_leaf:

@@ -84,6 +84,7 @@ if __name__ == "__main__":
     all_results = []
     for i in range(100):
        
+       # parallel laufen lassen
         result = run_simulation(12, 0.5, 6, 0.3, 10, 3, 5, i)
         all_results.append(result)
         
