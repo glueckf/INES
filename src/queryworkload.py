@@ -4,31 +4,31 @@ import string
 import random as rd
 
 # Private global variables
-_Prim = None
-_PrimitiveEvents = None
+#_Prim = None
+#_PrimitiveEvents = None
 
 # Function to initialize Prim and PrimitiveEvents
 def initialize_prim_and_primitive_events(primitive_events_data):
     "TODO No global variables"
-    global _Prim, _PrimitiveEvents
+    #_Prim = self.prim,
+    #_PrimitiveEvents = self.primitiveEvents
     
     # Create PrimitiveEvents list
-    _PrimitiveEvents = list(string.ascii_uppercase[:len(primitive_events_data)])
+    primitiveEvents = list(string.ascii_uppercase[:len(primitive_events_data)])
     
     # Populate the Prim dictionary
-    _Prim = {i: _PrimitiveEvents[i] for i in range(len(_PrimitiveEvents))}
+    prim = {i: primitiveEvents[i] for i in range(len(primitiveEvents))}
+    return primitiveEvents, prim
 
 # Getter for PrimitiveEvents
 def get_primitive_events(primitive_events_data):
-    if _PrimitiveEvents is None:
-        initialize_prim_and_primitive_events(primitive_events_data)
-    return _PrimitiveEvents
+    primitiveEvents, _ = initialize_prim_and_primitive_events(primitive_events_data)
+    return primitiveEvents
 
 # Getter for Prim
 def get_prim_variable(primitive_events_data):
-    if _Prim is None:
-        initialize_prim_and_primitive_events(primitive_events_data)
-    return _Prim
+    _, prim = initialize_prim_and_primitive_events(primitive_events_data)
+    return prim
 
         
 def getPrim(PrimitiveEvents,Prim):
@@ -39,8 +39,7 @@ def getPrim(PrimitiveEvents,Prim):
 def generate_workload(size, maxlength,primitive_events_data): #count, lenthh
     qwl = []
     initialize_prim_and_primitive_events(primitive_events_data)
-    PrimitiveEvent = get_primitive_events(primitive_events_data)
-    Prim = get_prim_variable(primitive_events_data)
+    primitiveEvents, prim = initialize_prim_and_primitive_events(primitive_events_data)
     #for i in range(size):          # changed
     while len(qwl) !=  size:
         mylength = int(rd.uniform(maxlength/2 , maxlength+1)) 
@@ -52,7 +51,7 @@ def generate_workload(size, maxlength,primitive_events_data): #count, lenthh
             query = SEQ()
         else:
             query = AND()
-        query.children = generateQ(query, int(nesting_depth), mylength, PrimitiveEvent,Prim)
+        query.children = generateQ(query, int(nesting_depth), mylength, primitiveEvents,prim)
         
         
         query = number_children(query)

@@ -115,7 +115,7 @@ def create_routing_dict(graph):
     return routing_dict
 
 
-def create_myDistances(G, me):
+def create_myDistances(routingDict, G, me):
     """Create the myDistances array for a given node `me`."""
     myDistances = []
     for j in range(len(G.nodes)):
@@ -126,22 +126,24 @@ def create_myDistances(G, me):
 
 
 # New helper function to replace the lambda in pool.map
-def compute_distances_for_node(node):
-    return create_myDistances(G, node)
+def compute_distances_for_node(routingDict,G,node):
+    return create_myDistances(routingDict,G, node)
 
 
 def populate_allPairs(graph: nx.digraph):
-    "TODO No globals"
-    global routingDict
-    global G
+    #"TODO No globals"
+    #global routingDict
+    #global G
     G = graph
     routingDict = dict(nx.all_pairs_shortest_path(graph))
 
     myNodes = list(graph.nodes)
     allPairs = [[] for x in myNodes]
 
+    args = [(routingDict, G, node) for node in myNodes]
+
     pool = multiprocessing.Pool()
-    result = pool.map(compute_distances_for_node, myNodes)
+    result = pool.starmap(compute_distances_for_node, args)
     for i in result:
         allPairs[i[0]] = i[1]
         

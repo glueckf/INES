@@ -416,19 +416,19 @@ def returnSubProjections(proj, projlist):
 
     return outputlist
 
-_sharedProjectionsDict = {}
-_sharedProjectionsList = []
-_projsPerQuery = {}
-_projlist = []
-_projrates = {}
+#_sharedProjectionsDict = {}
+#_sharedProjectionsList = []
+#_projsPerQuery = {}
+#_projlist = []
+#_projrates = {}
 
 def generate_all_projections(self):
-    "TODO no global"
-    global _sharedProjectionsDict 
-    global _sharedProjectionsList
-    global _projsPerQuery
-    global _projlist
-    global _projrates
+    #"TODO no global"
+    sharedProjectionsDict = self.h_sharedProjectionsDict
+    sharedProjectionsList = self.h_sharedProjectionsList
+    projsPerQuery = self.h_projsPerQuery
+    projlist = self.h_projlist
+    projrates = self.h_projrates
 
     wl = self.query_workload
     for query in wl:
@@ -438,22 +438,22 @@ def generate_all_projections(self):
 
         #projsPerQuery[query] = result[0]
         for i in result[0]:        
-            if i not in _projlist:
-                _projlist.append(i)
-                _projrates[i] = result[1][i]
-                _sharedProjectionsDict[i] = [query]
+            if i not in projlist:
+                projlist.append(i)
+                projrates[i] = result[1][i]
+                sharedProjectionsDict[i] = [query]
             else:
-                for mykey in _sharedProjectionsDict.keys():
+                for mykey in sharedProjectionsDict.keys():
                     if mykey == i:
-                        _sharedProjectionsDict[mykey].append(query)
+                        sharedProjectionsDict[mykey].append(query)
     #print(projrates)
     for query in wl:
         query = query.stripKL_simple()
-        _projsPerQuery[query] = [x for x in _projlist if query.can_be_used(x)]
+        projsPerQuery[query] = [x for x in projlist if query.can_be_used(x)]
 
-    for projection in _sharedProjectionsDict.keys():
-        if len(_sharedProjectionsDict[projection]) > 1:
-            _sharedProjectionsList.append(projection) 
+    for projection in sharedProjectionsDict.keys():
+        if len(sharedProjectionsDict[projection]) > 1:
+            sharedProjectionsList.append(projection) 
 
-    return _projlist,_projrates,_projsPerQuery,_sharedProjectionsDict,_sharedProjectionsList
+    return projlist,projrates,projsPerQuery,sharedProjectionsDict,sharedProjectionsList
 

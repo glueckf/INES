@@ -8,7 +8,7 @@ QUERIES = 'queries'
 MUSE_GRAPH = 'muse graph'
 SELECTIVITIES = 'selectivities'
 
-CURRENT_SECTION = ''
+#CURRENT_SECTION = ''
 
 network = []
 
@@ -40,7 +40,7 @@ class Query_fragment():
         self.forbidden_event_types = forbidden_event_types
 
 
-def get_current_section(line):
+def get_current_section(CURRENT_SECTION,line):
     if line == 'network\n':
         return NETWORK
     elif line == 'queries\n':
@@ -435,15 +435,14 @@ def determine_all_single_selectivities_for_projection(projection):
                 
             determine_randomized_single_selectivities_within_all_projections(projection, upper_bound_keys)
 
-def initializeSingleSelectivity(config_single, workload):
+def initializeSingleSelectivity(CURRENT_SECTION, config_single, workload):
 
-    global CURRENT_SECTION
 
     current_node = 0
    # CURRENT_SECTION = ''
     for line in config_single:
         OLD_SECTION = CURRENT_SECTION
-        CURRENT_SECTION = get_current_section(line)
+        CURRENT_SECTION = get_current_section(CURRENT_SECTION, line)
         if OLD_SECTION != CURRENT_SECTION:
             continue
         

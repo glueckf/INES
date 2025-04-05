@@ -37,6 +37,8 @@ class INES():
     eval_plan = None
     central_eval_plan = None
     experiment_result = None
+    prim = None
+    CURRENT_SECTION = ''
     
     "Helper Variables from different Files - namespace issues"
     h_network_data = None
@@ -44,11 +46,11 @@ class INES():
     h_primEvents = None
     h_instances=None
     h_nodes = None
-    h_projlist = None
-    h_projrates = None
-    h_projsPerQuery = None
-    h_sharedProjectionsDict = None
-    h_sharedProjectionsList = None
+    h_projlist = []
+    h_projrates = {}
+    h_projsPerQuery = {}
+    h_sharedProjectionsDict = {}
+    h_sharedProjectionsList = []
     h_eventNodes = None
     h_IndexEventNodes = None    
     h_projFilterDict = None
@@ -59,6 +61,9 @@ class INES():
     h_combiExperimentData = None
     h_criticalMSTypes = None
     h_criticalMSProjs = None
+    h_combiDict = {}
+    h_globalPartitioninInputTypes = {}
+    h_globalSiSInputTypes = {}
 
     
 
@@ -83,7 +88,7 @@ class INES():
         self.query_workload = generate_workload(query_size,query_length,self.primitiveEvents)
         self.selectivities,self.selectivitiesExperimentData = initialize_selectivities(self.primitiveEvents)
         self.config_single = generate_config_buffer(self.network,self.query_workload,self.selectivities)
-        self.single_selectivity = initializeSingleSelectivity(self.config_single, self.query_workload)
+        self.single_selectivity = initializeSingleSelectivity(self.CURRENT_SECTION, self.config_single, self.query_workload)
 
         #This is important to variious files afterwards
         self.h_network_data,self.h_rates_data,self.h_primEvents,self.h_instances,self.h_nodes = initialize_globals(self.network)
