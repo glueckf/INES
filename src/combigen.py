@@ -273,7 +273,7 @@ def getBestTreeCombiRec(self, longestPath,query, projection, mylist, mycombi, my
             # exclude the projection in which one of the partProjs of the combination so far is used as input of a single sink placement of an ancestor
             allSiSTypes = sum([allSiSEvents(self, x) for x in mycombi if x in combiDict.keys()],[])  #get SIS events, i e those that are covered by combi but not in MS types and remove all projections having ms events that intersect 
             subProjections = [x for x in subProjections if not (x in combiDict.keys() and set(allMSTypes(self, x)).intersection(set(allSiSTypes)))]
-            subProjections = [x for x in subProjections if not (x in combiDict.keys() and set(allSiSEvents(x)).intersection(set(myMSTypes)))]   
+            subProjections = [x for x in subProjections if not (x in combiDict.keys() and set(allSiSEvents(self, x)).intersection(set(myMSTypes)))]   
             
             # NEW: exlude combinations with subprojections whichs parttypes would cause to exceed a parttype threshold, here it would be nice to keep a set of good candidates for each projection
             subProjections = [x for x in subProjections if not globalPartitioningOK(query, mycombi + [x],longestPath,MSTrees)]
