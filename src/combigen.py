@@ -276,7 +276,7 @@ def getBestTreeCombiRec(self, longestPath,query, projection, mylist, mycombi, my
             subProjections = [x for x in subProjections if not (x in combiDict.keys() and set(allSiSEvents(self, x)).intersection(set(myMSTypes)))]   
             
             # NEW: exlude combinations with subprojections whichs parttypes would cause to exceed a parttype threshold, here it would be nice to keep a set of good candidates for each projection
-            subProjections = [x for x in subProjections if not globalPartitioningOK(query, mycombi + [x],longestPath,MSTrees)]
+            subProjections = [x for x in subProjections if not globalPartitioningOK(self, query, mycombi + [x],longestPath,MSTrees)]
       
             getBestTreeCombiRec(self,longestPath,query, projection, subProjections, mycombi, mycosts, shared, criticalMSTypes,DistMatrices,MSTrees)
             mycombi =  combiBefore

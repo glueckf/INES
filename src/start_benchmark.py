@@ -46,7 +46,7 @@ def run_simulation(nodes,node_event_ratio,num_eventtypes,eventskew,max_parents,q
 
 def start_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length, runs):
     """Runs multiple simulations in parallel."""
-    file_name = f"INES-simulation_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"
+    file_name = f"INES-Benchmark" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"
     result = run_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length,0)
     print(result)
     all_results = []
@@ -80,18 +80,31 @@ def start_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_par
 
 if __name__ == "__main__":
    # start_simulation(12, 0.5, 6, 0.3, 10, 3, 5, 4)
-    file_name = f"INES-simulation_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"  
+    file_name = f"INES-benchmark_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"  
     all_results = []
-    for i in range(100):
+    for i in range(10):
        
        # parallel laufen lassen
-        result = run_simulation(12, 0.5, 6, 0.3, 10, 3, 5, i)
+        result = run_simulation(100, 0.5, 6, 0.3, 10, 3, 5, i)
         all_results.append(result)
         
         if all_results:
-            all_results = [result for result in all_results if result is not None]  # Remove failed runs
             final_df = pd.concat(all_results, ignore_index=True)
-           # final_df.to_csv(f"./res/{file_name}", index=False)
-            print(f"✅ Results saved to: {file_name}")
+            #final_df.to_csv(f"./res/{file_name}", index=False)
+            print(f"✅ Results saved to: ./res/{file_name}")
+
+        # 🔍 Durchschnitt berechnen (nur für die 3 relevanten Spalten)
+            try:
+                avg_functions = final_df["Functions"].mean()
+                avg_inev = final_df["INEv"].mean()
+                avg_prepp = final_df["PrePP"].mean()
+
+                print("\n📊 Average Benchmark Times:")
+                print(f"🧩 Functions: {avg_functions:.4f} s")
+                print(f"📐 INEv:      {avg_inev:.4f} s")
+                print(f"⚙️  PrePP:     {avg_prepp:.4f} s")
+
+            except KeyError:
+                print("⚠️ Could not compute averages: One or more columns missing in the results.")
         else:
-            print("Nothing found")
+            print("❌ No valid results found.")
