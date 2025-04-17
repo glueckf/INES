@@ -27,7 +27,7 @@ def run_simulation(nodes,node_event_ratio,num_eventtypes,eventskew,max_parents,q
         print(f"\n==== Initaiting Run {run} Started ====\n")
         simulation = INES(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length)
         sys.stdout.flush()
-        return pd.DataFrame([simulation.function_times], columns=simulation.schema)  # Convert results to DataFrame
+        return pd.DataFrame([[simulation.function_times.get(key, None) for key in simulation.schema]], columns=simulation.schema)# Convert results to DataFrame
 
     except Exception as e:
         error_message = f"❌ Exception: {str(e)}\n{traceback.format_exc()}"
@@ -82,7 +82,7 @@ if __name__ == "__main__":
    # start_simulation(12, 0.5, 6, 0.3, 10, 3, 5, 4)
     file_name = f"INES-benchmark_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"  
     all_results = []
-    for i in range(10):
+    for i in range(3):
        
        # parallel laufen lassen
         result = run_simulation(100, 0.5, 6, 0.3, 10, 3, 5, i)
@@ -90,21 +90,7 @@ if __name__ == "__main__":
         
         if all_results:
             final_df = pd.concat(all_results, ignore_index=True)
-            #final_df.to_csv(f"./res/{file_name}", index=False)
+            final_df.to_csv(f"./res/{file_name}", index=False)
             print(f"✅ Results saved to: ./res/{file_name}")
-
-        # 🔍 Durchschnitt berechnen (nur für die 3 relevanten Spalten)
-            try:
-                avg_functions = final_df["Functions"].mean()
-                avg_inev = final_df["INEv"].mean()
-                avg_prepp = final_df["PrePP"].mean()
-
-                print("\n📊 Average Benchmark Times:")
-                print(f"🧩 Functions: {avg_functions:.4f} s")
-                print(f"📐 INEv:      {avg_inev:.4f} s")
-                print(f"⚙️  PrePP:     {avg_prepp:.4f} s")
-
-            except KeyError:
-                print("⚠️ Could not compute averages: One or more columns missing in the results.")
         else:
             print("❌ No valid results found.")
