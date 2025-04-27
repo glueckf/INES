@@ -471,7 +471,7 @@ def unfold_combiRec(self, combination, unfoldedDict):
             else:
                 mycombination = proj.leafs() # this is the case if proj is a single sink projection, and we have to decide how to match it later
             unfoldedDict[proj] = mycombination
-            unfoldedDict.update(unfold_combiRec(mycombination, unfoldedDict))
+            unfoldedDict.update(unfold_combiRec(self, mycombination, unfoldedDict))
     return unfoldedDict 
 
  

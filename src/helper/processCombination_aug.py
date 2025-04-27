@@ -70,11 +70,13 @@ def compute_dependencies_simple(combiDict):# has as input a final combination
     return levels           
 
 
-def getSharedMSinput(combiDict, myProjFilters): 
+def getSharedMSinput(self, combiDict, myProjFilters): 
     ''' for each ms projection in final combination, check if there is an input in the current combination, that is shared with another ms projection, output is shared dict, which is used for MS placements'''
     sharedInput = {}
+    criticalMSTypes = self.h_criticalMSTypes
+    projrates = self.h_projrates
     for proj in combiDict.keys():        
-        part = returnPartitioning(proj, combiDict[proj], criticalMSTypes)                  
+        part = returnPartitioning(self, proj, combiDict[proj], projrates , criticalMSTypes)                  
         if part: # only MS projections
             #for event in combiDict[proj]:
             for event in combiDict[proj] + list(getMaximalFilter(myProjFilters, proj)):

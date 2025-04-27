@@ -260,7 +260,7 @@ def NEW_isPartitioning(self ,element, combi, proj,projrates:dict):
 	myproj  = 0 #costs for outputrates
 	if proj.get_original(wl) not in wl:
 		myproj =  projrates[proj][1] * (getNumETBs(proj,IndexEventNodes)) # additional constraint about ratio of partitioning event type and outputrate of projection
-
+        
 	if totalRate(self,element,projrates) * longestPath > (mysum * costs) + myproj * longestPath :  
 		
 		return [costs],MSTrees,DistMatrices

@@ -17,6 +17,255 @@ from EvaluationPlan import Instance,Projection
 import numpy as np
 from helper.filter import getKeySingleSelect
 import networkx as nx
+from helper.structures import MSManageETBs
+from networkx.algorithms.approximation import steiner_tree
+
+# def getFilters(self, projection, partType): # move to filter file eventually 
+#         IndexEventNodes = self.h_IndexEventNodes
+#         projrates = self.h_projrates
+#         totalETBs = 0
+#         for etb in IndexEventNodes[partType]: #for each multi-sink
+            
+#                 numETBs = 1
+#                 node = getNodes(etb)[0]        
+#                 myETBs = getETBs(node)       
+#                 if not set(IndexEventNodes[projection]).issubset(set(getETBs(node))): # it is  checked if the node already received all etbs of the projection, if this is the case its not necessary to reduce something here     
+#                     # jedes etb eines leaftypes von projection, aufsummieren, wenn von jedem mindestens 1 dann aufmultiplizieren und somit etbs ausrechnen und dann rate der etbs aufsummieren pro knoten
+#                     for primEvent in projection.leafs():
+#                         numETBs *= len(list(set(myETBs) & set(IndexEventNodes[primEvent])))
+                       
+#                     totalETBs += numETBs
+#       #  print("AUTO FILTERS: " + str(totalETBs * projrates[projection][1]))    # if the projection is also input to another projection in the combination, it may also be the case that the nodes of the parttypes already received all instances of the projections, hence filters can't help anymore...
+#         return totalETBs * projrates[projection][1]
+
+def computeMSplacementCosts(self,projection, combination, partType, sharedDict, noFilter, G):
+    projFilterDict = self.h_projFilterDict
+    IndexEventNodes = self.h_IndexEventNodes
+    nodes = self.h_nodes
+    costs = 0
+    Filters  = []
+    
+    ##### FILTERS, append maximal filters
+    intercombi = []
+    
+    automaticFilters = 0
+    for proj in combination:
+        #if len(proj) > 1 and len(IndexEventNodes[proj]) == 1:     #here a node can only have already ALL events if the node is a sink for the projection, this case is however already covered in normal placement cost calculation
+            # automaticFilters +=  getFilters(proj, partType[0]) # TODO first version
+            
+        intercombi.append(proj)
+        if len(proj) > 1 and len(getMaximalFilter(projFilterDict, proj, noFilter)) > 0: # those are the extra events that need to be sent around due to filters
+            Filters.append((proj,getMaximalFilter(projFilterDict, proj, noFilter) ))
+            #print("Using Filter: " + str(getMaximalFilter(projFilterDict, proj)) + ": " + str(projFilterDict[proj][getMaximalFilter(projFilterDict, proj)][0]) + " instead of " + str(projrates[proj])  )
+            for etype in getMaximalFilter(projFilterDict, proj, noFilter):
+                intercombi.append(etype)
+    combination = list(set(intercombi))
+    myPathLength = 0
+    eventNodes = self.h_eventNodes
+    totalInstances = [] #!
+    myNodes = [] #!
+    #event_key = partType[0]
+
+    if not partType:
+        print("Fehler: partType ist leer!")
+        return []  # Oder irgendein sinnvolles Fallback
+    
+    if isinstance(partType[0], list):
+        partType = partType[0]  # Extrahiere das erste Element der Liste
+
+    if not partType or partType[0] not in IndexEventNodes:
+        print(f"Fehler: Ungültiger partType[0] - {partType[0] if partType else 'LEER'}")
+        return []
+
+    for i in IndexEventNodes[partType[0]]: #!
+        myNodes += getNodes(i, eventNodes, IndexEventNodes)
+        #myNodes += getNodes(i) #!
+        
+    myProjection = Projection(projection, {}, nodes[partType[0]], [], Filters) #!
+    for myInput in combination:
+           
+            if not partType[0] == myInput:
+                    if myInput in sharedDict.keys():  
+                        if isinstance(myInput, list):
+                            etype = myInput[0]  # extrahiere den tatsächlichen Eventtyp
+                        else:
+                            etype = myInput  
+                            if not etype or etype not in IndexEventNodes:
+                                print(f"[Fehler] Ungültiger Event-Typ '{etype}' – nicht in IndexEventNodes enthalten.")
+                            return []
+          
+                        #result = NEWcomputeMSplacementCosts_Path(projection, [myInput], sharedDict[myInput], noFilter)
+                        result = NEWcomputeMSplacementCosts(self, projection, etype, sharedDict[myInput], noFilter, G)
+                        costs +=  result[0] #fix SharedDict with Filter Inputs
+                        
+                    else:
+                        if not etype or etype not in IndexEventNodes:
+                            print(f"[Fehler] Ungültiger Event-Typ '{etype}' – nicht in IndexEventNodes enthalten.")
+                            return []
+                        #result = NEWcomputeMSplacementCosts_Path(projection, [myInput],  partType[0], noFilter) 
+                        if isinstance(myInput, list):
+                                etype = myInput[0]  # extrahiere den tatsächlichen Eventtyp
+                        else:
+                                etype = myInput 
+                        result = NEWcomputeMSplacementCosts(self, projection, [myInput],  partType[0], noFilter, G) 
+                        costs +=  result[0]
+                    if result[1] > myPathLength:
+                        myPathLength = result[1]
+                    
+                    myProjection.addInstances(myInput, result[2]) #!
+                    
+                    totalInstances += result[2] #!
+            else:
+                
+                myInstances = [Instance(partType[0], partType[0], nodes[partType[0]], {})]
+                myProjection.addInstances(partType[0], myInstances)
+    if str(projection) == "AND(D, E)":
+                    print(partType[0], nodes[partType[0]])                
+    # here generate an instance of etbs per parttype and add one line per instance
+    MSManageETBs(projection, partType[0])    
+    
+    spawnedInstances = IndexEventNodes[projection]
+    myProjection.addSpawned(spawnedInstances)
+    
+    
+    costs -= automaticFilters            
+    
+    return costs, myPathLength, myProjection, totalInstances, Filters
+
+def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, noFilter, G): #we need tuples, (C, [E,A]) C should be sent to all e and a nodes ([D,E], [A]) d and e should be sent to all a nodes etc
+    #print(projection, sourcetypes)
+
+    projFilterDict = self.h_projFilterDict
+    IndexEventNodes = self.h_IndexEventNodes
+    projrates = self.h_projrates
+    costs = 0
+    destinationNodes = []    
+    singleSelectivities = self.single_selectivity 
+    mycombi = self.h_mycombi
+    rates = self.h_rates_data
+    placementTreeDict = self.placementTreeDict
+
+    for etype in destinationtypes:
+        for etb in IndexEventNodes[etype]:
+            destinationNodes += getNodes(etb)
+            
+            
+    newInstances = [] #!
+    pathLength = 0        
+    etype = sourcetypes[0]
+    print(f"NEWcomputeMSplacementCosts: etype = {etype}, type = {type(etype)}")
+    
+    f = open("msFilter.txt", "w")
+    if etype in projFilterDict.keys() and getMaximalFilter(projFilterDict, etype, noFilter):
+        print("hasFilter")
+        f.write("VAR=true")
+    else:        
+        f.write("VAR=false")
+    f.close()     
+        
+        
+    for etb in IndexEventNodes[etype]: #parallelize 
+            
+       
+            MydestinationNodes = list(set(destinationNodes).difference(set(getNodes(etb)))) #only consider nodes that do not already hold etb
+            if MydestinationNodes: #are there ms nodes which did not receive etb before
+                    node = findBestSource(self, getNodes(etb), MydestinationNodes) #best source is node closest to a node of destinationNodes
+                    treenodes = copy.deepcopy(MydestinationNodes) 
+                    treenodes.append(node)
+                                        
+                    mytree = steiner_tree(G, treenodes)
+                    
+                    myInstance = Instance(etype, etb, [node], {projection: list(mytree.edges)}) #! #append routing tree information for instance/etb                    
+                    newInstances.append(myInstance) #!
+                    
+                    
+                    myPathLength = max([len(nx.shortest_path(mytree, x, node, method='dijkstra')) for x in MydestinationNodes]) - 1
+                    
+                    
+                    if etype in projFilterDict.keys() and  getMaximalFilter(projFilterDict, etype, noFilter): #case input projection has filter
+                        mycosts =  len(mytree.edges()) * getDecomposedTotal(getMaximalFilter(projFilterDict, etype, noFilter), etype)                    
+                        if len(IndexEventNodes[etype]) > 1 : # filtered projection has ms placement
+                             partType = returnPartitioning(etype, mycombi[etype])[0]                     
+                             mycosts -= len(mytree.edges())  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] * len(IndexEventNodes[etype])
+                             mycosts += len(mytree.edges())  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] 
+                    elif len(etype) == 1:
+                        mycosts = len(mytree.edges()) * rates[etype]
+                    else:                    
+                        num = NumETBsByKey(etb, etype)                 
+                        mycosts = len(mytree.edges()) *  projrates[etype][1] * num     # FILTER              
+                        
+                    placementTreeDict[(tuple(destinationtypes),etb)] = [node, MydestinationNodes, mytree] #only kept for updating in the next step
+                    costs +=  mycosts 
+                    
+                    pathLength = max([pathLength, myPathLength])
+                    
+                    # update events sent over network
+                    for routingNode in mytree.nodes():
+                        if not routingNode in getNodes(etb):
+                            setEventNodes(routingNode, etb)
+    
+        
+  # print(list(map(lambda x: str(x), sourcetypes)), costs)           
+    return costs, pathLength, newInstances
+
+
+
+
+def NEWcomputeMSplacementCosts_Path(self, projection, sourcetypes, destinationtypes, noFilter, G): #for PathVariant - fix generate EvalPlan
+    costs = 0
+    destinationNodes = []     
+    IndexEventNodes = self.h_IndexEventNodes
+    projrates = self.h_projrates
+    projFilterDict = self.h_projFilterDict
+    mycombi = self.h_mycombi
+    singleSelectivities = self.single_selectivity
+    rates = self.h_rates_data
+
+    for etype in destinationtypes:
+        for etb in IndexEventNodes[etype]:
+            destinationNodes += getNodes(etb)            
+            
+    newInstances = [] #!
+    longestPath = 0        
+    etype = sourcetypes[0]
+    routingInfo = []
+        
+    for etb in IndexEventNodes[etype]: #parallelize
+        newInstance = False   
+        MydestinationNodes = list(set(destinationNodes).difference(set(getNodes(etb)))) #only consider nodes that do not already hold etb
+        if MydestinationNodes:     
+                for dest in MydestinationNodes:
+                   if not dest in getNodes(etb):  
+                        #are there ms nodes which did not receive etb before
+                        node = findBestSource(self, getNodes(etb), [dest]) #best source is node closest to a node of destinationNodes
+                        
+                        shortestPath = nx.shortest_path(G, dest, node, method='dijkstra') 
+                        if len(shortestPath) > longestPath:
+                            longestPath = len(shortestPath)
+                    
+                        if etype in projFilterDict.keys() and  getMaximalFilter(projFilterDict, etype, noFilter): #case input projection has filter
+                            mycosts =  len(shortestPath) * getDecomposedTotal(getMaximalFilter(projFilterDict, etype, noFilter), etype)                    
+                            if len(IndexEventNodes[etype]) > 1 : # filtered projection has ms placement
+                                 partType = returnPartitioning(etype, mycombi[etype])[0]                     
+                                 mycosts -= len(shortestPath)  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] * len(IndexEventNodes[etype])
+                                 mycosts += len(shortestPath)  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] 
+                        elif len(etype) == 1:
+                            mycosts = len(shortestPath) * rates[etype]
+                        else:                    
+                            num = NumETBsByKey(etb, etype)                 
+                            mycosts = len(shortestPath) *  projrates[etype][1] * num          
+                        costs +=  mycosts     
+
+                        routingInfo.append(shortestPath)    # destinations have different sources
+                    
+                        for routingNode in shortestPath:
+                            if not routingNode in getNodes(etb):
+                                setEventNodes(routingNode, etb)  
+                        newInstance = True        
+        if newInstance:
+            myInstance = Instance(etype, etb, [node], {projection: routingInfo}) #! #append routing tree information for instance/etb                    
+            newInstances.append(myInstance) #!        
+    return costs, longestPath, newInstances
 
 # def NEWcomputeMSplacementCosts(projection, sourcetypes, destinationtypes, noFilter): #we need tuples, (C, [E,A]) C should be sent to all e and a nodes ([D,E], [A]) d and e should be sent to all a nodes etc
 #     #print(projection, sourcetypes)
@@ -89,13 +338,14 @@ import networkx as nx
 
 
 
-# def findBestSource(sources, actualDestNodes): #this is only a heuristic, as the closest node can still be shit with respect to a good steiner tree ?+
-#     curmin = np.inf     
-#     for node in sources:        
-#         if min([allPairs[node][x] for x in actualDestNodes]) < curmin:
-#            curmin =  min([allPairs[node][x] for x in actualDestNodes])
-#            bestSource = node
-#     return bestSource
+def findBestSource(self, sources, actualDestNodes): #this is only a heuristic, as the closest node can still be shit with respect to a good steiner tree ?+
+    allPairs = self.allPairs
+    curmin = np.inf     
+    for node in sources:        
+        if min([allPairs[node][x] for x in actualDestNodes]) < curmin:
+           curmin =  min([allPairs[node][x] for x in actualDestNodes])
+           bestSource = node
+    return bestSource
         
 # def getDestinationsUpstream(projection):
 #     return  range(len(allPairs))       

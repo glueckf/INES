@@ -39,6 +39,7 @@ class INES():
     experiment_result = None
     prim = None
     CURRENT_SECTION = ''
+    placementTreeDict = {}
     
     "Helper Variables from different Files - namespace issues"
     h_network_data = None
@@ -52,11 +53,11 @@ class INES():
     h_sharedProjectionsDict = {}
     h_sharedProjectionsList = []
     h_eventNodes = None
-    h_IndexEventNodes = None    
+    h_IndexEventNodes = None
     h_projFilterDict = None
     h_longestPath = None
     h_mycombi = None
-    h_combiDict = None
+    #h_combiDict = None
     h_criticalMSTypes_criticalMSProjs = None
     h_combiExperimentData = None
     h_criticalMSTypes = None

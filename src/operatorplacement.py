@@ -1,5 +1,5 @@
-from helper.placement_aug import NEWcomputeCentralCosts,ComputeSingleSinkPlacement
-from helper.processCombination_aug import compute_dependencies
+from helper.placement_aug import NEWcomputeCentralCosts,ComputeSingleSinkPlacement, computeMSplacementCosts
+from helper.processCombination_aug import compute_dependencies, getSharedMSinput
 import time
 import csv
 import sys
@@ -53,6 +53,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     singleSelectivities = self.single_selectivity
     projrates = self.h_projrates
     EventNodes = self.h_eventNodes
+    G = self.graph
 
     Filters = []
     writeExperimentData = 0
@@ -94,6 +95,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     #mycombi = removeSisChains()
     unfolded = self.h_mycombi
     criticalMSTypes = self.h_criticalMSTypes
+    sharedDict = getSharedMSinput(self, unfolded, projFilterDict)
     print(unfolded)
     print(criticalMSTypes)
     dependencies = compute_dependencies(self,unfolded,criticalMSTypes)
@@ -110,19 +112,53 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
             #partType = returnPartitioning(self,projection, unfolded[projection], self.h_projrates,criticalMSTypes)
 
             #TODO ComputeMSPlacement
-            result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter,projFilterDict,EventNodes,IndexEventNodes,self.h_network_data,allPairs,mycombi,rates,singleSelectivities,projrates,self.graph,self.network)
-            additional = result[0]
-            costs += additional
-            hopLatency[projection] += result[2]
-            myPlan.addProjection(result[3]) #!
-            for newin in result[3].spawnedInstances: # add new spawned instances
-                
-                myPlan.addInstances(projection, newin)
-            
-            myPlan.updateInstances(result[4]) #! update instances
-            Filters += result[5]
-            
-            print("SiS " + str(projection) + "PC: " + str(additional)  + " Hops: " + str(result[2]))
+            partType,_,_ = returnPartitioning(self, projection, unfolded[projection], projrates ,criticalMSTypes)
+            if partType : 
+                MSPlacements[projection] = partType
+                result = computeMSplacementCosts(self, projection, unfolded[projection], partType, sharedDict, noFilter, G)
+                if not result:
+                    print(f"[Fehler] Leeres Ergebnis für MS-Placement von {projection} erhalten. Überspringe...")
+                    break  # continue / return / break
+                additional = result[0]
+                costs += additional
+                hopLatency[projection] += result[1]
+
+                myPlan.addProjection(result[2]) #!
+
+                for newin in result[2].spawnedInstances: # add new spawned instances
+                    myPlan.addInstances(projection, newin) 
+
+
+                myPlan.updateInstances(result[3]) #! update instances
+
+
+                Filters += result[4]
+                #if partType, and projection in wl and partType kleene component of projection, add sink
+                print("MS " + str(projection) + " At: " + str(partType) + " PC: " + str(additional) + " Hops:" + str(result[1]))
+
+
+                if projection.get_original(wl) in wl and partType[0] in list(map(lambda x: str(x), projection.get_original(wl).kleene_components())):
+
+
+                    result = ComputeSingleSinkPlacement(projection.get_original(wl), [projection], noFilter)
+                    additional = result[0]
+                    costs += additional
+                print("SiS Sink for Kleene:" + str(projection.get_original(wl)) + " PC: " + str(additional) + " Hops:" + str(result[1]))
+
+            else: 
+                result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter,projFilterDict,EventNodes,IndexEventNodes,self.h_network_data,allPairs,mycombi,rates,singleSelectivities,projrates,self.graph,self.network)
+                additional = result[0]
+                costs += additional
+                hopLatency[projection] += result[2]
+                myPlan.addProjection(result[3]) #!
+                for newin in result[3].spawnedInstances: # add new spawned instances
+
+                    myPlan.addInstances(projection, newin)
+
+                    myPlan.updateInstances(result[4]) #! update instances
+                    Filters += result[5]
+
+            print("SiS " + str(projection) + "PC: " + str(additional) + " Hops: " + str(result[2]))
                 
     mycosts = costs/ccosts[0]
     print("INEv Transmission " + str(costs) )
@@ -152,9 +188,12 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     
     print(dependencies)
     #hoplatency = max([hopLatency[x] for x in hopLatency.keys()])   
-
+    if dependencies:
+        max_dependency = float(max(list(dependencies.values())) / 2)
+    else:
+        max_dependency = 0.0  # default value
     #totalLatencyRatio = hoplatency / centralHopLatency
-    myResult = [ID, mycosts, ccosts[0], costs,Filters, networkParams[3], networkParams[0], networkParams[2], len(wl), combigenParams[3], selectivityParams[0], selectivityParams[1], combigenParams[1], longestPath, totaltime, centralHopLatency, float(max(list(dependencies.values()))/2), ccosts[0], lowerBound / ccosts[0], networkParams[1], number_parents]
+    myResult = [ID, mycosts, ccosts[0], costs,Filters, networkParams[3], networkParams[0], networkParams[2], len(wl), combigenParams[3], selectivityParams[0], selectivityParams[1], combigenParams[1], longestPath, totaltime, centralHopLatency, max_dependency, ccosts[0], lowerBound / ccosts[0], networkParams[1], number_parents]
     
     
  
