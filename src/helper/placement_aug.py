@@ -68,10 +68,10 @@ def computeMSplacementCosts(self,projection, combination, partType, sharedDict, 
 
     if not partType:
         print("Fehler: partType ist leer!")
-        return []  # Oder irgendein sinnvolles Fallback
+        return [] 
     
     if isinstance(partType[0], list):
-        partType = partType[0]  # Extrahiere das erste Element der Liste
+        partType = partType[0]
 
     if not partType or partType[0] not in IndexEventNodes:
         print(f"Fehler: Ungültiger partType[0] - {partType[0] if partType else 'LEER'}")
@@ -92,10 +92,10 @@ def computeMSplacementCosts(self,projection, combination, partType, sharedDict, 
                             etype = myInput  
                             if not etype or etype not in IndexEventNodes:
                                 print(f"[Fehler] Ungültiger Event-Typ '{etype}' – nicht in IndexEventNodes enthalten.")
-                            return []
+                                return []
           
                         #result = NEWcomputeMSplacementCosts_Path(projection, [myInput], sharedDict[myInput], noFilter)
-                        result = NEWcomputeMSplacementCosts(self, projection, etype, sharedDict[myInput], noFilter, G)
+                        result = NEWcomputeMSplacementCosts(self, projection, [etype], sharedDict[myInput], noFilter, G)
                         costs +=  result[0] #fix SharedDict with Filter Inputs
                         
                     else:
@@ -103,10 +103,10 @@ def computeMSplacementCosts(self,projection, combination, partType, sharedDict, 
                             print(f"[Fehler] Ungültiger Event-Typ '{etype}' – nicht in IndexEventNodes enthalten.")
                             return []
                         #result = NEWcomputeMSplacementCosts_Path(projection, [myInput],  partType[0], noFilter) 
-                        if isinstance(myInput, list):
-                                etype = myInput[0]  # extrahiere den tatsächlichen Eventtyp
-                        else:
-                                etype = myInput 
+                        # if isinstance(myInput, list):
+                        #         etype = myInput[0]  # extrahiere den tatsächlichen Eventtyp
+                        # else:
+                        #         etype = myInput 
                         result = NEWcomputeMSplacementCosts(self, projection, [myInput],  partType[0], noFilter, G) 
                         costs +=  result[0]
                     if result[1] > myPathLength:
@@ -122,7 +122,7 @@ def computeMSplacementCosts(self,projection, combination, partType, sharedDict, 
     if str(projection) == "AND(D, E)":
                     print(partType[0], nodes[partType[0]])                
     # here generate an instance of etbs per parttype and add one line per instance
-    MSManageETBs(projection, partType[0])    
+    MSManageETBs(self, projection, partType[0])    
     
     spawnedInstances = IndexEventNodes[projection]
     myProjection.addSpawned(spawnedInstances)
@@ -144,16 +144,21 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
     mycombi = self.h_mycombi
     rates = self.h_rates_data
     placementTreeDict = self.placementTreeDict
-
-    for etype in destinationtypes:
-        for etb in IndexEventNodes[etype]:
-            destinationNodes += getNodes(etb)
-            
-            
+    eventNodes = self.h_eventNodes
+        
+        
     newInstances = [] #!
     pathLength = 0        
     etype = sourcetypes[0]
     print(f"NEWcomputeMSplacementCosts: etype = {etype}, type = {type(etype)}")
+
+    for d_type in destinationtypes:
+        if isinstance(d_type, list) and len(d_type) > 0:
+            d_type = d_type[0]
+        else:
+             continue
+        for etb in IndexEventNodes[d_type]:
+            destinationNodes += getNodes(etb, eventNodes, IndexEventNodes)
     
     f = open("msFilter.txt", "w")
     if etype in projFilterDict.keys() and getMaximalFilter(projFilterDict, etype, noFilter):
@@ -167,9 +172,9 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
     for etb in IndexEventNodes[etype]: #parallelize 
             
        
-            MydestinationNodes = list(set(destinationNodes).difference(set(getNodes(etb)))) #only consider nodes that do not already hold etb
+            MydestinationNodes = list(set(destinationNodes).difference(set(getNodes(etb, eventNodes, IndexEventNodes)))) #only consider nodes that do not already hold etb
             if MydestinationNodes: #are there ms nodes which did not receive etb before
-                    node = findBestSource(self, getNodes(etb), MydestinationNodes) #best source is node closest to a node of destinationNodes
+                    node = findBestSource(self, getNodes(etb, eventNodes, IndexEventNodes), MydestinationNodes) #best source is node closest to a node of destinationNodes
                     treenodes = copy.deepcopy(MydestinationNodes) 
                     treenodes.append(node)
                                         
@@ -201,7 +206,7 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
                     
                     # update events sent over network
                     for routingNode in mytree.nodes():
-                        if not routingNode in getNodes(etb):
+                        if not routingNode in getNodes(etb, eventNodes, IndexEventNodes):
                             setEventNodes(routingNode, etb)
     
         
@@ -520,8 +525,8 @@ def NEWcomputeCentralCosts(workload,IndexEventNodes,allPairs,rates,EventNodes,G)
         for etb in IndexEventNodes[eventtype]:
                     mySource = getNodes(etb,EventNodes,IndexEventNodes)[0]         
                     thiscosts += rates[eventtype] * allPairs[node][mySource]
-                  #  print(allPairs[node][mySource])
-      #  print(eventtype, thiscosts )    
+                    #print(allPairs[node][mySource])
+        #print(eventtype, thiscosts )    
     return (costs, node, longestPath, routingDict) 
                     
 #TODO compute and print rates saved by placement

@@ -118,7 +118,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
                 result = computeMSplacementCosts(self, projection, unfolded[projection], partType, sharedDict, noFilter, G)
                 if not result:
                     print(f"[Fehler] Leeres Ergebnis für MS-Placement von {projection} erhalten. Überspringe...")
-                    break  # continue / return / break
+                    continue  # continue / return / break
                 additional = result[0]
                 costs += additional
                 hopLatency[projection] += result[1]

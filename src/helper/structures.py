@@ -67,15 +67,19 @@ def SiSManageETBs(projection, node,IndexEventNodes,EventNodes,network):
     addETB(etbID, projection,EventNodes,IndexEventNodes,network)           
     setEventNodes(node, etbID,EventNodes,IndexEventNodes)       
 
-def MSManageETBs(projection, parttype,nodes):
-    etbIDs = genericETB(parttype, projection)
+def MSManageETBs(self, projection, parttype):
+    nodes = self.h_nodes
+    network = self.h_network_data
+    eventNodes = self.h_eventNodes
+    IndexEventNodes = self.h_IndexEventNodes
+    etbIDs = genericETB(parttype, projection, nodes)
     for projectionETB in etbIDs:
-             addETB(projectionETB, projection)             
+             addETB(projectionETB, projection, eventNodes, IndexEventNodes, network)             
     for i in range(len(nodes[parttype])):
-        setEventNodes(nodes[parttype][i], etbIDs[i])          
+        setEventNodes(nodes[parttype][i], etbIDs[i], eventNodes, IndexEventNodes)          
 
 
-def genericETB(partType, projection,node):
+def genericETB(partType, projection,nodes):
     ETBs = []   
     if len(partType) == 0 or partType not in projection.leafs():
         myID = ""
