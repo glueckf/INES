@@ -113,7 +113,7 @@ def NumETBsByKey(etb, projection,IndexEventNodes):
         elif etb[i] in projection.leafs():
             index = i
     
-    num = getNumETBs(projection)
+    num = getNumETBs(projection, IndexEventNodes)
     for etype in instancedEvents:
         num = num / len(IndexEventNodes[etype])
     return num

@@ -39,7 +39,6 @@ class INES():
     experiment_result = None
     prim = None
     CURRENT_SECTION = ''
-    placementTreeDict = {}
     
     "Helper Variables from different Files - namespace issues"
     h_network_data = None
@@ -65,6 +64,7 @@ class INES():
     h_combiDict = {}
     h_globalPartitioninInputTypes = {}
     h_globalSiSInputTypes = {}
+    h_placementTreeDict = {}
 
     
 

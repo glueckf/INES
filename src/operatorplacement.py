@@ -161,7 +161,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
             print("SiS " + str(projection) + "PC: " + str(additional) + " Hops: " + str(result[2]))
                 
     mycosts = costs/ccosts[0]
-    print("INEv Transmission " + str(costs) )
+    print("INEv Transmission with MS " + str(costs) )
     if len(wl)>1 or wl[0].hasKleene() or wl[0].hasNegation():
         lowerBound = 0
     else:

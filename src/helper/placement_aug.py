@@ -143,22 +143,22 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
     singleSelectivities = self.single_selectivity 
     mycombi = self.h_mycombi
     rates = self.h_rates_data
-    placementTreeDict = self.placementTreeDict
+    placementTreeDict = self.h_placementTreeDict
     eventNodes = self.h_eventNodes
         
         
+    for etype in destinationtypes:
+        if isinstance(etype, list) and len(etype) > 0:
+            etype = etype[0]
+        else:
+             continue
+        for etb in IndexEventNodes[etype]:
+            destinationNodes += getNodes(etb, eventNodes, IndexEventNodes)
+
     newInstances = [] #!
     pathLength = 0        
     etype = sourcetypes[0]
     print(f"NEWcomputeMSplacementCosts: etype = {etype}, type = {type(etype)}")
-
-    for d_type in destinationtypes:
-        if isinstance(d_type, list) and len(d_type) > 0:
-            d_type = d_type[0]
-        else:
-             continue
-        for etb in IndexEventNodes[d_type]:
-            destinationNodes += getNodes(etb, eventNodes, IndexEventNodes)
     
     f = open("msFilter.txt", "w")
     if etype in projFilterDict.keys() and getMaximalFilter(projFilterDict, etype, noFilter):
@@ -178,7 +178,7 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
                     treenodes = copy.deepcopy(MydestinationNodes) 
                     treenodes.append(node)
                                         
-                    mytree = steiner_tree(G, treenodes)
+                    mytree = steiner_tree(G.to_undirected(), treenodes)
                     
                     myInstance = Instance(etype, etb, [node], {projection: list(mytree.edges)}) #! #append routing tree information for instance/etb                    
                     newInstances.append(myInstance) #!
@@ -197,9 +197,17 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
                         mycosts = len(mytree.edges()) * rates[etype]
                     else:                    
                         num = NumETBsByKey(etb, etype)                 
-                        mycosts = len(mytree.edges()) *  projrates[etype][1] * num     # FILTER              
-                        
-                    placementTreeDict[(tuple(destinationtypes),etb)] = [node, MydestinationNodes, mytree] #only kept for updating in the next step
+                        mycosts = len(mytree.edges()) *  projrates[etype][1] * num     # FILTER           
+
+    
+                    #placementTreeDict[(tuple(destinationtypes), etb)] = [node, MydestinationNodes, mytree]
+                    # Convert all elements of destinationtypes to tuples if they are lists
+                    hashable_destinationtypes = tuple(tuple(d) if isinstance(d, list) else d for d in destinationtypes)
+
+                    # Use this hashable version in your dictionary key
+                    placementTreeDict[(hashable_destinationtypes, etb)] = [node, MydestinationNodes, mytree]
+
+                    #(tuple(tuple(d) if isinstance(d, list) else d for d in destinationtypes), tuple(etb) if isinstance(etb, list) else etb) #only kept for updating in the next step
                     costs +=  mycosts 
                     
                     pathLength = max([pathLength, myPathLength])
@@ -207,7 +215,7 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
                     # update events sent over network
                     for routingNode in mytree.nodes():
                         if not routingNode in getNodes(etb, eventNodes, IndexEventNodes):
-                            setEventNodes(routingNode, etb)
+                            setEventNodes(routingNode, etb, eventNodes, IndexEventNodes)
     
         
   # print(list(map(lambda x: str(x), sourcetypes)), costs)           
