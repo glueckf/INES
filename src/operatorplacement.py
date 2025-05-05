@@ -143,7 +143,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
                     result = ComputeSingleSinkPlacement(projection.get_original(wl), [projection], noFilter)
                     additional = result[0]
                     costs += additional
-                print("SiS Sink for Kleene:" + str(projection.get_original(wl)) + " PC: " + str(additional) + " Hops:" + str(result[1]))
+                    print("SiS Sink for Kleene:" + " At: " + str(partType) + str(projection.get_original(wl)) + " PC: " + str(additional) + " Hops:" + str(result[1]))
 
             else: 
                 result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter,projFilterDict,EventNodes,IndexEventNodes,self.h_network_data,allPairs,mycombi,rates,singleSelectivities,projrates,self.graph,self.network)
@@ -155,10 +155,10 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
 
                     myPlan.addInstances(projection, newin)
 
-                    myPlan.updateInstances(result[4]) #! update instances
-                    Filters += result[5]
+                myPlan.updateInstances(result[4]) #! update instances
+                Filters += result[5]
 
-            print("SiS " + str(projection) + "PC: " + str(additional) + " Hops: " + str(result[2]))
+                print("SiS " + str(projection) + " At: " + str(partType) + "PC: " + str(additional) + " Hops: " + str(result[2]))
                 
     mycosts = costs/ccosts[0]
     print("INEv Transmission with MS " + str(costs) )

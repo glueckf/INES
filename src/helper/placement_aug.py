@@ -195,8 +195,9 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
                              mycosts += len(mytree.edges())  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] 
                     elif len(etype) == 1:
                         mycosts = len(mytree.edges()) * rates[etype]
-                    else:                    
-                        num = NumETBsByKey(etb, etype)                 
+                    else:
+                        print("TESTING" + str(etb) + "TESTING" + str(etype) + "TESTING" + str(IndexEventNodes))                    
+                        num = NumETBsByKey(etb, etype, IndexEventNodes)                 
                         mycosts = len(mytree.edges()) *  projrates[etype][1] * num     # FILTER           
 
     

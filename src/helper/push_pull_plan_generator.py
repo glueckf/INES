@@ -561,7 +561,7 @@ class Initiate():
         if costs < push_plan_costs:
             return costs, used_eventtype_to_pull,max_latency
         else:
-            return push_plan_costs, [[]]
+            return push_plan_costs, [[]], max_latency
 
 
     #https://stackoverflow.com/questions/32694444/algorithm-to-generate-all-preorders-weak-orders-of-size-n
