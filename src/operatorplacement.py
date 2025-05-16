@@ -11,7 +11,7 @@ from projections import returnPartitioning,totalRate
 #maxDist = max([max(x) for x in allPairs])
 
 def getLowerBound(query,self): # lower bound -> for multiple projections, keep track of events sent as single sink and do not add up
-
+    
     projsPerQuery = self.h_projsPerQuery
     rates = self.h_rates_data
     longestPath = self.h_longestPath
@@ -22,17 +22,22 @@ def getLowerBound(query,self): # lower bound -> for multiple projections, keep t
         if myprojs:
             MS.append(e)
         for p in [x for x in projsPerQuery[query] if e in x.leafs()]:
-            part = returnPartitioning(p,p.leafs())            
+            part = returnPartitioning(self, p, p.leafs(), self.h_projrates, self.h_combiDict)
+           
             if e in part:
                 MS.append(e)
     nonMS = [e for e in query.leafs() if not e in MS]  
     if nonMS:          
-        minimalRate = sum(sorted([totalRate(e) for e in query.leafs() if not e in MS])) * longestPath
+        minimalRate = sum(sorted([totalRate(self, e, self.h_projrates) for e in query.leafs() if not e in MS])) * longestPath
     else:
-        minimalRate = min([totalRate(e) for e in query.leafs()]) * longestPath
-    minimalProjs = sorted([totalRate(p) for p in projsPerQuery[query] if not p==query])[:len(list(set(MS)))-1]
+        minimalRate = min([totalRate(self, e, self.h_projrates) for e in query.leafs()]) * longestPath
+    minimalProjs = sorted([totalRate(self, p, self.h_projrates) for p in projsPerQuery[query] if not p==query])[:len(list(set(MS)))-1]
     if not len(nonMS) == len(query.leafs()):
         minimalRate +=  sum(minimalProjs) * longestPath
+    
+    # print("→ totalRate call for:", self.h_projection)
+    # print("→ result:", self.h_projrates.get(self.h_projection, 0))
+
     return minimalRate#, nonMS) 
 
 def calculate_operatorPlacement(self,file_path: str, max_parents: int):
@@ -111,14 +116,14 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
           
             #partType = returnPartitioning(self,projection, unfolded[projection], self.h_projrates,criticalMSTypes)
 
-            #TODO ComputeMSPlacement
+            #ComputeMSPlacement
             partType,_,_ = returnPartitioning(self, projection, unfolded[projection], projrates ,criticalMSTypes)
             if partType : 
                 MSPlacements[projection] = partType
                 result = computeMSplacementCosts(self, projection, unfolded[projection], partType, sharedDict, noFilter, G)
-                if not result:
-                    print(f"[Fehler] Leeres Ergebnis für MS-Placement von {projection} erhalten. Überspringe...")
-                    continue  # continue / return / break
+                # if not result:
+                #     print(f"[Fehler] Leeres Ergebnis für MS-Placement von {projection} erhalten. Überspringe...")
+                #     continue  # continue / return / break
                 additional = result[0]
                 costs += additional
                 hopLatency[projection] += result[1]
@@ -134,7 +139,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
 
                 Filters += result[4]
                 #if partType, and projection in wl and partType kleene component of projection, add sink
-                print("MS " + str(projection) + " At: " + str(partType) + " PC: " + str(additional) + " Hops:" + str(result[1]))
+                print("MS " + str(projection) + " At: " + str(partType) + " For: " + str(projection)+ " PC: " + str(additional) + " Hops:" + str(result[1]))
 
 
                 if projection.get_original(wl) in wl and partType[0] in list(map(lambda x: str(x), projection.get_original(wl).kleene_components())):

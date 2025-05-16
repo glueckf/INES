@@ -76,8 +76,12 @@ def MSManageETBs(self, projection, parttype):
     for projectionETB in etbIDs:
              addETB(projectionETB, projection, eventNodes, IndexEventNodes, network)             
     for i in range(len(nodes[parttype])):
-        setEventNodes(nodes[parttype][i], etbIDs[i], eventNodes, IndexEventNodes)          
-
+        node_id = nodes[parttype][i]
+        if self.network[node_id].computational_power > 0:
+            setEventNodes(node_id, etbIDs[i], eventNodes, IndexEventNodes)
+        else:
+            print(f"[WARNUNG] Node {node_id} hat keine ComputePower – ETB wird nicht gesetzt.")
+        
 
 def genericETB(partType, projection,nodes):
     ETBs = []   

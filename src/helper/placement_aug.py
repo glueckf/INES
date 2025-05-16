@@ -44,6 +44,7 @@ def computeMSplacementCosts(self,projection, combination, partType, sharedDict, 
     nodes = self.h_nodes
     costs = 0
     Filters  = []
+    #routingAlgo = dict(nx.all_pairs_shortest_path(G))
     
     ##### FILTERS, append maximal filters
     intercombi = []
@@ -66,47 +67,20 @@ def computeMSplacementCosts(self,projection, combination, partType, sharedDict, 
     myNodes = [] #!
     #event_key = partType[0]
 
-    if not partType:
-        print("Fehler: partType ist leer!")
-        return [] 
-    
-    if isinstance(partType[0], list):
-        partType = partType[0]
-
-    if not partType or partType[0] not in IndexEventNodes:
-        print(f"Fehler: Ungültiger partType[0] - {partType[0] if partType else 'LEER'}")
-        return []
-
     for i in IndexEventNodes[partType[0]]: #!
-        myNodes += getNodes(i, eventNodes, IndexEventNodes)
-        #myNodes += getNodes(i) #!
+        myNodes += getNodes(i, eventNodes, IndexEventNodes) #!
         
     myProjection = Projection(projection, {}, nodes[partType[0]], [], Filters) #!
     for myInput in combination:
            
             if not partType[0] == myInput:
-                    if myInput in sharedDict.keys():  
-                        if isinstance(myInput, list):
-                            etype = myInput[0]  # extrahiere den tatsächlichen Eventtyp
-                        else:
-                            etype = myInput  
-                            if not etype or etype not in IndexEventNodes:
-                                print(f"[Fehler] Ungültiger Event-Typ '{etype}' – nicht in IndexEventNodes enthalten.")
-                                return []
-          
+                    if myInput in sharedDict.keys():                         
                         #result = NEWcomputeMSplacementCosts_Path(projection, [myInput], sharedDict[myInput], noFilter)
-                        result = NEWcomputeMSplacementCosts(self, projection, [etype], sharedDict[myInput], noFilter, G)
+                        result = NEWcomputeMSplacementCosts(self, projection, [myInput], sharedDict[myInput], noFilter, G)
                         costs +=  result[0] #fix SharedDict with Filter Inputs
                         
                     else:
-                        if not etype or etype not in IndexEventNodes:
-                            print(f"[Fehler] Ungültiger Event-Typ '{etype}' – nicht in IndexEventNodes enthalten.")
-                            return []
                         #result = NEWcomputeMSplacementCosts_Path(projection, [myInput],  partType[0], noFilter) 
-                        # if isinstance(myInput, list):
-                        #         etype = myInput[0]  # extrahiere den tatsächlichen Eventtyp
-                        # else:
-                        #         etype = myInput 
                         result = NEWcomputeMSplacementCosts(self, projection, [myInput],  partType[0], noFilter, G) 
                         costs +=  result[0]
                     if result[1] > myPathLength:
@@ -127,33 +101,65 @@ def computeMSplacementCosts(self,projection, combination, partType, sharedDict, 
     spawnedInstances = IndexEventNodes[projection]
     myProjection.addSpawned(spawnedInstances)
     
-    
-    costs -= automaticFilters            
+    costs -= automaticFilters     
+    print(f"[Test-Ausgabe] MS-Placement: Kosten={costs}, Pfadlänge={myPathLength}, Instanzanzahl={len(totalInstances)}")       
     
     return costs, myPathLength, myProjection, totalInstances, Filters
 
 def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, noFilter, G): #we need tuples, (C, [E,A]) C should be sent to all e and a nodes ([D,E], [A]) d and e should be sent to all a nodes etc
     #print(projection, sourcetypes)
 
+    from allPairs import create_routing_dict
+    routingDict = create_routing_dict(G)
+    #routingDict = dict(nx.all_pairs_shortest_path(G))
+    print(routingDict)
+    routingAlgo = dict(nx.all_pairs_shortest_path(G))
+    costs = 0
+    longestPath = 0 
+    node = 0
+    allPairs = self.allPairs
+
     projFilterDict = self.h_projFilterDict
     IndexEventNodes = self.h_IndexEventNodes
     projrates = self.h_projrates
-    costs = 0
+    #costs = 0
     destinationNodes = []    
     singleSelectivities = self.single_selectivity 
     mycombi = self.h_mycombi
     rates = self.h_rates_data
     placementTreeDict = self.h_placementTreeDict
     eventNodes = self.h_eventNodes
+    #etype = sourcetypes[0]
         
-        
-    for etype in destinationtypes:
-        if isinstance(etype, list) and len(etype) > 0:
-            etype = etype[0]
-        else:
-             continue
-        for etb in IndexEventNodes[etype]:
-            destinationNodes += getNodes(etb, eventNodes, IndexEventNodes)
+    destinationtypes = [node for node, neighbors in self.h_network_data.items() if not neighbors and self.network[node].computational_power >= projection.computing_requirements]
+    
+    # for etype in destinationtypes:
+    #     if isinstance(etype, list) and len(etype) > 0:
+    #         etype = etype[0]
+    #     else:
+    #          continue
+    #     for etb in IndexEventNodes[etype]:
+    #         destinationNodes += getNodes(etb, eventNodes, IndexEventNodes)
+    for destination in destinationtypes:
+        skip_destination = False  # Flag to determine if we should skip this destination
+        for eventtype in mycombi:
+            if eventtype not in IndexEventNodes:
+                continue
+            for etb in IndexEventNodes[eventtype]:
+                destinationNodes = getNodes(etb,eventNodes,IndexEventNodes)
+                for source in destinationNodes:
+                    # Use the routing_dict to get the common ancestor
+                    common_ancestor = routingDict[destination][source]['common_ancestor']
+                    if common_ancestor != destination:
+                        # print(f"Skipping destination {destination} for source {source} (Common ancestor: {common_ancestor})")
+                        skip_destination = True
+                        break
+                if skip_destination:
+                    break  # Break out of the etb loop
+            if skip_destination:
+                break  # Break out of the eventtype loop
+        if skip_destination:
+            continue  # Move on to the next destination without computing costs
 
     newInstances = [] #!
     pathLength = 0        
@@ -168,59 +174,86 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
         f.write("VAR=false")
     f.close()     
         
-        
-    for etb in IndexEventNodes[etype]: #parallelize 
+    for eventtype in mycombi:    
+        for etb in IndexEventNodes[etype]: #parallelize 
             
        
             MydestinationNodes = list(set(destinationNodes).difference(set(getNodes(etb, eventNodes, IndexEventNodes)))) #only consider nodes that do not already hold etb
             if MydestinationNodes: #are there ms nodes which did not receive etb before
-                    node = findBestSource(self, getNodes(etb, eventNodes, IndexEventNodes), MydestinationNodes) #best source is node closest to a node of destinationNodes
-                    treenodes = copy.deepcopy(MydestinationNodes) 
-                    treenodes.append(node)
-                                        
-                    mytree = steiner_tree(G.to_undirected(), treenodes)
+                for dest in MydestinationNodes:
+                    #if not dest in getNodes(etb, eventNodes, IndexEventNodes):  
+                        #are there ms nodes which did not receive etb before
+                        #node = findBestSource(self, getNodes(etb, eventNodes, IndexEventNodes), [dest]) #best source is node closest to a node of destinationNodes
+                        node = findBestSource(self, MydestinationNodes, [dest])
+                        # shortestPath = nx.shortest_path(G, MydestinationNodes, node, method='dijkstra') 
+                        # if len(shortestPath) > longestPath:
+                        #     longestPath = len(shortestPath)
+                        # if allPairs[destination][source] < allPairs[destination][mySource]:                               
+                        #         mySource  = source
+                hashable_etb = tuple(sorted(etb.items())) if isinstance(etb, dict) else etb    
+                try:
+                    shortestPath = nx.shortest_path(G, node, dest, method='dijkstra')
+                except nx.NetworkXNoPath:
+                    print(f"[WARNUNG] Kein Pfad zwischen {node} und {dest}")
+                    continue 
+                    # if len(shortestPath) > longestPath:
+                    #     longestPath = len(shortestPath)
+                if len(shortestPath) - 1 > longestPath:
+                    longestPath = len(shortestPath) - 1   
+                    if allPairs[destination][source] < allPairs[destination][mySource]:                               
+                        mySource  = source
+                    #treenodes = copy.deepcopy(MydestinationNodes) 
+                    #treenodes.append(node)
+                    #print(f"treenodes = {treenodes}")                    
+                    #mytree = steiner_tree(G.to_undirected(), treenodes)
                     
-                    myInstance = Instance(etype, etb, [node], {projection: list(mytree.edges)}) #! #append routing tree information for instance/etb                    
+                    
+                    #mytree = find_shortest_path_or_ancestor(routingAlgo, etype, node) 
+                    edges = list(zip(shortestPath[:-1], shortestPath[1:]))
+                    myInstance = Instance(etype, etb, [node], {projection: edges}) #! #append routing tree information for instance/etb                    
                     newInstances.append(myInstance) #!
                     
                     
-                    myPathLength = max([len(nx.shortest_path(mytree, x, node, method='dijkstra')) for x in MydestinationNodes]) - 1
+                    #myPathLength = max([len(nx.shortest_path(mytree, x, node, method='dijkstra')) for x in MydestinationNodes]) - 1
                     
                     
                     if etype in projFilterDict.keys() and  getMaximalFilter(projFilterDict, etype, noFilter): #case input projection has filter
-                        mycosts =  len(mytree.edges()) * getDecomposedTotal(getMaximalFilter(projFilterDict, etype, noFilter), etype)                    
+                        mycosts =  len(edges()) * getDecomposedTotal(getMaximalFilter(projFilterDict, etype, noFilter), etype)                    
                         if len(IndexEventNodes[etype]) > 1 : # filtered projection has ms placement
                              partType = returnPartitioning(etype, mycombi[etype])[0]                     
-                             mycosts -= len(mytree.edges())  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] * len(IndexEventNodes[etype])
-                             mycosts += len(mytree.edges())  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] 
+                             mycosts -= len(edges())  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] * len(IndexEventNodes[etype])
+                             mycosts += len(edges())  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] 
                     elif len(etype) == 1:
-                        mycosts = len(mytree.edges()) * rates[etype]
+                        mycosts = len(edges()) * rates[etype]
                     else:
                         print("TESTING" + str(etb) + "TESTING" + str(etype) + "TESTING" + str(IndexEventNodes))                    
                         num = NumETBsByKey(etb, etype, IndexEventNodes)                 
-                        mycosts = len(mytree.edges()) *  projrates[etype][1] * num     # FILTER           
+                        mycosts = len(edges()) *  projrates[etype][1] * num     # FILTER           
 
     
-                    #placementTreeDict[(tuple(destinationtypes), etb)] = [node, MydestinationNodes, mytree]
+                    hashable_etb = tuple(sorted(etb.items())) if isinstance(etb, dict) else etb
+                    placementTreeDict[(tuple(destinationtypes), hashable_etb)] = [node, [dest], shortestPath]
                     # Convert all elements of destinationtypes to tuples if they are lists
-                    hashable_destinationtypes = tuple(tuple(d) if isinstance(d, list) else d for d in destinationtypes)
+                    #hashable_destinationtypes = tuple(tuple(d) if isinstance(d, list) else d for d in destinationtypes)
 
                     # Use this hashable version in your dictionary key
-                    placementTreeDict[(hashable_destinationtypes, etb)] = [node, MydestinationNodes, mytree]
+                    #placementTreeDict[(hashable_destinationtypes, etb)] = [node, MydestinationNodes, mytree]
 
-                    #(tuple(tuple(d) if isinstance(d, list) else d for d in destinationtypes), tuple(etb) if isinstance(etb, list) else etb) #only kept for updating in the next step
+                    (tuple(tuple(d) if isinstance(d, list) else d for d in destinationtypes), tuple(etb) if isinstance(etb, list) else etb) #only kept for updating in the next step
                     costs +=  mycosts 
                     
-                    pathLength = max([pathLength, myPathLength])
+                    longestPath = max(longestPath, len(shortestPath) - 1)
                     
                     # update events sent over network
-                    for routingNode in mytree.nodes():
+                    for routingNode in shortestPath.nodes():
                         if not routingNode in getNodes(etb, eventNodes, IndexEventNodes):
                             setEventNodes(routingNode, etb, eventNodes, IndexEventNodes)
+    hops = len(find_shortest_path_or_ancestor(routingAlgo, 0, node)) - 1 if len(find_shortest_path_or_ancestor(routingAlgo, 0, node)) > 1 else 0
+    costs += hops
     
-        
+
   # print(list(map(lambda x: str(x), sourcetypes)), costs)           
-    return costs, pathLength, newInstances
+    return costs, longestPath, newInstances
 
 
 
