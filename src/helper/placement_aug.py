@@ -86,8 +86,10 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
 
     # here generate an instance of etbs per parttype and add one line per instance
     MSManageETBs(self, projection, partType[0])
-    spawnedInstances = IndexEventNodes[projection]
-    myProjection.addSpawned(spawnedInstances)
+    #IndexEventNodes = {'A7': 0, 'A': ['A7'], 'B7': 1, 'B8': 2, 'B10': 3, 'B': ['B7', 'B8', 'B10'], 'C7': 4, 'C9': 5, 'C': ['C7', 'C9'], 'E9': 6, 'E11': 7, 'E': ['E9', 'E11'], 'D10': 8, 'D': ['D10'], 'F11': 9, 'F': ['F11'], 'ACB': 10, <helper.Tree.SEQ object at 0x7f537e7b21a0>: ['ACB'], 'F11DCB': 11, <helper.Tree.AND object at 0x7f537e7b0be0>: ['F11DCB']}
+    spawnedInstances = []
+    for etb in IndexEventNodes.get(projection, []):
+        spawnedInstances.extend(getNodes(etb, eventNodes, IndexEventNodes))
 
     # Debug output
     print(f"[MS-Placement] Projection: {projection}, Total Cost: {costs}, Max Path Length: {myPathLength}, Instances: {len(totalInstances)}")
@@ -99,9 +101,11 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
     from allPairs import create_routing_dict
     routingDict = create_routing_dict(G)
     routingAlgo = dict(nx.all_pairs_shortest_path(G))
+    allPairs = self.allPairs
+
     costs = 0
     longestPath = 0
-    allPairs = self.allPairs
+    newInstances = []
 
     projFilterDict = self.h_projFilterDict
     IndexEventNodes = self.h_IndexEventNodes
@@ -112,35 +116,36 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
     placementTreeDict = self.h_placementTreeDict
     eventNodes = self.h_eventNodes
 
-    destinationtypes = [node for node, neighbors in self.h_network_data.items()
-                        if not neighbors and self.network[node].computational_power >= projection.computing_requirements]
+    destinationtypes = [node for node, neighbors in self.h_network_data.items()if not neighbors and self.network[node].computational_power >= projection.computing_requirements]
+
+    # Ensure hashable type for later usage in placementTreeDict
+    destinationtypes_hashed = tuple(destinationtypes)
+
+    # Suche gültige Sinks
+    valid_destinations = [node for node, neighbors in self.h_network_data.items() if not neighbors and self.network[node].computational_power >= projection.computing_requirements]
 
     # Filters all valid destinationNodes
     destinationNodes = []
-    for destination in destinationtypes:
-        skip_destination = False    # Flag to determine if we should skip this destination
+    for destination in valid_destinations:
+        skip = False    # Flag to determine if we should skip this destination
         for eventtype in mycombi.get(projection, []):
             if eventtype not in IndexEventNodes:
                 continue
             for etb in IndexEventNodes[eventtype]:
-                sources = getNodes(etb, eventNodes, IndexEventNodes)
-                for source in sources:
+                for source in getNodes(etb, eventNodes, IndexEventNodes):
                     # Use the routing_dict to get the common ancestor
-                    common_ancestor = routingDict[destination][source]['common_ancestor']
-                    if common_ancestor != destination:
-                        skip_destination = True
+                    if routingDict[destination][source]["common_ancestor"] != destination:
+                        skip = True
                         break
-                if skip_destination:
-                    break   # Break out of the etb loop
-            if skip_destination:
-                break   # Break out of the eventtype loop
-        if not skip_destination:
+                if skip: 
+                    break  # Break out of the etb loop
+            if skip: 
+                break  # Break out of the eventtype loop
+        if not skip:
             destinationNodes.append(destination)
 
-    newInstances = []
-    etype = sourcetypes[0]
-
     # Check filter
+    etype = sourcetypes[0]
     with open("msFilter.txt", "w") as f:
         if etype in projFilterDict and getMaximalFilter(projFilterDict, etype, noFilter):
             f.write("VAR=true")
@@ -158,15 +163,20 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
             for dest in MydestinationNodes:
                 if not currentSources:
                     continue
-                mySource = min(currentSources, key=lambda s: allPairs[dest][s])
-                shortestPath = nx.shortest_path(G, mySource, dest, method='dijkstra')
-                edges = list(zip(shortestPath[:-1], shortestPath[1:]))
+                mySource = min(currentSources, key=lambda s: allPairs[dest][s]) if len(currentSources) > 1 else currentSources[0]
+                shortestPath = find_shortest_path_or_ancestor(routingAlgo, mySource, dest)
 
+                if not shortestPath or not isinstance(shortestPath, list):
+                    print(f"[Warnung] Kein Pfad von {mySource} zu {dest} für etb {etb}")
+                    continue
+
+                edges = list(zip(shortestPath[:-1], shortestPath[1:]))
+                print(f"[Tracking] Sende {etb} von {mySource} nach {dest} über {shortestPath}")
                 myInstance = Instance(eventtype, etb, [mySource], {projection: edges})
                 newInstances.append(myInstance)
 
                 # Cost calculation
-                if eventtype in projFilterDict and getMaximalFilter(projFilterDict, eventtype, noFilter): #case input projection has filter
+                if eventtype in projFilterDict and getMaximalFilter(projFilterDict, eventtype, noFilter):
                     filterTypes = getMaximalFilter(projFilterDict, eventtype, noFilter)
                     mycosts = len(edges) * getDecomposedTotal(filterTypes, eventtype)
 
@@ -182,26 +192,26 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
                     mycosts = len(edges) * projrates[eventtype][1] * num        # FILTER 
 
                 # pathlength and costst
-                longestPath = max(longestPath, len(shortestPath) - 1)
                 costs += mycosts
+                longestPath = max(longestPath, len(shortestPath) - 1)
 
                 # Convert all elements of destinationtypes to tuples if they are lists
-                #etb = 'F11'
                 hashable_etb = tuple(sorted(etb.items())) if isinstance(etb, dict) else etb
-                # placementTreeDict = {((...), 'F11'): [11, [...], [...]]},
-                # destinationtypes = [0, 1, 2, 3, 4, 5, 6],
-                # hashable_etb = 'F11',
-                # mySource = 11,
-                # dest = 0,
-                # shortestPath = [11, 6, 2, 0]
-                placementTreeDict[(tuple(destinationtypes), hashable_etb)] = [mySource, [dest], shortestPath]
+                placementTreeDict[(destinationtypes_hashed, hashable_etb)] = [mySource, [dest], shortestPath]
 
                 # update events sent over network
                 for routingNode in shortestPath:
                     if routingNode not in currentSources:
                         setEventNodes(routingNode, etb, eventNodes, IndexEventNodes)
 
+    # Hop-Kosten vom Root (z. B. 0) zu einem Ziel
+    if destinationNodes:
+        sink_node = destinationNodes[0]
+        hops = len(find_shortest_path_or_ancestor(routingAlgo, 0, sink_node)) - 1
+        costs += max(hops, 0)
+
     return costs, longestPath, newInstances
+
 
 
 
@@ -332,7 +342,6 @@ def NEWcomputeMSplacementCosts_Path(self, projection, sourcetypes, destinationty
 #     return costs, pathLength, newInstances
 
 
-
 def findBestSource(self, sources, actualDestNodes): #this is only a heuristic, as the closest node can still be shit with respect to a good steiner tree ?+
     allPairs = self.allPairs
     curmin = np.inf     
@@ -341,6 +350,27 @@ def findBestSource(self, sources, actualDestNodes): #this is only a heuristic, a
            curmin =  min([allPairs[node][x] for x in actualDestNodes])
            bestSource = node
     return bestSource
+
+# def findBestSource(self, sources, actualDestNodes, allowedSources=None):
+#     """
+#     Wählt die beste Quelle aus einer Liste `sources`, die am nächsten zu einem Ziel in `actualDestNodes` liegt.
+#     Optional: Nur Quellen aus `allowedSources` werden berücksichtigt.
+#     """
+#     allPairs = self.allPairs
+#     curmin = np.inf
+#     bestSource = None
+
+#     # Falls eine Filtermenge angegeben ist, filtere die Quellen
+#     filtered_sources = [s for s in sources if allowedSources is None or s in allowedSources]
+
+#     for node in filtered_sources:
+#         min_dist = min([allPairs[node][x] for x in actualDestNodes])
+#         if min_dist < curmin:
+#             curmin = min_dist
+#             bestSource = node
+
+#     return bestSource
+
         
 # def getDestinationsUpstream(projection):
 #     return  range(len(allPairs))       
