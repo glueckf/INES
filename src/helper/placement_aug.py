@@ -50,9 +50,10 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
     mycombi = self.h_mycombi
     singleSelectivities = self.single_selectivity
     rates = self.h_rates_data
+    if not hasattr(self, "assigned_queries_per_node"):
+        self.assigned_queries_per_node = {}
 
     ##### FILTERS, append maximal filters
-    # Combined event types incl. filter event types
     intercombi = list(combination)
     for proj in combination:
         if proj in projFilterDict:  # Protection against KeyError
@@ -61,9 +62,8 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
                 Filters.append((proj, filters))
                 intercombi.extend(filters)
 
-
-    # Initialisation of the placement
-    myProjection = Projection(projection, {}, nodes[partType[0]], [], Filters)
+    # Initialisation of the placement, set sink later
+    myProjection = Projection(projection, {}, [], [], Filters)
     myPathLength = 0
     totalInstances = []
 
@@ -84,13 +84,34 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
             myInstances = [Instance(partType[0], partType[0], nodes[partType[0]], {})]
             myProjection.addInstances(partType[0], myInstances)
 
-    # here generate an instance of etbs per parttype and add one line per instance
     MSManageETBs(self, projection, partType[0])
-    #IndexEventNodes = {'A7': 0, 'A': ['A7'], 'B7': 1, 'B8': 2, 'B10': 3, 'B': ['B7', 'B8', 'B10'], 'C7': 4, 'C9': 5, 'C': ['C7', 'C9'], 'E9': 6, 'E11': 7, 'E': ['E9', 'E11'], 'D10': 8, 'D': ['D10'], 'F11': 9, 'F': ['F11'], 'ACB': 10, <helper.Tree.SEQ object at 0x7f537e7b21a0>: ['ACB'], 'F11DCB': 11, <helper.Tree.AND object at 0x7f537e7b0be0>: ['F11DCB']}
+
+    # Determine the most favourable sink based on the actual routing paths
+    sink_costs = {}
+    for inst in totalInstances:
+        if projection in inst.routingDict and inst.routingDict[projection]:
+            dest = inst.routingDict[projection][-1][1]
+            cost = len(inst.routingDict[projection])
+            sink_costs[dest] = sink_costs.get(dest, 0) + cost
+
+    sorted_sinks = sorted(sink_costs.items(), key=lambda x: x[1])
+    for sink, _ in sorted_sinks:
+        node_obj = self.network[sink]
+        cloud = node_obj.computational_power = np.inf
+        assigned_queries = self.assigned_queries_per_node.get(sink, 0)
+        if assigned_queries == 0 or cloud:
+            myProjection.sinks = [sink]
+            self.assigned_queries_per_node[sink] = assigned_queries + 1
+            print(f"[Kostenbasiert] {projection} an Node {sink} mit Gesamtkosten {sink_costs[sink]}")
+            break
+    else:
+        myProjection.sinks = [0]
+        print(f"[Fallback] Kein geeigneter Sink gefunden, nutze Node 0")
+
     spawnedInstances = []
     for etb in IndexEventNodes.get(projection, []):
         spawnedInstances.extend(getNodes(etb, eventNodes, IndexEventNodes))
-
+    
     # Debug output
     print(f"[MS-Placement] Projection: {projection}, Total Cost: {costs}, Max Path Length: {myPathLength}, Instances: {len(totalInstances)}")
 

@@ -16,6 +16,7 @@ from generateEvalPlan import generate_eval_plan
 from prepp import generate_prePP
 import csv
 from queryworkload import AND, SEQ, PrimEvent
+import numpy as np
 
 class INES():
     allPairs: list
@@ -88,9 +89,9 @@ class INES():
         #root = self.network[0]
 
         # 1️⃣ Knoten erstellen
-        n0 = Node(0, compute_power=100, memory=100)
-        n1 = Node(1, compute_power=2, memory=2)
-        n2 = Node(2, compute_power=2, memory=2)
+        n0 = Node(0, compute_power=np.inf, memory=np.inf)
+        n1 = Node(1, compute_power=3, memory=3)
+        n2 = Node(2, compute_power=3, memory=3)
         n3 = Node(3, compute_power=1, memory=1)
         n4 = Node(4, compute_power=1, memory=1)
         n5 = Node(5, compute_power=1, memory=1)
