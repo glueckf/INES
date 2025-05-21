@@ -261,7 +261,7 @@ def NEW_isPartitioning(self ,element, combi, proj,projrates:dict):
 	if proj.get_original(wl) not in wl:
 		myproj =  projrates[proj][1] * (getNumETBs(proj,IndexEventNodes)) # additional constraint about ratio of partitioning event type and outputrate of projection
         
-	if totalRate(self,element,projrates) * longestPath > (mysum * costs) + myproj * longestPath :  
+	if totalRate(self, element, projrates) * longestPath > (mysum * costs) + myproj * longestPath :  
 		
 		return [costs],MSTrees,DistMatrices
 
@@ -280,18 +280,27 @@ def fillMyMatrice(myNodes, myEdges, me):
            myDistances.append(len(nx.shortest_path(myG, me, j, method='dijkstra')) - 1)   
     return (me, myDistances)
 
-pool = multiprocessing.Pool()
+pool = None  # Only declare the pool variable once
+
+def get_pool():
+    global pool
+    if pool is None:
+        pool = multiprocessing.Pool()
+    return pool
 
 def fillMyDistMatrice(myG): #all pairs shortest path distance matrice -> also slow for big graphs
+    global pool
     myNodes = list(myG.nodes)
     myPairs = [[] for x in myNodes ]
     mytuple = (list(myNodes),list(myG.edges))
-    args  = [(mytuple[0], mytuple[1], x) for x in myNodes ]
-    result = pool.starmap(fillMyMatrice, args)
+    args = [(mytuple[0], mytuple[1], x) for x in myNodes ]
+    # Use the pool to parallelize the computation
+    current_pool = get_pool()
+    result = current_pool.starmap(fillMyMatrice, args)
+    
     for i in result:
         myPairs.append(i[1])
     return myPairs
-
 
     
 def min_max_doubles(query,projevents):
@@ -331,23 +340,19 @@ def totalRate(self, projection, projrates: dict):
     nodes = self.h_nodes
     IndexEventNodes = self.h_IndexEventNodes
 
-    print("Current projrates:", projrates)
-    print("Type of projection:", type(projection), "Value:", projection)
-
-    # Catch the problematic case early
-    if isinstance(projection, list):
-        print("⚠️ WARNING: projection is a LIST here! Investigating...")
-        import traceback
-        traceback.print_stack()  # Print the call stack to see where this was called
-
     if projection in projrates.keys():  # is complex event
-        return projrates[projection][1] * getNumETBs(projection,IndexEventNodes)
+        return projrates[projection][1] * getNumETBs(projection, IndexEventNodes)
     
-    elif len(projection) == 1:
-        return rates[str(projection)] * len(nodes[str(projection)])
+    elif isinstance(projection, str) or len(projection) == 1:
+        if isinstance(projection, str):
+            proj_key = projection
+        else:
+            proj_key = str(projection)
+            
+        return rates[proj_key] * len(nodes[proj_key])
     else:
-        outrate = projection.evaluate() * getNumETBs(projection,IndexEventNodes)
-        selectivity = return_selectivity(projection.leafs())
+        outrate = projection.evaluate() * getNumETBs(projection, IndexEventNodes)
+        selectivity = return_selectivity(self, projection.leafs())
         myrate = outrate * selectivity
         return myrate
 
@@ -355,6 +360,10 @@ def totalRate(self, projection, projrates: dict):
 def return_selectivity(self, proj):
     
 		""" return selectivity for arbitrary projection """
+		if not hasattr(self, 'selectivities'):
+			# If using the projection directly, not through INES
+			return 1
+			
 		selectivities = self.selectivities
 		proj = list(map(lambda x: filter_numbers(x), proj))
 		two_temp = sbs.printcombination(proj,2)    
@@ -388,7 +397,7 @@ def generate_projections(self,query):
 							outrate = mysubop.evaluate(self.h_rates_data)
 
 							#outrate = mysubop.evaluate(self.h_rates_data)                          
-							selectivity =  return_selectivity(self,curcom)
+							selectivity = self.return_selectivity(curcom)
 							rate = outrate * selectivity  
 							placement_options = isBeneficial(self,mysubop, rate)                
 							
@@ -397,7 +406,7 @@ def generate_projections(self,query):
 											projections.append(mysubop) # do something to prevent a1a2b and a2a3b to be appended to dictionary
 		projections.append(query)
 		outrate = query.evaluate(self.h_rates_data)                          
-		selectivity =  return_selectivity(self,query.leafs())
+		selectivity = self.return_selectivity(query.leafs())
 		rate = outrate * selectivity                            
 		projrates[query] = (selectivity, rate) 
 		# print("printing")
@@ -457,3 +466,9 @@ def generate_all_projections(self):
 
     return projlist,projrates,projsPerQuery,sharedProjectionsDict,sharedProjectionsList
 
+
+if __name__ == '__main__':
+    # Initialize the multiprocessing pool
+    from multiprocessing import freeze_support
+    freeze_support()
+    pool = multiprocessing.Pool()
