@@ -16,7 +16,8 @@ def initialize_selectivities(primEvents,x=0.1,y=0.01):
     selectivities = {}
     selectivity = 0
     for i in projlist: 
-        #if len(filter_numbers(i)) >1 :                  
+        #if len(filter_numbers(i)) >1 :
+            # TODO: Warum 0,01 und 0,3?
             selectivity = rd.uniform(0.0,0.3)             
             if selectivity > 0.2:
                 selectivity = 1
