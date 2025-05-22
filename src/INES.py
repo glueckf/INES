@@ -67,33 +67,39 @@ class INES():
     h_globalSiSInputTypes = {}
     h_placementTreeDict = {}
 
-    def __init__(self, nwSize: int, node_event_ratio: float, num_eventtypes: int, eventskew: float, max_partens: int,
-                 query_size: int, query_length: int):
+    def __init__(self, network_size: int, node_event_ratio: float, num_eventtypes: int, eventskew: float, max_parents: int,
+                 num_of_queries: int, query_length: int):
         self.schema = ["ID", "TransmissionRatio", "Transmission", "INEvTransmission", "FilterUsed", "Nodes",
                        "EventSkew", "EventNodeRatio", "WorkloadSize", "NumberProjections", "MinimalSelectivity",
                        "MedianSelectivity", "CombigenComputationTime", "Efficiency", "PlacementComputationTime",
                        "centralHopLatency", "Depth", "CentralTransmission", "LowerBound", "EventTypes",
                        "MaximumParents", "exact_costs", "PushPullTime", "MaxPushPullLatency"]
-        self.nwSize = nwSize
+        self.nwSize = network_size
         self.node_event_ratio = node_event_ratio
         self.number_eventtypes = num_eventtypes
         self.eventskew = eventskew
-        self.max_parents = max_partens
-        self.query_size = query_size
+        self.max_parents = max_parents
+        self.query_size = num_of_queries
         self.query_length = query_length
 
         from projections import generate_all_projections
         self.eventrates = generate_eventrates(eventskew, num_eventtypes)
         self.networkParams = [self.eventskew, self.number_eventtypes, self.node_event_ratio, self.nwSize,
                               min(self.eventrates) / max(self.eventrates)]
+        # TODO: Warum haben wir diese Variable, wenn die einzelnen Leaf-Nodes schon eigene Eventrates haben?
         self.primitiveEvents = generate_events(self.eventrates, node_event_ratio)
-        root, self.network = create_random_tree(nwSize, self.eventrates, node_event_ratio, max_partens)
+        root, self.network = create_random_tree(network_size, self.eventrates, node_event_ratio, max_parents)
         self.graph = create_fog_graph(self.network)
         self.allPairs = populate_allPairs(self.graph)
         self.h_longestPath = getLongest(self.allPairs)
-        self.query_workload = generate_workload(query_size, query_length, self.primitiveEvents)
+        self.query_workload = generate_workload(num_of_queries, query_length, self.primitiveEvents)
+
+        # TODO: Warum nehmen wir nur die selevtivities für zwei aufeinanderfolgende Events?
         self.selectivities, self.selectivitiesExperimentData = initialize_selectivities(self.primitiveEvents)
+
         self.config_single = generate_config_buffer(self.network, self.query_workload, self.selectivities)
+
+        # TODO: Was ist Selectivity? Was ist SingleSelectivity? Was sagt z.B. A|AF aus?
         self.single_selectivity = initializeSingleSelectivity(self.CURRENT_SECTION, self.config_single,
                                                               self.query_workload)
 
