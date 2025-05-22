@@ -130,10 +130,8 @@ def compute_distances_for_node(routingDict,G,node):
     return create_myDistances(routingDict,G, node)
 
 
+# TODO: Why does this not respect the graphs directed strucuture?
 def populate_allPairs(graph: nx.digraph):
-    #"TODO No globals"
-    #global routingDict
-    #global G
     G = graph
     routingDict = dict(nx.all_pairs_shortest_path(graph))
 
