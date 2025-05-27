@@ -14,7 +14,7 @@ import multiprocessing
 # from filter import *
 from helper.filter import getMaximalFilter,getDecomposedTotal
 from helper.structures import getNumETBs,getNodes,getLongest
-from helper.projString import filter_numbers,sepnumbers,rename_without_numbers,getdoubles_k
+from helper.projString import filter_numbers, rename_without_numbers, getdoubles_k, parse_event_string
 from helper.Tree import PrimEvent
 
 
@@ -317,7 +317,7 @@ def settoproj(evlist,query):
 
 
     leaflist = []
-    evlist = sepnumbers(evlist)  
+    evlist = parse_event_string(evlist)
     evlist = list(map(lambda x: str(x), evlist))
     for i in evlist:   
         leaflist.append(PrimEvent(i))    

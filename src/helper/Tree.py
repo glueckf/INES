@@ -125,7 +125,7 @@ class Tree():
                 nodes = nodes[0]
                 if self.getleafs().count(nodes) > 1:
                     nodes = [nodes for i in range(self.getleafs().count(nodes))]
-            for  i in sorted(subop.getleafs(), key = lambda x: self.level(x), reverse = True):  
+            for i in sorted(subop.getleafs(), key = lambda x: self.level(x), reverse = True):
                  if i not in nodes:                      
                      parent = subop.getparent(i)  
                      li = list(parent.children)    

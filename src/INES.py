@@ -88,6 +88,7 @@ class INES():
                               min(self.eventrates) / max(self.eventrates)]
         # TODO: Warum haben wir diese Variable, wenn die einzelnen Leaf-Nodes schon eigene Eventrates haben?
         self.primitiveEvents = generate_events(self.eventrates, node_event_ratio)
+
         root, self.network = create_random_tree(network_size, self.eventrates, node_event_ratio, max_parents)
         self.graph = create_fog_graph(self.network)
         self.allPairs = populate_allPairs(self.graph)
@@ -106,6 +107,8 @@ class INES():
         #This is important to variious files afterwards
         self.h_network_data, self.h_rates_data, self.h_primEvents, self.h_instances, self.h_nodes = initialize_globals(
             self.network)
+
+        # TODO: Start here
         self.h_eventNodes, self.h_IndexEventNodes = initEventNodes(self.h_nodes, self.h_network_data)
         self.h_projlist, self.h_projrates, self.h_projsPerQuery, self.h_sharedProjectionsDict, self.h_sharedProjectionsList = generate_all_projections(
             self)

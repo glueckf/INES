@@ -10,9 +10,12 @@ from helper.parse_network import get_nodes
 import numpy as np
 
 
-def initEventNodes(nodes,
-                   network):  #matrice: comlumn indices are node ids, row indices correspond to etbs, for a given etb use IndexEventNodes to get row ID for given ETB
-    #Storign all nodes producing a given event type with a 1 in the corresponding list
+def initEventNodes(
+        nodes,
+        network):
+    # matrice: comlumn indices are node ids, row indices correspond to etbs, for a given
+    # etb use IndexEventNodes to get row ID for given ETB
+    # Storign all nodes producing a given event type with a 1 in the corresponding list
     # Node generating event type A would have: [1,0,0,0,...]
     myEventNodes = []
     #Storing a dictionary with the event type and node id as key and the index in the myEventNodes type for the list.
