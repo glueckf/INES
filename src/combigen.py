@@ -428,10 +428,9 @@ def globalPartitioningOK(self, projection, combination,longestPath,MSTrees):    
        
     return additionalCriticals        
     
-    
-    
-   
 
+   
+    
 def getExpensiveProjs(self,criticals):  # only on criticalTypes
     combiDict = self.h_combiDict
     wl = self.query_workload

@@ -82,7 +82,7 @@ class INES():
 
 
         from projections import generate_all_projections
-        self.eventrates = [500, 500, 1000, 1000, 2000, 1000] #TODO lower eventrates
+        self.eventrates = [10, 10, 10, 10, 10, 10] #TODO lower eventrates
         self.networkParams = [self.eventskew,self.number_eventtypes,self.node_event_ratio,self.nwSize,min(self.eventrates)/max(self.eventrates)]
         self.primitiveEvents= ['A', 'B', 'C', 'D', 'E', 'F'] #generate_events(self.eventrates,node_event_ratio)
         #self.network = self.network[0].add_child(self.network[1]), self.network[0].add_child(self.network[2]),self.network[1].add_child(self.network[3]), self.network[1].add_child(self.network[4]),self.network[2].add_child(self.network[5]),self.network[2].add_child(self.network[6]),self.network[3].add_child(self.network[7]),self.network[3].add_child(self.network[8]),self.network[4].add_child(self.network[9]),self.network[5].add_child(self.network[10]),self.network[6].add_child(self.network[11]) #create_random_tree(nwSize,self.eventrates,node_event_ratio,max_partens) 
@@ -159,20 +159,20 @@ class INES():
 
         # 4️⃣ Eventrates für Leaf Nodes setzen
         eventrate_map = {
-            7: [500, 500, 1000, 0, 0, 0],  # A
-            8: [0, 500, 0, 0, 0, 0],  # B
-            9: [0, 0, 1000, 0, 2000, 0], # C,D
-            10: [0, 500, 0, 1000, 0, 0], # B,D
-            11: [0, 0, 0, 0, 2000, 1000] # E,F
+            7: [10, 10, 10, 0, 0, 0],  # A
+            8: [0, 10, 0, 0, 0, 0],  # B
+            9: [0, 0, 10, 0, 10, 0], # C,D
+            10: [0, 10, 0, 10, 0, 0], # B,D
+            11: [0, 0, 0, 0, 10, 10] # E,F
         }
         for node in self.network:
             node.eventrates = eventrate_map.get(node.id, [0] * len(self.eventrates))
         eventrate_map = {
-            7: [500, 500, 1000, 0, 0, 0],  # A
-            8: [0, 500, 0, 0, 0, 0],  # B
-            9: [0, 0, 1000, 0, 2000, 0], # C,D
-            10: [0, 500, 0, 1000, 0, 0], # B,D
-            11: [0, 0, 0, 0, 2000, 1000] # E,F
+            7: [10, 10, 10, 0, 0, 0],  # A
+            8: [0, 10, 0, 0, 0, 0],  # B
+            9: [0, 0, 10, 0, 10, 0], # C,D
+            10: [0, 10, 0, 10, 0, 0], # B,D
+            11: [0, 0, 0, 0, 10, 10] # E,F
         }
         for node in self.network:
             node.eventrates = eventrate_map.get(node.id, [0] * len(self.eventrates))
@@ -226,7 +226,7 @@ class INES():
 # )
 
 try:
-    my_ines = INES(12, 0.5, 6, 0.3, 10, 3, 5)
+    my_ines = INES(12, 0.5, 6, 0.3, 8, 3, 5)
 except Exception as e:
     error_message = f"❌ Exception: {str(e)}\n"
     print(error_message)  # Optional: also print to console

@@ -1,4 +1,4 @@
-from FixedINES import INES
+from INES import INES
 import traceback
 import logging
 from datetime import datetime
