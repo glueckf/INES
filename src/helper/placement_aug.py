@@ -39,12 +39,13 @@ from networkx.algorithms.approximation import steiner_tree
 #         return totalETBs * projrates[projection][1]
 
 def computeMSplacementCosts(self, projection, combination, partType, sharedDict, noFilter, G):
+    #from allPairs import find_shortest_path_or_ancestor
+    #import networkx as nx
+    
     projFilterDict = self.h_projFilterDict
     IndexEventNodes = self.h_IndexEventNodes
     nodes = self.h_nodes
     eventNodes = self.h_eventNodes
-    costs = 0
-    Filters = []
 
     projrates = self.h_projrates
     mycombi = self.h_mycombi
@@ -53,16 +54,17 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
     if not hasattr(self, "assigned_queries_per_node"):
         self.assigned_queries_per_node = {}
 
-    ##### FILTERS, append maximal filters
+    Filters = []
     intercombi = list(combination)
+
+    ##### FILTERS: append maximal filters
     for proj in combination:
-        if proj in projFilterDict:  # Protection against KeyError
+        if proj in projFilterDict:
             filters = getMaximalFilter(projFilterDict, proj, noFilter)
             if len(proj) > 1 and filters:
                 Filters.append((proj, filters))
                 intercombi.extend(filters)
 
-    # Initialisation of the placement
     myProjection = Projection(projection, {}, nodes[partType[0]], [], Filters)
     myPathLength = 0
     totalInstances = []
@@ -75,18 +77,16 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
             else:
                 result = NEWcomputeMSplacementCosts(self, projection, [myInput], partType[0], noFilter, G)
 
-            costs += result[0]
             myPathLength = max(myPathLength, result[1])
             myProjection.addInstances(myInput, result[2])
             totalInstances.extend(result[2])
         else:
-            # Own MS projection as instance (placement already given)
             myInstances = [Instance(partType[0], partType[0], nodes[partType[0]], {})]
             myProjection.addInstances(partType[0], myInstances)
 
     MSManageETBs(self, projection, partType[0])
 
-    # Determine the most favourable sink based on the actual routing paths
+    # calc sink from all possible sinks
     sink_costs = {}
     for inst in totalInstances:
         if projection in inst.routingDict and inst.routingDict[projection]:
@@ -95,27 +95,66 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
             sink_costs[dest] = sink_costs.get(dest, 0) + cost
 
     sorted_sinks = sorted(sink_costs.items(), key=lambda x: x[1])
+    chosen_sink = None
     for sink, _ in sorted_sinks:
-        node_obj = self.network[sink]
-        cloud = node_obj.computational_power = np.inf
+        node = self.network[sink]
+        cloud = node.computational_power == np.inf
         assigned_queries = self.assigned_queries_per_node.get(sink, 0)
         if assigned_queries == 0 or cloud:
             myProjection.sinks = [sink]
             self.assigned_queries_per_node[sink] = assigned_queries + 1
-            print(f"[Kostenbasiert] {projection} an Node {sink} mit Gesamtkosten {sink_costs[sink]}")
+            chosen_sink = sink
+            print(f"[Costs] {projection} to Node {sink} with total costs of {sink_costs[sink]}")
             break
     else:
         myProjection.sinks = [0]
-        print(f"[Fallback] Kein geeigneter Sink gefunden, nutze Node 0")
+        chosen_sink = 0
+        print(f"[Fallback] no Sink found, use Node 0")
+
+    # Calc costs for selected sink
+    chosen_cost = 0
+    for inst in totalInstances:
+        if projection in inst.routingDict and inst.routingDict[projection]:
+            dest = inst.routingDict[projection][-1][1]
+            if dest == chosen_sink:
+                hops = len(inst.routingDict[projection])
+
+                eventtype = next((etype for etype in projection.leafs() if inst.name.startswith(etype)), None)
+                if eventtype is None:
+                    continue
+
+                if eventtype in projFilterDict and getMaximalFilter(projFilterDict, eventtype, noFilter):
+                    # Filter case
+                    mycosts = hops * getDecomposedTotal(getMaximalFilter(projFilterDict, eventtype, noFilter), eventtype)
+                    if len(IndexEventNodes[eventtype]) > 1:
+                        partType = returnPartitioning(eventtype, mycombi[eventtype])[0]
+                        mycosts -= hops * rates[partType] * singleSelectivities[getKeySingleSelect(partType, eventtype)] * len(IndexEventNodes[eventtype])
+                        mycosts += hops * rates[partType] * singleSelectivities[getKeySingleSelect(partType, eventtype)]
+                elif len(eventtype) == 1:
+                    # Primitive event
+                    mycosts = hops * rates[eventtype]
+                else:
+                    # Complex event
+                    num = NumETBsByKey(inst.name, eventtype, IndexEventNodes)
+                    mycosts = hops * projrates[eventtype][1] * num
+
+                chosen_cost += mycosts
+        
+    routingAlgo = dict(nx.all_pairs_shortest_path(G))
+    hops_to_sink = len(find_shortest_path_or_ancestor(routingAlgo, 0, chosen_sink)) - 1
+    if hops_to_sink > 0:
+        chosen_cost += hops_to_sink
 
     spawnedInstances = []
     for etb in IndexEventNodes.get(projection, []):
         spawnedInstances.extend(getNodes(etb, eventNodes, IndexEventNodes))
-        
-    # Debug output
-    print(f"[MS-Placement] Projection: {projection}, Total Cost: {costs}, Max Path Length: {myPathLength}, Instances: {len(totalInstances)}")
 
-    return costs, myPathLength, myProjection, totalInstances, Filters
+    print(f"Actual costs for chosen sink {chosen_sink}: {chosen_cost}")
+    print(f"[MS-Placement] Projection: {projection}, Total Cost: {chosen_cost}, Max Path Length: {myPathLength}, Instances: {len(totalInstances)}")
+
+    return chosen_cost, myPathLength, myProjection, totalInstances, Filters
+
+
 
 
 def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, noFilter, G):
@@ -142,7 +181,7 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
     # Ensure hashable type for later usage in placementTreeDict
     destinationtypes_hashed = tuple(destinationtypes)
 
-    # Suche gültige Sinks
+    # search valid sinks
     valid_destinations = [node for node, neighbors in self.h_network_data.items() if not neighbors and self.network[node].computational_power >= projection.computing_requirements]
 
     # Filters all valid destinationNodes
@@ -197,7 +236,7 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
                     continue
 
                 edges = list(zip(shortestPath[:-1], shortestPath[1:]))
-                print(f"[Tracking] Sende {etb} von {mySource} nach {dest} über {shortestPath}")
+                print(f"[Tracking] send {etb} from {mySource} to {dest} over {shortestPath}")
                 myInstance = Instance(eventtype, etb, [mySource], {projection: edges})
                 newInstances.append(myInstance)
 
@@ -214,7 +253,7 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
                     num = NumETBsByKey(etb, eventtype, IndexEventNodes)                 
                     mycosts = len(edges) *  projrates[eventtype][1] * num     # FILTER   
 
-                # pathlength and costst
+                # pathlength and costs
                 costs += mycosts
                 longestPath = max(longestPath, len(shortestPath) - 1)
 
