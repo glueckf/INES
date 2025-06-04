@@ -86,7 +86,8 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
 
     MSManageETBs(self, projection, partType[0])
 
-    # calc sink from all possible sinks
+    ### Calc sink from all possible sinks
+    # Iterate through all instances
     sink_costs = {}
     for inst in totalInstances:
         if projection in inst.routingDict and inst.routingDict[projection]:
@@ -96,19 +97,18 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
 
     sorted_sinks = sorted(sink_costs.items(), key=lambda x: x[1])
     chosen_sink = None
+    
+    # Chose the optimal sink
     for sink, _ in sorted_sinks:
         node = self.network[sink]
         cloud = node.computational_power == np.inf
         assigned_queries = self.assigned_queries_per_node.get(sink, 0)
 
-        if node.computational_power is None or node.computational_power < projection.computing_requirements:
-            continue
-
         if assigned_queries == 0 or cloud:
             myProjection.sinks = [sink]
             self.assigned_queries_per_node[sink] = assigned_queries + 1
-            chosen_sink = sink
-            node.computational_power -= projection.computing_requirements
+            chosen_sink = sink  # Set sink
+            node.computational_power -= projection.computing_requirements # Remove computational power of sink for next iteration
             print(f"[Costs] {projection} to Node {sink} with total costs of {sink_costs[sink]}")
             break
     else:
@@ -522,6 +522,7 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
             node = destination
     myProjection.addSinks(node) #!
 
+    # Remove computational power of sink for next iteration
     if network[node].computational_power >= projection.computing_requirements:
         network[node].computational_power -= projection.computing_requirements
 
