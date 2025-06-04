@@ -7,6 +7,7 @@ import numpy as np
 import random
 from Node import Node
 import pandas as pd
+import math
 
 
 def generate_eventrates(eventskew, numb_eventtypes,total_count=10000):
@@ -57,7 +58,6 @@ def create_random_tree(nwsize, eventrates, node_event_ratio, max_parents: int = 
     Returns:
         Tuple of (root_node, all_nodes_list)
     """
-    import math
     if nwsize <= 0:
         return None, []
     

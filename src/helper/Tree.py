@@ -363,7 +363,7 @@ class KL(Tree):
         # rate = 1
         # for i in self.children:
         #     rate *= 2^(i.evaluate())
-        print(self.stripKL_simple())
+        print(f"[TREE] Evaluating Kleene component: {self.stripKL_simple()}")
         return self.stripKL_simple().evaluate(rates)
     
 class NSEQ(Tree):

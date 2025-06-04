@@ -67,14 +67,14 @@ def computeMSplacementCosts(self,projection, combination, partType, sharedDict, 
     #event_key = partType[0]
 
     if not partType:
-        print("Fehler: partType ist leer!")
+        print("[PLACEMENT] Error: partType is empty - cannot compute multi-sink placement")
         return [] 
     
     if isinstance(partType[0], list):
         partType = partType[0]
 
     if not partType or partType[0] not in IndexEventNodes:
-        print(f"Fehler: Ungültiger partType[0] - {partType[0] if partType else 'LEER'}")
+        print(f"[PLACEMENT] Error: Invalid partType[0] - {partType[0] if partType else 'EMPTY'}")
         return []
 
     for i in IndexEventNodes[partType[0]]: #!
@@ -91,7 +91,7 @@ def computeMSplacementCosts(self,projection, combination, partType, sharedDict, 
                         else:
                             etype = myInput  
                             if not etype or etype not in IndexEventNodes:
-                                print(f"[Fehler] Ungültiger Event-Typ '{etype}' – nicht in IndexEventNodes enthalten.")
+                                print(f"[PLACEMENT] Error: Invalid event type '{etype}' - not found in IndexEventNodes")
                                 return []
           
                         #result = NEWcomputeMSplacementCosts_Path(projection, [myInput], sharedDict[myInput], noFilter)
@@ -158,11 +158,11 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
     newInstances = [] #!
     pathLength = 0        
     etype = sourcetypes[0]
-    print(f"NEWcomputeMSplacementCosts: etype = {etype}, type = {type(etype)}")
+    print(f"[PLACEMENT] Computing multi-sink costs for event type: {etype} (type: {type(etype)})")
     
     f = open("msFilter.txt", "w")
     if etype in projFilterDict.keys() and getMaximalFilter(projFilterDict, etype, noFilter):
-        print("hasFilter")
+        print("[PLACEMENT] Filter detected for projection")
         f.write("VAR=true")
     else:        
         f.write("VAR=false")
@@ -196,7 +196,7 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
                     elif len(etype) == 1:
                         mycosts = len(mytree.edges()) * rates[etype]
                     else:
-                        print("TESTING" + str(etb) + "TESTING" + str(etype) + "TESTING" + str(IndexEventNodes))                    
+                        print(f"[PLACEMENT] Debug - ETB: {etb}, Event type: {etype}, IndexEventNodes available")                    
                         num = NumETBsByKey(etb, etype, IndexEventNodes)                 
                         mycosts = len(mytree.edges()) *  projrates[etype][1] * num     # FILTER           
 
@@ -387,9 +387,9 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
     combination = list(set(intercombi))
     
     myProjection = Projection(projection, {}, [], [], Filters) #!
-    print("Network")
-    print(network)
-    print(network_data)
+    print("[PLACEMENT] Network topology analysis:")
+    print(f"[PLACEMENT] Network nodes: {network}")
+    print(f"[PLACEMENT] Network structure: {network_data}")
     # Extract only the keys (nodes) with an empty list of connections
     # iterate through less nodes if possible
     non_leaf = [node for node, neighbors in network_data.items() if not neighbors and network[node].computational_power >= projection.computing_requirements]
@@ -437,7 +437,7 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
                         else: # case projection                         
                              num = NumETBsByKey(etb, eventtype,IndexEventNodes)
                              mycosts += projrates[eventtype][1] * allPairs[destination][mySource] * num 
-        print(mycosts)
+        print(f"[PLACEMENT] Computed single-sink placement cost: {mycosts}")
         if mycosts < costs:
             costs = mycosts
             node = destination

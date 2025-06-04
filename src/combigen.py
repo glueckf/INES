@@ -150,36 +150,36 @@ def getSavings(self,partType, combination, projection,DistMatrices,MSTrees): #OP
     wl = self.query_workload
 
     # Debug partType
-    print(f"getSavings called with partType: {partType}")
+    print(f"[COMBIGEN] Computing savings for partition type: {partType}")
 
     # Debug MSTrees lookup
     if partType not in MSTrees:
-        print(f"❌ KeyError: partType '{partType}' not found in MSTrees keys: {list(MSTrees.keys())}")
+        print(f"[COMBIGEN] Error: Partition type '{partType}' not found in MSTrees. Available: {list(MSTrees.keys())}")
     else:
-        print(f"✅ Found partType '{partType}' in MSTrees")
+        print(f"[COMBIGEN] Successfully found partition type '{partType}' in MSTrees")
 
     # Debug DistMatrices lookup
     if partType in MSTrees and MSTrees[partType] not in DistMatrices:
-        print(f"❌ KeyError: MSTrees[{partType}] -> '{MSTrees[partType]}' not found in DistMatrices keys: {list(DistMatrices.keys())}")
+        print(f"[COMBIGEN] Error: MSTrees[{partType}] not found in DistMatrices. Available: {list(DistMatrices.keys())}")
     else:
-        print(f"✅ Found MSTrees[{partType}] in DistMatrices")
+        print(f"[COMBIGEN] Successfully found MSTrees[{partType}] in DistMatrices")
 
     # Debug projection.get_original(wl)
     proj_original = projection.get_original(wl)
     if proj_original not in wl:
-        print(f"⚠️ Warning: Projection '{proj_original}' not found in workload (wl)")
+        print(f"[COMBIGEN] Warning: Projection '{proj_original}' not found in workload")
 
     # Debug totalRate calls
     try:
         rate = totalRate(self, partType, self.h_projrates)
     except KeyError as e:
-        print(f"❌ KeyError in totalRate: {e}")
-        print(f"Available projrates keys: {list(self.h_projrates.keys())}")
+        print(f"[COMBIGEN] Error in totalRate calculation: {e}")
+        print(f"[COMBIGEN] Available projection rates: {list(self.h_projrates.keys())}")
 
     try:
         opt_rate = optimisticTotalRate(self,projection)
     except KeyError as e:
-        print(f"❌ KeyError in optimisticTotalRate: {e}")
+        print(f"[COMBIGEN] Error in optimisticTotalRate calculation: {e}")
 
     #TODO: it is not totalRate but only local Rate that we save for PartType
     if projection.get_original(wl) not in wl: #some intermediate projection
@@ -442,8 +442,8 @@ def getExpensiveProjs(self,criticals):  # only on criticalTypes
     myMSProjs = [x for x in combiDict.keys() if set(allMSProjs).intersection(set(combiDict[x][0])).issubset(set(allMSProjs)) and combiDict[x][1] ]
     #the inputs are already part of other multi-sink placements (or if at least some of the inputs are already disseminated)
     for proj in allMSProjs:
-        print(str(proj) +  " : " +  str(totalRate(self,proj,self.h_projrates)))
-    print(list(map(lambda x: str(x), myMSProjs)))
+        print(f"[COMBIGEN] Multi-sink projection rate: {str(proj)} -> {str(totalRate(self,proj,self.h_projrates))}")
+    print(f"[COMBIGEN] Selected multi-sink projections: {list(map(lambda x: str(x), myMSProjs))}")
     
     #
     #allExpensiveMSProjs = [outRateHigh(x) for x in allMSProjs]
@@ -517,9 +517,9 @@ def generate_combigen(self):
 
     
     for pro in curcombi.keys():
-        print(str(pro) + " " + str(list(map(lambda x: str(x), curcombi[pro]))))
-    print("time: " + str(end_time - start_time))   
-    print(numberCombis)
+        print(f"[COMBIGEN] Projection combination: {str(pro)} -> {str(list(map(lambda x: str(x), curcombi[pro])))}")
+    print(f"[COMBIGEN] Combination generation completed in {end_time - start_time:.2f} seconds")   
+    print(f"[COMBIGEN] Total combinations processed: {numberCombis}")
 
     projlist = self.h_projlist
      

@@ -65,16 +65,16 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     filename = file_path
     number_parents = max_parents
 
-    print(filename)
-    print("Here")
-    print(IndexEventNodes)
+    print(f"[PLACEMENT] Processing file: {filename}")
+    print(f"[PLACEMENT] Analyzing placement options...")
+    print(f"[PLACEMENT] IndexEventNodes structure: {IndexEventNodes}")
     ccosts = NEWcomputeCentralCosts(wl,IndexEventNodes,allPairs,rates,EventNodes,self.graph)
     #print("central costs : " + str(ccosts))
     centralHopLatency = max(allPairs[ccosts[1]])
     numberHops = sum(allPairs[ccosts[1]])
-    print("centralCosts: " + str(ccosts[0]))
-    print("Central Hops: " + str(numberHops))
-    print("central Hop Latency: " + str(centralHopLatency))
+    print(f"[PLACEMENT] Central processing costs: {ccosts[0]}")
+    print(f"[PLACEMENT] Central communication hops: {numberHops}")
+    print(f"[PLACEMENT] Central hop latency: {centralHopLatency}")
     MSPlacements = {}
     curcosts = 1 
     start_time = time.time()
@@ -96,8 +96,8 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     unfolded = self.h_mycombi
     criticalMSTypes = self.h_criticalMSTypes
     sharedDict = getSharedMSinput(self, unfolded, projFilterDict)
-    print(unfolded)
-    print(criticalMSTypes)
+    print(f"[PLACEMENT] Unfolded projection combinations: {unfolded}")
+    print(f"[PLACEMENT] Critical multi-sink types: {criticalMSTypes}")
     dependencies = compute_dependencies(self,unfolded,criticalMSTypes)
     processingOrder = sorted(dependencies.keys(), key = lambda x : dependencies[x] ) # unfolded enthält kombi   
     costs = 0
@@ -117,7 +117,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
                 MSPlacements[projection] = partType
                 result = computeMSplacementCosts(self, projection, unfolded[projection], partType, sharedDict, noFilter, G)
                 if not result:
-                    print(f"[Fehler] Leeres Ergebnis für MS-Placement von {projection} erhalten. Überspringe...")
+                    print(f"[PLACEMENT] Error: Empty result for MS-placement of {projection}. Skipping...")
                     continue  # continue / return / break
                 additional = result[0]
                 costs += additional
@@ -134,7 +134,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
 
                 Filters += result[4]
                 #if partType, and projection in wl and partType kleene component of projection, add sink
-                print("MS " + str(projection) + " At: " + str(partType) + " PC: " + str(additional) + " Hops:" + str(result[1]))
+                print(f"[PLACEMENT] Multi-sink placement - Projection: {projection}, Location: {partType}, Cost: {additional}, Hops: {result[1]}")
 
 
                 if projection.get_original(wl) in wl and partType[0] in list(map(lambda x: str(x), projection.get_original(wl).kleene_components())):
@@ -143,7 +143,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
                     result = ComputeSingleSinkPlacement(projection.get_original(wl), [projection], noFilter)
                     additional = result[0]
                     costs += additional
-                    print("SiS Sink for Kleene:" + " At: " + str(partType) + str(projection.get_original(wl)) + " PC: " + str(additional) + " Hops:" + str(result[1]))
+                    print(f"[PLACEMENT] Single-sink placement for Kleene - Location: {partType}, Query: {projection.get_original(wl)}, Cost: {additional}, Hops: {result[1]}")
 
             else: 
                 result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter,projFilterDict,EventNodes,IndexEventNodes,self.h_network_data,allPairs,mycombi,rates,singleSelectivities,projrates,self.graph,self.network)
@@ -158,35 +158,35 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
                 myPlan.updateInstances(result[4]) #! update instances
                 Filters += result[5]
 
-                print("SiS " + str(projection) + " At: " + str(partType) + "PC: " + str(additional) + " Hops: " + str(result[2]))
+                print(f"[PLACEMENT] Single-sink placement - Projection: {projection}, Location: {partType}, Cost: {additional}, Hops: {result[2]}")
                 
     mycosts = costs/ccosts[0]
-    print("INEv Transmission with MS " + str(costs) )
+    print(f"[PLACEMENT] INES transmission cost with multi-sink optimizations: {costs}")
     if len(wl)>1 or wl[0].hasKleene() or wl[0].hasNegation():
         lowerBound = 0
     else:
       for query in wl:
         lowerBound= getLowerBound(query,self)
-    print("Lower Bound: " + str(lowerBound / ccosts[0]))
+    print(f"[PLACEMENT] Theoretical lower bound ratio: {lowerBound / ccosts[0]:.3f}")
 
-    print("Transmission Ratio: " + str(mycosts))
+    print(f"[PLACEMENT] Achieved transmission ratio: {mycosts:.3f}")
     #print("INEv Depth: " + str(float(max(list(dependencies.values()))+1)/2))
     
     ID = int(np.random.uniform(0,10000000))
     
     totaltime = str(round(time.time() - start_time, 2))
 
-    print("Printing execution times")
-    print(start_time)
-    print(time.time())
-    print("Finished in " + totaltime + " seconds")
+    print(f"[PLACEMENT] Operator placement computation complete")
+    print(f"[PLACEMENT] Start time: {start_time}")
+    print(f"[PLACEMENT] End time: {time.time()}")
+    print(f"[PLACEMENT] Total execution time: {totaltime} seconds")
     
             
       
                       
     ID = int(np.random.uniform(0,10000000))
     
-    print(dependencies)
+    print(f"[PLACEMENT] Projection dependencies: {dependencies}")
     #hoplatency = max([hopLatency[x] for x in hopLatency.keys()])   
     if dependencies:
         max_dependency = float(max(list(dependencies.values())) / 2)
