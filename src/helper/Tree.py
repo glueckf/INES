@@ -308,7 +308,7 @@ class AND(Tree):
     def __init__ (self, *children):
         self.children = children
         self.mytype = 'AND'
-        self.computing_requirements = 1
+        self.computing_requirements = 2
         
     def __str__(self):
         s = "AND("
@@ -330,7 +330,7 @@ class SEQ(Tree):
     def __init__ (self, *children):        
         self.children = children
         self.mytype = 'SEQ'
-        self.computing_requirements = 2
+        self.computing_requirements = 3
         
     def __str__(self):
         s = "SEQ("

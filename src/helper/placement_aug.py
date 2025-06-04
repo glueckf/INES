@@ -100,10 +100,15 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
         node = self.network[sink]
         cloud = node.computational_power == np.inf
         assigned_queries = self.assigned_queries_per_node.get(sink, 0)
+
+        if node.computational_power is None or node.computational_power < projection.computing_requirements:
+            continue
+
         if assigned_queries == 0 or cloud:
             myProjection.sinks = [sink]
             self.assigned_queries_per_node[sink] = assigned_queries + 1
             chosen_sink = sink
+            node.computational_power -= projection.computing_requirements
             print(f"[Costs] {projection} to Node {sink} with total costs of {sink_costs[sink]}")
             break
     else:
@@ -516,6 +521,10 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
             costs = mycosts
             node = destination
     myProjection.addSinks(node) #!
+
+    if network[node].computational_power >= projection.computing_requirements:
+        network[node].computational_power -= projection.computing_requirements
+
     newInstances = [] #!
     # Update Event Node Matrice, by adding events etbs sent to node through node x to events of node x
     longestPath  = 0

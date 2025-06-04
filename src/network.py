@@ -50,6 +50,9 @@ def create_random_tree(nwsize, eventrates, node_event_ratio, max_parents: int = 
         # Initialize the list to store all nodes
         nw = []
 
+        # Track events along the network nodes
+        eList = {}
+
         levels = math.ceil(math.log2(nwsize))
         print(levels)
         # Create the root node
@@ -70,6 +73,7 @@ def create_random_tree(nwsize, eventrates, node_event_ratio, max_parents: int = 
 
             # Create the new node
             new_node = Node(id=node_id, compute_power=compute_power, memory=memore)
+            eList
 
             # Ensure level-specific nodes exist in the dictionary
             if level not in level_nodes:
@@ -100,6 +104,10 @@ def create_random_tree(nwsize, eventrates, node_event_ratio, max_parents: int = 
                 # with open('PrimitiveEvents', 'wb') as f:
                 #     pickle.dump(evtrate, f)
                 node.eventrates = evtrate
+
+                etypes = [i for i, rate in enumerate(evtrate) if rate > 0]
+                eList[node.id] = etypes
+                
             else:
                 node.eventrates = [0] * len(eventrates)
                 
@@ -117,4 +125,5 @@ def create_random_tree(nwsize, eventrates, node_event_ratio, max_parents: int = 
             if eventrates_df[column].sum() == 0:
                 print("Still 0 ")
         # post_order_sum_events(root)
+        #print(eList)
         return root, nw
