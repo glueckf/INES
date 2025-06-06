@@ -1,5 +1,5 @@
 from Node import Node
-from network import generate_eventrates, create_random_tree,generate_events
+from network import generate_eventrates, create_random_tree,generate_events, compressed_graph
 from graph import create_fog_graph
 from graph import draw_graph
 from allPairs import populate_allPairs
@@ -39,6 +39,7 @@ class INES():
     experiment_result = None
     prim = None
     CURRENT_SECTION = ''
+    eList = {}
     
     "Helper Variables from different Files - namespace issues"
     h_network_data = None
@@ -84,6 +85,7 @@ class INES():
         self.primitiveEvents= generate_events(self.eventrates,node_event_ratio)
         root, self.network = create_random_tree(nwSize,self.eventrates,node_event_ratio,max_partens) 
         self.graph = create_fog_graph(self.network)
+        #self.graph = compressed_graph(self.graph, self.eList)
         self.allPairs = populate_allPairs(self.graph)
         self.h_longestPath = getLongest(self.allPairs)
         self.query_workload = generate_workload(query_size,query_length,self.primitiveEvents)

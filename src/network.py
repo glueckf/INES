@@ -125,5 +125,35 @@ def create_random_tree(nwsize, eventrates, node_event_ratio, max_parents: int = 
             if eventrates_df[column].sum() == 0:
                 print("Still 0 ")
         # post_order_sum_events(root)
-        #print(eList)
+        print(f"[TESTING]{eList}")
         return root, nw
+
+def compressed_graph(G, eList):
+    compList = []
+    
+    # add relevant nodes into the compressed graph list
+    for nodes, etypes in eList.items():
+        if len(etypes) > 1:
+            compList.append(nodes)
+
+    compressed_nodes = sorted(set(compList))
+
+    compGraph = G.copy()
+
+    # mark relevant nodes for operator placement
+    for n in compGraph.nodes:
+        if n in compressed_nodes:
+            compGraph.nodes[n]['relevant'] = n in compList
+
+
+    print(f"total nodes in compressed graph = {len(compGraph.nodes)}")
+    print(f"total nodes in graph = {len(G.nodes)}")
+
+    # for n in compGraph.nodes:
+    #     if n in compressed_nodes:
+    #         compGraph.nodes[n]['relevant'] = True
+    #     else:
+    #         compGraph.nodes[n]['relevant'] = False
+
+    return compGraph
+

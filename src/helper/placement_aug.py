@@ -237,11 +237,11 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
                 shortestPath = find_shortest_path_or_ancestor(routingAlgo, mySource, dest)
 
                 if not shortestPath or not isinstance(shortestPath, list):
-                    print(f"[Warnung] Kein Pfad von {mySource} zu {dest} für etb {etb}")
+                    print(f"[Warning] No edge from {mySource} to {dest} for etb {etb}")
                     continue
 
                 edges = list(zip(shortestPath[:-1], shortestPath[1:]))
-                print(f"[Tracking] send {etb} from {mySource} to {dest} over {shortestPath}")
+                #print(f"[Tracking] send {etb} from {mySource} to {dest} over {shortestPath}")
                 myInstance = Instance(eventtype, etb, [mySource], {projection: edges})
                 newInstances.append(myInstance)
 
