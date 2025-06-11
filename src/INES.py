@@ -1,5 +1,5 @@
 from Node import Node
-from network import generate_eventrates, create_random_tree,generate_events, compressed_graph
+from network import generate_eventrates, create_random_tree,generate_events, compressed_graph, treeDict
 from graph import create_fog_graph
 from graph import draw_graph
 from allPairs import populate_allPairs
@@ -40,6 +40,7 @@ class INES():
     prim = None
     CURRENT_SECTION = ''
     eList = {}
+    h_treeDict = {}
     
     "Helper Variables from different Files - namespace issues"
     h_network_data = None
@@ -83,9 +84,8 @@ class INES():
         self.eventrates = generate_eventrates(eventskew,num_eventtypes)
         self.networkParams = [self.eventskew,self.number_eventtypes,self.node_event_ratio,self.nwSize,min(self.eventrates)/max(self.eventrates)]
         self.primitiveEvents= generate_events(self.eventrates,node_event_ratio)
-        root, self.network = create_random_tree(nwSize,self.eventrates,node_event_ratio,max_partens) 
+        root, self.network, eList = create_random_tree(nwSize,self.eventrates,node_event_ratio,max_partens) 
         self.graph = create_fog_graph(self.network)
-        #self.graph = compressed_graph(self.graph, self.eList)
         self.allPairs = populate_allPairs(self.graph)
         self.h_longestPath = getLongest(self.allPairs)
         self.query_workload = generate_workload(query_size,query_length,self.primitiveEvents)
@@ -95,6 +95,10 @@ class INES():
 
         #This is important to variious files afterwards
         self.h_network_data,self.h_rates_data,self.h_primEvents,self.h_instances,self.h_nodes = initialize_globals(self.network)
+        #print(f"DATA {self.h_network_data} and NETWORK {self.h_nodes}")
+        self.h_treeDict = treeDict(self.h_network_data,eList)
+        print(f"treeDict{self.h_treeDict}")
+        self.graph = compressed_graph(self.graph, self.h_treeDict)
         self.h_eventNodes,self.h_IndexEventNodes = initEventNodes(self.h_nodes,self.h_network_data)
         self.h_projlist,self.h_projrates,self.h_projsPerQuery,self.h_sharedProjectionsDict,self.h_sharedProjectionsList = generate_all_projections(self)
         self.h_projFilterDict = populate_projFilterDict(self)
@@ -132,7 +136,7 @@ class INES():
 # )
 
 try:
-    my_ines = INES(12, 0.5, 6, 0.3, 10, 3, 5)
+    my_ines = INES(12, 0.5, 6, 0.3, 5, 3, 5)
 except Exception as e:
     error_message = f"❌ Exception: {str(e)}\n"
     print(error_message)  # Optional: also print to console

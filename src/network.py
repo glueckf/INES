@@ -105,7 +105,11 @@ def create_random_tree(nwsize, eventrates, node_event_ratio, max_parents: int = 
                 #     pickle.dump(evtrate, f)
                 node.eventrates = evtrate
 
-                etypes = [i for i, rate in enumerate(evtrate) if rate > 0]
+                # assign leaf nodes and their parent nodes till cloud to the dictionary.
+                etypes = []
+                for i, rate in enumerate(evtrate):
+                    if rate > 0:
+                        etypes.append(i)
                 eList[node.id] = etypes
                 
             else:
@@ -125,8 +129,12 @@ def create_random_tree(nwsize, eventrates, node_event_ratio, max_parents: int = 
             if eventrates_df[column].sum() == 0:
                 print("Still 0 ")
         # post_order_sum_events(root)
-        print(f"[TESTING]{eList}")
-        return root, nw
+        # print(f"[TESTING]{eList}")
+        # for n, v in eList.items():
+        #     print(n, v)
+        return root, nw, eList
+
+
 
 def compressed_graph(G, eList):
     compList = []
@@ -143,17 +151,59 @@ def compressed_graph(G, eList):
     # mark relevant nodes for operator placement
     for n in compGraph.nodes:
         if n in compressed_nodes:
-            compGraph.nodes[n]['relevant'] = n in compList
+            compGraph.nodes[n]['relevant'] = True
+        else:
+            compGraph.nodes[n]['relevant'] = False
+
+    # for n in compGraph.nodes:
+    #     if n in compressed_nodes:
+    #         compGraph.nodes[n]['relevant'] = n in compList
+    print(f"List compressed graph: {compList}")
 
 
     print(f"total nodes in compressed graph = {len(compGraph.nodes)}")
     print(f"total nodes in graph = {len(G.nodes)}")
 
-    # for n in compGraph.nodes:
-    #     if n in compressed_nodes:
-    #         compGraph.nodes[n]['relevant'] = True
-    #     else:
-    #         compGraph.nodes[n]['relevant'] = False
+    total_nodes = len(G.nodes)
+    relevant_nodes = len(compList)
+    compression_ratio = 100 * (1 - relevant_nodes / total_nodes)
+
+    print(f"[After compression] Total Nodes: {total_nodes}, Relevant Nodes: {relevant_nodes} (including leaf Nodes)")
+    print(f"[After compression] Compression Ratio: {compression_ratio:.2f}% Nodes removed.")
+
+
 
     return compGraph
 
+
+def treeDict(network_data, eList):
+    # dict with nodes as key and their events
+    treeAsDict = {}
+
+    for node, events in network_data.items():
+        # Iterate over each event associated with the current node
+        for etypes in events:
+            # add node to dict as key and event to node as value
+            if node not in treeAsDict:
+                # add nodes into dict
+                treeAsDict[node] = set()
+            # add their events
+            treeAsDict[node].add(etypes)
+
+            # forward events as value to nodes which were in eList as values
+            for cNodes in eList.get(node, []):
+                # add node to dict as key and event to node as value
+                if cNodes not in treeAsDict:
+                    # add nodes into dict
+                    treeAsDict[cNodes] = set()
+                # add their events
+                treeAsDict[cNodes].add(etypes)
+        
+    print(f"TESTDICT {treeAsDict}")
+
+    # sort keys & values in new dict
+    final_treeDict = {}
+    for k, val in sorted(treeAsDict.items()):
+        final_treeDict[k] = sorted(val)
+
+    return final_treeDict

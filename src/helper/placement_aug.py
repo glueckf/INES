@@ -103,6 +103,10 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
         node = self.network[sink]
         cloud = node.computational_power == np.inf
         assigned_queries = self.assigned_queries_per_node.get(sink, 0)
+        
+        # consider relevant nodes for placement
+        if G.nodes[sink].get('relevant', True):
+            continue
 
         if assigned_queries == 0 or cloud:
             myProjection.sinks = [sink]
@@ -111,6 +115,7 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
             node.computational_power -= projection.computing_requirements # Remove computational power of sink for next iteration
             print(f"[Costs] {projection} to Node {sink} with total costs of {sink_costs[sink]}")
             break
+        
     else:
         myProjection.sinks = [0]
         chosen_sink = 0
@@ -474,6 +479,9 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
     non_leaf = [node for node, neighbors in network_data.items() if not neighbors and network[node].computational_power >= projection.computing_requirements]
     
     for destination in non_leaf:
+        # consider relevant nodes for placement
+        if Graph.nodes[destination].get('relevant', True):
+            continue
         skip_destination = False  # Flag to determine if we should skip this destination
         for eventtype in combination:
             for etb in IndexEventNodes[eventtype]:

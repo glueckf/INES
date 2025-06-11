@@ -48,6 +48,9 @@ def initialize_globals(network_data):
     # Populate instances dictionary
     for i in primEvents:
         instances[i] = len(nodes[i])
+    
+    print(f"[NETWORK] {network}")
+
     return network,rates,primEvents,instances,nodes
 
 # Getter functions with lazy initialization
