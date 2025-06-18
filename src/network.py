@@ -130,8 +130,6 @@ def create_random_tree(nwsize, eventrates, node_event_ratio, max_parents: int = 
                 print("Still 0 ")
         # post_order_sum_events(root)
         # print(f"[TESTING]{eList}")
-        # for n, v in eList.items():
-        #     print(n, v)
         return root, nw, eList
 
 

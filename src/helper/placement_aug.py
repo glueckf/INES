@@ -85,12 +85,10 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
         for etb in IndexEventNodes[eventtype]:
             #candidate_nodes = getNodes(etb, eventNodes, IndexEventNodes)
             for node in valid_destinations:
-                if not G.nodes[node].get('relevant', False):  # <- Nur unrelevante Nodes ausschließen
+                if not G.nodes[node].get('relevant', False):  # Out of calculation if not relevant
                     continue
                 if self.network[node].computational_power >= projection.computing_requirements:
                     myNodes.append(node)
-                    #if network[node].computational_power >= projection.computing_requirements:
-                    #self.network[node].computational_power -= projection.computing_requirements
 
     # Remove duplicates
     myNodes = list(set(myNodes))
@@ -463,13 +461,11 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
     
     for destination in non_leaf:
         # consider relevant nodes for placement
-        if not Graph.nodes[destination].get('relevant', False):  # <- Ausschließen, wenn NICHT relevant
+        if not Graph.nodes[destination].get('relevant', False):  # Out of calculation if not relevant
             continue
         skip_destination = False  # Flag to determine if we should skip this destination
         for eventtype in combination:
             for etb in IndexEventNodes[eventtype]:
-                if Graph.nodes[destination].get('relevant', True):
-                    continue
                 possibleSources = getNodes(etb,EventNodes,IndexEventNodes)
                 for source in possibleSources:
                     # Use the routing_dict to get the common ancestor

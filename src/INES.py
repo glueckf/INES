@@ -84,7 +84,7 @@ class INES():
         self.eventrates = generate_eventrates(eventskew,num_eventtypes)
         self.networkParams = [self.eventskew,self.number_eventtypes,self.node_event_ratio,self.nwSize,min(self.eventrates)/max(self.eventrates)]
         self.primitiveEvents= generate_events(self.eventrates,node_event_ratio)
-        root, self.network, eList = create_random_tree(nwSize,self.eventrates,node_event_ratio,max_partens) 
+        self.root, self.network, self.eList = create_random_tree(nwSize,self.eventrates,node_event_ratio,max_partens) 
         self.graph = create_fog_graph(self.network)
         self.allPairs = populate_allPairs(self.graph)
         self.h_longestPath = getLongest(self.allPairs)
@@ -96,8 +96,8 @@ class INES():
         #This is important to variious files afterwards
         self.h_network_data,self.h_rates_data,self.h_primEvents,self.h_instances,self.h_nodes = initialize_globals(self.network)
         #print(f"DATA {self.h_network_data} and NETWORK {self.h_nodes}")
-        self.h_treeDict = treeDict(self.h_network_data, eList)
-        print(f"treeDict{self.h_treeDict}")
+        self.h_treeDict = treeDict(self.h_network_data, self.eList)
+        #print(f"treeDict{self.h_treeDict}")
         self.graph = compressed_graph(self.graph, self.h_treeDict)
         self.h_eventNodes,self.h_IndexEventNodes = initEventNodes(self.h_nodes,self.h_network_data)
         self.h_projlist,self.h_projrates,self.h_projsPerQuery,self.h_sharedProjectionsDict,self.h_sharedProjectionsList = generate_all_projections(self)
