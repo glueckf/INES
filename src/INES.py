@@ -96,7 +96,7 @@ class INES():
         #This is important to variious files afterwards
         self.h_network_data,self.h_rates_data,self.h_primEvents,self.h_instances,self.h_nodes = initialize_globals(self.network)
         #print(f"DATA {self.h_network_data} and NETWORK {self.h_nodes}")
-        self.h_treeDict = treeDict(self.h_network_data,eList)
+        self.h_treeDict = treeDict(self.h_network_data, eList)
         print(f"treeDict{self.h_treeDict}")
         self.graph = compressed_graph(self.graph, self.h_treeDict)
         self.h_eventNodes,self.h_IndexEventNodes = initEventNodes(self.h_nodes,self.h_network_data)

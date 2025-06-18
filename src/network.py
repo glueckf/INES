@@ -204,6 +204,6 @@ def treeDict(network_data, eList):
     # sort keys & values in new dict
     final_treeDict = {}
     for k, val in sorted(treeAsDict.items()):
-        final_treeDict[k] = sorted(val)
+        final_treeDict[k] = sorted(list(val))
 
     return final_treeDict
