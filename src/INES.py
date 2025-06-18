@@ -136,7 +136,7 @@ class INES():
 # )
 
 try:
-    my_ines = INES(12, 0.5, 6, 0.3, 5, 3, 5)
+    my_ines = INES(20, 0.5, 6, 0.3, 4, 3, 5)
 except Exception as e:
     error_message = f"❌ Exception: {str(e)}\n"
     print(error_message)  # Optional: also print to console
