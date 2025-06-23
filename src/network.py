@@ -144,14 +144,14 @@ def compressed_graph(G, eList):
 
     compressed_nodes = sorted(set(compList))
 
-    compGraph = G.copy()
+    #compGraph = G.copy()
 
     # mark relevant nodes for operator placement
-    for n in compGraph.nodes:
+    for n in G.nodes:
         if n in compressed_nodes:
-            compGraph.nodes[n]['relevant'] = True
+            G.nodes[n]['relevant'] = True
         else:
-            compGraph.nodes[n]['relevant'] = False
+            G.nodes[n]['relevant'] = False
 
     # for n in compGraph.nodes:
     #     if n in compressed_nodes:
@@ -159,7 +159,7 @@ def compressed_graph(G, eList):
     print(f"List compressed graph: {compList}")
 
 
-    print(f"total nodes in compressed graph = {len(compGraph.nodes)}")
+    print(f"total nodes in compressed graph = {len(G.nodes)}")
     print(f"total nodes in graph = {len(G.nodes)}")
 
     total_nodes = len(G.nodes)
@@ -171,7 +171,7 @@ def compressed_graph(G, eList):
 
 
 
-    return compGraph
+    return G
 
 
 def treeDict(network_data, eList):

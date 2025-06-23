@@ -204,8 +204,8 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
 
     # Main logic: for all event types that belong to the projection
     for eventtype in mycombi.get(projection, []):
-        if eventtype not in IndexEventNodes:
-            continue
+        if eventtype not in IndexEventNodes and not G.nodes[destination].get('relevant', False):  # Out of calculation if not relevant
+                continue
         for etb in IndexEventNodes[eventtype]:
             currentSources = getNodes(etb, eventNodes, IndexEventNodes)
             MydestinationNodes = list(set(destinationNodes) - set(currentSources))
@@ -483,7 +483,8 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
         
         mycosts = 0
         for eventtype in combination:
-
+                if not Graph.nodes[destination].get('relevant', False):  # Out of calculation if not relevant
+                    continue
                 for etb in IndexEventNodes[eventtype]: #check for all sources #here iterated over length of IndesEventNodes to get all sources for etb Instances
                         
                         possibleSources = getNodes(etb,EventNodes,IndexEventNodes)
