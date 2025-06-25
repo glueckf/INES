@@ -495,7 +495,7 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
     all_eventtype_output_rates = {}
 
     eventtype_to_sources_map = {}
-    print(input_buffer.getvalue())
+    print(f"[PREPP] Processing input buffer with {len(input_buffer.getvalue())} characters")
     input_buffer.seek(0)
     for line in input_buffer:
         line=line.strip()
@@ -524,7 +524,7 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
         if CURRENT_SECTION == MUSE_GRAPH:
             if "SELECT" in line and "ON" in line:
                 # Split the line at "SELECT" and "FROM"
-                print("SPlitting")
+                print("[PREPP] Parsing SELECT statement with FROM and ON clauses")
                 select_split = line.split("SELECT")[1].split("FROM")
                 query = select_split[0].strip()  # Extract the query, it's the part between SELECT and FROM
                 
@@ -585,7 +585,7 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
                 query.query = extract_muse_graph_queries(line)
 
             if query.query in queries_to_process:
-                print("single_sink_evaluation_node",single_sink_evaluation_node)
+                print(f"[PREPP] Selected single sink evaluation node: {single_sink_evaluation_node}")
                 single_sink_query_network.append(Query_fragment(query.query,determine_all_primitive_events_of_projection(query.query),[single_sink_evaluation_node],""))
             
             if extract_muse_graph_sources(line) != None:
@@ -636,7 +636,7 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
             total_cost += cost
     
     
-    print(f"total central push cost is {total_cost}")
+    print(f"[PREPP] Total central push cost calculated: {total_cost}")
     central_push_costs = total_cost
     reversed_query_network = []
     for i in range(len(query_network)-2,-1,-1):
@@ -648,16 +648,16 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
         eventtype_to_sources_map[query_network[i].query] = query_network[i].node_placement
         all_eventtype_output_rates[query_network[i].query] = determine_total_query_rate(query_network[i],all_eventtype_output_rates,eventtype_to_sources_map,eventtype_pair_to_selectivity)
     for query in query_network:
-        print(query.query)
-    print("~~")
+        print(f"[PREPP] Query network entry: {query.query}")
+    print("[PREPP] Network processing complete")
     query_network = reversed_query_network
     for query in single_sink_query_network:
-        print(query.query)
+        print(f"[PREPP] Single sink query: {query.query}")
 
     all_needed_primitive_events, biggest_query_length_to_be_processed = get_all_distinct_eventtypes_of_used_queries_and_largest_query(queries_to_process)
     number_of_samples = int(runs)
     all_exact_costs = 0
-    print(queries_to_process)
+    print(f"[PREPP] Processing {len(queries_to_process)} queries: {queries_to_process}")
     old_eventtype_pair_to_selectivity = eventtype_pair_to_selectivity.copy()
     
     query_network_copy = copy.deepcopy(query_network)
@@ -693,19 +693,23 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
             sampling_costs_avg.append(sampling_costs)
             factorial_costs_avg.append(factorial_costs)
             exact_costs_avg.append(exact_costs)
-            print(f"greedy_costs: {greedy_costs}")
-            print(f"sampling_costs: {sampling_costs}")
-            print(f"factorial_costs: {factorial_costs}")
-            print(f"exact_costs: {exact_costs}")
+            print(f"[PREPP] Greedy algorithm costs: {greedy_costs}")
+            print(f"[PREPP] Sampling algorithm costs: {sampling_costs}")
+            print(f"[PREPP] Factorial algorithm costs: {factorial_costs}")
+            print(f"[PREPP] Exact algorithm costs: {exact_costs}")
             
            
-            print("§§§§§§§§§§ Push-Pull MuSE costs §§§§§§§§§§")
+            print("[PREPP] ========== Push-Pull MuSE Cost Analysis ==========")
             if algorithm == "e":            
-                print("####### EXACT #######")
-                print("Exact network costs:", exact_costs)
+                print("[PREPP] ===== EXACT ALGORITHM RESULTS =====")
+                print(f"[PREPP] Exact network costs: {exact_costs}")
                 all_exact_costs += exact_costs
-                print("Exact Average:", all_exact_costs/idx)
-                print("Exact Average Transsmission Ratio:", (all_exact_costs/idx) / central_push_costs)
+                print(f"[PREPP] Running average exact costs: {all_exact_costs/idx}")
+                if central_push_costs == 0:
+                    print("[PREPP] Warning: Central push costs are 0 - division skipped")
+                else:
+                    print(f"[PREPP] Exact average transmission ratio: {(all_exact_costs/idx) / central_push_costs:.3f}")
+                #print("Exact Average Transsmission Ratio:", (all_exact_costs/idx) / central_push_costs)
                 if exact_costs < exact_best_generated_costs:
                     exact_best_generated_costs = exact_costs
 				
@@ -713,16 +717,16 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
                     exact_worst_generated_costs = exact_costs
 				
                 exact_accumulated_exec_time += exact_algo_time
-                print("Average exact algorithm execution time:", exact_accumulated_exec_time/idx)
+                print(f"[PREPP] Average exact algorithm execution time: {exact_accumulated_exec_time/idx:.3f} seconds")
 
 
 
             query_network_copy = copy.deepcopy(query_network)
             single_sink_query_network_copy = copy.deepcopy(single_sink_query_network)
-    print(greedy_costs_avg)
-    print(sampling_costs_avg)
-    print(factorial_costs_avg)
-    print(exact_costs_avg)      
+    print(f"[PREPP] Final greedy costs average: {greedy_costs_avg}")
+    print(f"[PREPP] Final sampling costs average: {sampling_costs_avg}")
+    print(f"[PREPP] Final factorial costs average: {factorial_costs_avg}")
+    print(f"[PREPP] Final exact costs average: {exact_costs_avg}")      
     end_time = time.time()
     total_time = end_time - start_time
     exact_cost = sum(exact_costs_avg) / len(exact_costs_avg)

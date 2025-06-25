@@ -244,7 +244,7 @@ def generate_eval_plan(nw,selectivities,myPlan,centralPlan,workload):
     MSPlacements = myPlan[2]
     myplan = myPlan[0]
 
-    print(f"Myplan is {myplan}")
+    print(f"[EVALPLAN] Generated evaluation plan: {myplan}")
             
     cdict = centralPlan[1]
     csource = centralPlan[0]

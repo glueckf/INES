@@ -125,7 +125,7 @@ class Tree():
                 nodes = nodes[0]
                 if self.getleafs().count(nodes) > 1:
                     nodes = [nodes for i in range(self.getleafs().count(nodes))]
-            for  i in sorted(subop.getleafs(), key = lambda x: self.level(x), reverse = True):  
+            for i in sorted(subop.getleafs(), key = lambda x: self.level(x), reverse = True):
                  if i not in nodes:                      
                      parent = subop.getparent(i)  
                      li = list(parent.children)    
@@ -363,7 +363,7 @@ class KL(Tree):
         # rate = 1
         # for i in self.children:
         #     rate *= 2^(i.evaluate())
-        print(self.stripKL_simple())
+        print(f"[TREE] Evaluating Kleene component: {self.stripKL_simple()}")
         return self.stripKL_simple().evaluate(rates)
     
 class NSEQ(Tree):

@@ -7,6 +7,7 @@ import numpy as np
 import random
 from Node import Node
 import pandas as pd
+import math
 
 
 def generate_eventrates(eventskew, numb_eventtypes,total_count=10000):
@@ -22,6 +23,8 @@ def generate_eventrates(eventskew, numb_eventtypes,total_count=10000):
     
     # Sample event rates from multinomial distribution
     eventrates = np.random.multinomial(total_count, weights)
+
+    # TODO: Frage: Warum total_count = 10000 und clipping bei 1000, wenn alle weights immer größer sind als 0.1?
     
     # Clip event rates to be within min and max values
     eventrates = np.clip(eventrates, min_value, max_value)
@@ -31,11 +34,11 @@ def generate_eventrates(eventskew, numb_eventtypes,total_count=10000):
 
 # At one Node show in Array the Events which are generated at each node
 # Looping through all Eventrates 
-def generate_events(eventrates, n_e_r):
+def generate_events(eventrates, node_event_ratio):
     myevents = []
     for i in range(len(eventrates)):
         x = np.random.uniform(0,1)
-        if x < n_e_r:
+        if x < node_event_ratio:
             myevents.append(int(eventrates[i]))
         else:
             myevents.append(0)
@@ -44,77 +47,96 @@ def generate_events(eventrates, n_e_r):
 
 
 def create_random_tree(nwsize, eventrates, node_event_ratio, max_parents: int = 1):
-        if nwsize <= 0:
-            return None
-        import math
-        # Initialize the list to store all nodes
-        nw = []
+    """Create a random tree network with the specified parameters.
+    
+    Args:
+        nwsize: Number of nodes in the network
+        eventrates: List of event rates for each event type
+        node_event_ratio: Probability of a node generating an event
+        max_parents: Maximum number of parents a node can have
+        
+    Returns:
+        Tuple of (root_node, all_nodes_list)
+    """
+    if nwsize <= 0:
+        return None, []
+    
+    # Initialize the network nodes list
+    nodes = []
+    
+    # Calculate the number of tree levels based on network size
+    levels = math.ceil(math.log2(nwsize))
+    
+    # Create the root node (has infinite resources)
+    root = Node(id=0, compute_power=math.inf, memory=math.inf)
+    nodes.append(root)
+    
+    # Store nodes by level for easier parent selection
+    nodes_by_level = {0: [root]}
+    
+    # Create all remaining nodes
+    for node_id in range(1, nwsize):
+        # Calculate the target level for this node to create a balanced tree
+        level = min(levels - 1, node_id // (nwsize // levels) + 1)
+        
+        # Assign resources (higher levels have lower resources)
+        resources = levels - level
+        
+        # Create new node
+        new_node = Node(id=node_id, compute_power=resources, memory=resources)
+        
+        # Make sure we have a list for this level
+        if level not in nodes_by_level:
+            nodes_by_level[level] = []
+        
+        # Connect to parent nodes from the previous level
+        parent_count = random.randint(1, max_parents)
+        available_parents = nodes_by_level[level - 1]
+        parent_nodes = random.sample(available_parents, min(len(available_parents), parent_count))
+        
+        # Set up parent-child relationships
+        for parent in parent_nodes:
+            new_node.Parent.append(parent)
+            parent.Child.append(new_node)
+        
+        # Add new node to the network and its level
+        nodes.append(new_node)
+        nodes_by_level[level].append(new_node)
+    
+    # Assign event rates to nodes
+    _assign_event_rates(nodes, eventrates, node_event_ratio)
+    
+    return root, nodes
 
-        levels = math.ceil(math.log2(nwsize))
-        print(levels)
-        # Create the root node
-        root = Node(id=0, compute_power=math.inf, memory=math.inf )#, eventrate=generate_events(eventrates, node_event_ratio))
-        nw.append(root)
 
-        # Track nodes by level to manage the structure and prevent imbalance
-        level_nodes = {0: [root]}
-
-        # Create remaining nodes and build the tree
-        for node_id in range(1, nwsize):
-            # Determine the level for the new node
-            level = min(levels - 1, node_id // (nwsize // levels) + 1)
-            
-            # Compute power and memory decrease as the level increases
-            compute_power = levels - level
-            memore = levels - level
-
-            # Create the new node
-            new_node = Node(id=node_id, compute_power=compute_power, memory=memore)
-
-            # Ensure level-specific nodes exist in the dictionary
-            if level not in level_nodes:
-                level_nodes[level] = []
-            
-            # Randomly choose the number of parents between 1 and max_parents
-            num_parents = random.randint(1,max_parents)
-                
-            # Randomly choose parents from the previous level
-            parent_nodes = random.sample(level_nodes[level - 1], min(len(level_nodes[level - 1]), num_parents))
-
-            # Set parents and add the new node to each parent's list of children
-            for parent_node in parent_nodes:
-                new_node.Parent.append(parent_node)
-                parent_node.Child.append(new_node)
-
-
-            # Add new node to the list and to the level-specific tracking
-            nw.append(new_node)
-            level_nodes[level].append(new_node)
-
-        # Assign event rates to leaf nodes and initialize non-leaf nodes with empty event rates
-        for node in nw:
-            if len(node.Child) == 0:
-   
-                evtrate = generate_events(eventrates, node_event_ratio)
-
-                # with open('PrimitiveEvents', 'wb') as f:
-                #     pickle.dump(evtrate, f)
-                node.eventrates = evtrate
-            else:
-                node.eventrates = [0] * len(eventrates)
-                
-        eventrates_df = pd.DataFrame([node.eventrates for node in nw if len(node.Child) == 0])
-          # Check if any column (representing an event) has only 0
-        for column in eventrates_df.columns:
-            if eventrates_df[column].sum() == 0:
-                # Select a random leaf node and assign the eventrate from eventrates array
-                # print(f"Assigning eventrate to a random leaf node {column}")
-                random_leaf_node = random.choice([node for node in nw if len(node.Child) == 0])
-                #print(random_leaf_node)
-                random_leaf_node.eventrates[column] = eventrates[column]
-        print(eventrates)
-        for column in eventrates_df.columns:
-            if eventrates_df[column].sum() == 0:
-                print("Still 0 ")
-        # post_order_sum_events(root)
-        return root, nw
+def _assign_event_rates(nodes, eventrates, node_event_ratio):
+    """Assign event rates to nodes in the network.
+    
+    Leaf nodes get randomly generated event rates, while non-leaf nodes start with
+    event rates of 0. Also ensures every event type has at least one producer.
+    
+    Args:
+        nodes: List of all nodes in the network
+        eventrates: List of event rates for each event type
+        node_event_ratio: Probability of a node generating an event
+    """
+    # Identify leaf nodes (nodes with no children)
+    leaf_nodes = [node for node in nodes if len(node.Child) == 0]
+    
+    # Set up initial event rates
+    for node in nodes:
+        if node in leaf_nodes:
+            # Leaf nodes generate events
+            node.eventrates = generate_events(eventrates, node_event_ratio)
+        else:
+            # Non-leaf nodes start with zero event rates
+            node.eventrates = [0] * len(eventrates)
+    
+    # Check if any event type has no producer
+    event_sums = pd.DataFrame([node.eventrates for node in leaf_nodes])
+    
+    # For each event type with no producers, assign it to a random leaf node
+    for event_idx in event_sums.columns:
+        if event_sums[event_idx].sum() == 0:
+            random_leaf = random.choice(leaf_nodes)
+            random_leaf.eventrates[event_idx] = eventrates[event_idx]
