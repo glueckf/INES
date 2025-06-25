@@ -140,9 +140,17 @@ def populate_allPairs(graph: nx.digraph):
     myNodes = list(graph.nodes)
     allPairs = [[] for x in myNodes]
 
-    pool = multiprocessing.Pool()
-    result = pool.map(compute_distances_for_node, myNodes)
-    for i in result:
-        allPairs[i[0]] = i[1]
+    if __name__ == '__main__':
+        with multiprocessing.Pool() as pool:
+            result = pool.map(compute_distances_for_node, myNodes)
+            for i in result:
+                allPairs[i[0]] = i[1]
+    else:
+        # Fallback to single-threaded execution when not in main module
+        result = []
+        for node in myNodes:
+            result.append(compute_distances_for_node(node))
+        for i in result:
+            allPairs[i[0]] = i[1]
         
     return allPairs

@@ -6,6 +6,7 @@ from concurrent.futures import ProcessPoolExecutor
 import os
 import pandas as pd
 import sys
+import multiprocessing
 
 # logging.basicConfig(
 #     filename="simulation_errors.log",  # Save errors in a .log file
@@ -79,10 +80,11 @@ def start_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_par
         print(f"Results saved to: {file_name}")
 
 if __name__ == "__main__":
+    multiprocessing.set_start_method('spawn', force=True)  # Fix for macOS multiprocessing
    # start_simulation(12, 0.5, 6, 0.3, 10, 3, 5, 4)
     file_name = f"INES-simulation_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"  
     all_results = []
-    for i in range(100):
+    for i in range(1):
        
         result = run_simulation(12, 0.5, 6, 0.3, 10, 3, 5, i)
         all_results.append(result)

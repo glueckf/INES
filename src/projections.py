@@ -280,14 +280,25 @@ def fillMyMatrice(myNodes, myEdges, me):
            myDistances.append(len(nx.shortest_path(myG, me, j, method='dijkstra')) - 1)   
     return (me, myDistances)
 
-pool = multiprocessing.Pool()
+pool = None
 
 def fillMyDistMatrice(myG): #all pairs shortest path distance matrice -> also slow for big graphs
+    global pool
     myNodes = list(myG.nodes)
     myPairs = [[] for x in myNodes ]
     mytuple = (list(myNodes),list(myG.edges))
     args  = [(mytuple[0], mytuple[1], x) for x in myNodes ]
-    result = pool.starmap(fillMyMatrice, args)
+    
+    if __name__ == '__main__':
+        if pool is None:
+            pool = multiprocessing.Pool()
+        result = pool.starmap(fillMyMatrice, args)
+    else:
+        # Fallback to single-threaded execution when not in main module
+        result = []
+        for arg in args:
+            result.append(fillMyMatrice(*arg))
+    
     for i in result:
         myPairs.append(i[1])
     return myPairs
