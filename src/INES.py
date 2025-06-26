@@ -13,7 +13,6 @@ from helper.structures import getLongest
 from operatorplacement import calculate_operatorPlacement
 from generateEvalPlan import generate_eval_plan
 from prepp import generate_prePP
-import math
 
 
 class INES():
@@ -96,8 +95,8 @@ class INES():
         
         if use_deterministic_scenario:
             print(f"[INES] Configuration mode: Deterministic scenario (reproduces exact results)")
-            from thesis_contribution_fg.hardcoded_scenario import (create_hardcoded_network, create_hardcoded_queries,
-                                                                       get_hardcoded_eventrates, get_hardcoded_primitive_events)
+            from joint_optimization.hardcoded_topology.hardcoded_scenario import (create_hardcoded_network, create_hardcoded_queries,
+                                                                                      get_hardcoded_eventrates, get_hardcoded_primitive_events)
             
             # Use exact values from the successful simulation run
             print("[INES] Step 1/18: Loading deterministic event rates...")
@@ -160,7 +159,7 @@ class INES():
         # Step 7: Generate query workload
         print("[INES] Step 7/18: Generating query workload...")
         if use_deterministic_scenario:
-            from thesis_contribution_fg.hardcoded_scenario import create_hardcoded_queries
+            from joint_optimization.hardcoded_topology.hardcoded_scenario import create_hardcoded_queries
             self.query_workload = create_hardcoded_queries()
             print(f"[INES] Loaded deterministic workload with {len(self.query_workload)} queries:")
         else:

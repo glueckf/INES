@@ -368,7 +368,7 @@ def return_selectivity(self, proj):
 		""" return selectivity for arbitrary projection """
 		selectivities = self.selectivities
 		proj = list(map(lambda x: filter_numbers(x), proj))
-		two_temp = sbs.printcombination(proj,2)    
+		two_temp = sbs.generate_string_combinations(proj,2)
 		selectivity = 1
 		for two_s in two_temp:       
 			if two_s in selectivities.keys():           
@@ -384,7 +384,7 @@ def generate_projections(self,query):
 		match = query.leafs()
 		projlist = match
 		for i in range(2, len(match)):
-				iset =  sbs.boah(match, i) 
+				iset =  sbs.generate_csv_combinations(match, i)
 				for k in range(len(iset)):  
 							nseq_violated = False
 							curcom = list(iset[k].split(","))  

@@ -57,8 +57,8 @@ def processInstance(instance,forwardingDict):
 
 def getSelectionRate(projection, combination,selectivities):
     
-    subsProj = set(sbs.printcombination(projection.leafs(),2))
-    subsCombi = set(sum([sbs.printcombination(x.leafs(), 2) for x in combination if len(x)>1],[]))
+    subsProj = set(sbs.generate_string_combinations(projection.leafs(),2))
+    subsCombi = set(sum([sbs.generate_string_combinations(x.leafs(), 2) for x in combination if len(x)>1],[]))
     subsProj = subsProj.difference(subsCombi)    
     res = 1
     for i in [selectivities[x] for x in subsProj]:

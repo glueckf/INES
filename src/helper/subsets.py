@@ -57,19 +57,3 @@ def generate_csv_combinations(arr, r):
         generate_csv_combinations(['A', 'B', 'C'], 2) -> ['A,B', 'A,C', 'B,C']
     """
     return [','.join(combo) for combo in combinations(arr, r)]
-
-
-# Legacy function aliases for backward compatibility
-def printcombination(arr, i):
-    """Legacy function - use generate_string_combinations instead."""
-    return generate_string_combinations(arr, i)
-
-
-def printcombination2(arr, i):
-    """Legacy function - use generate_list_combinations instead."""
-    return generate_list_combinations(arr, i)
-
-
-def boah(arr, i):
-    """Legacy function - use generate_csv_combinations instead."""
-    return generate_csv_combinations(arr, i)

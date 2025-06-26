@@ -217,7 +217,7 @@ if __name__ == "__main__":
 
             # Validate results if in deterministic mode
             if DETERMINISTIC_MODE:
-                from thesis_contribution_fg.hardcoded_scenario import get_expected_results
+                from src.joint_optimization.hardcoded_topology.hardcoded_scenario import get_expected_results
 
                 expected = get_expected_results()
 
