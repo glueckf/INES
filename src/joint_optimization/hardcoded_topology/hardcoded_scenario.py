@@ -6,8 +6,8 @@ from the successful simulation run to ensure reproducible results for testing
 and demonstration purposes.
 """
 
-from Node import Node
-from helper.Tree import AND, SEQ, PrimEvent
+from ...Node import Node
+from ...helper.Tree import AND, SEQ, PrimEvent
 import math
 
 
