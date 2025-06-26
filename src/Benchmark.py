@@ -249,23 +249,3 @@ class INES():
         plt.title('Benchmark: Execution Time of Each Function')
         plt.tight_layout()
         plt.show()
-
-# my_ines = INES(12, 0.5, 6, 0.3, 4, 5, 10)
-# my_ines.plot_benchmark_times()
-
-# if __name__ == "__main__":
-#     all_function_times = {"Functions": [], "INEv": [], "PrePP": []}
-
-#     for i in range(2):
-#         print(f"🔁 Run {i+1}/{10}")
-#         try:
-#             my_ines = INES(70, 0.5, 6, 0.3, 10, 6, 8)
-#             all_function_times["Functions"].append(my_ines.function_times.get("Functions", 0))
-#             all_function_times["INEv"].append(my_ines.function_times.get("INEv", 0))
-#             all_function_times["PrePP"].append(my_ines.function_times.get("PrePP", 0))
-#         except Exception as e:
-#             print(f"❌ Run {i+1} failed: {e}")
-
-#     # Call avg plotting
-#     if 'my_ines':  # only if at least one run succeeded
-#         my_ines.avg_function_times(all_function_times)

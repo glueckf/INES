@@ -1,0 +1,11 @@
+.git
+.gitignore
+.idea/
+*.log
+**/__pycache__
+**/*.pyc
+.venv/
+src/.venv/
+docs/
+README.md
+error_log.txt

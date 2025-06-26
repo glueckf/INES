@@ -281,77 +281,6 @@ def NEWcomputeMSplacementCosts_Path(self, projection, sourcetypes, destinationty
             newInstances.append(myInstance) #!        
     return costs, longestPath, newInstances
 
-# def NEWcomputeMSplacementCosts(projection, sourcetypes, destinationtypes, noFilter): #we need tuples, (C, [E,A]) C should be sent to all e and a nodes ([D,E], [A]) d and e should be sent to all a nodes etc
-#     #print(projection, sourcetypes)
-
-    
-#     costs = 0
-#     destinationNodes = []     
-
-#     for etype in destinationtypes:
-#         for etb in IndexEventNodes[etype]:
-#             destinationNodes += getNodes(etb)
-            
-            
-#     newInstances = [] #!
-#     pathLength = 0        
-#     etype = sourcetypes[0]
-    
-#     f = open("msFilter.txt", "w")
-#     if etype in projFilterDict.keys() and getMaximalFilter(projFilterDict, etype, noFilter):
-#         print("hasFilter")
-#         f.write("VAR=true")
-#     else:        
-#         f.write("VAR=false")
-#     f.close()     
-        
-        
-#     for etb in IndexEventNodes[etype]: #parallelize 
-            
-       
-#             MydestinationNodes = list(set(destinationNodes).difference(set(getNodes(etb)))) #only consider nodes that do not already hold etb
-#             if MydestinationNodes: #are there ms nodes which did not receive etb before
-#                     node = findBestSource(getNodes(etb), MydestinationNodes) #best source is node closest to a node of destinationNodes
-#                     treenodes = copy.deepcopy(MydestinationNodes) 
-#                     treenodes.append(node)
-#                     from networkx.algorithms.approximation import steiner_tree
-#                     mytree = steiner_tree(G, treenodes)
-                    
-#                     myInstance = Instance(etype, etb, [node], {projection: list(mytree.edges)}) #! #append routing tree information for instance/etb                    
-#                     newInstances.append(myInstance) #!
-                    
-                    
-#                     myPathLength = max([len(nx.shortest_path(mytree, x, node, method='dijkstra')) for x in MydestinationNodes]) - 1
-                    
-                    
-#                     if etype in projFilterDict.keys() and  getMaximalFilter(projFilterDict, etype, noFilter): #case input projection has filter
-#                         mycosts =  len(mytree.edges()) * getDecomposedTotal(getMaximalFilter(projFilterDict, etype, noFilter), etype)                    
-#                         if len(IndexEventNodes[etype]) > 1 : # filtered projection has ms placement
-#                              partType = returnPartitioning(etype, mycombi[etype])[0]                     
-#                              mycosts -= len(mytree.edges())  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] * len(IndexEventNodes[etype])
-#                              mycosts += len(mytree.edges())  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] 
-#                     elif len(etype) == 1:
-#                         mycosts = len(mytree.edges()) * rates[etype]
-#                     else:                    
-#                         num = NumETBsByKey(etb, etype)                 
-#                         mycosts = len(mytree.edges()) *  projrates[etype][1] * num     # FILTER              
-                        
-#                     placementTreeDict[(tuple(destinationtypes),etb)] = [node, MydestinationNodes, mytree] #only kept for updating in the next step
-#                     costs +=  mycosts 
-                    
-#                     pathLength = max([pathLength, myPathLength])
-                    
-#                     # update events sent over network
-#                     for routingNode in mytree.nodes():
-#                         if not routingNode in getNodes(etb):
-#                             setEventNodes(routingNode, etb)
-    
-        
-#   # print(list(map(lambda x: str(x), sourcetypes)), costs)           
-#     return costs, pathLength, newInstances
-
-
-
 def findBestSource(self, sources, actualDestNodes): #this is only a heuristic, as the closest node can still be shit with respect to a good steiner tree ?+
     allPairs = self.allPairs
     curmin = np.inf     
@@ -537,5 +466,3 @@ def NEWcomputeCentralCosts(workload,IndexEventNodes,allPairs,rates,EventNodes,G)
                     #print(allPairs[node][mySource])
         #print(eventtype, thiscosts )    
     return (costs, node, longestPath, routingDict) 
-                    
-#TODO compute and print rates saved by placement

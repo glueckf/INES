@@ -1,0 +1,14 @@
+services:
+  ines-simulation:
+    build: .
+    container_name: ines-sim
+    volumes:
+      - ./src/res:/app/src/res
+      - ./logs:/app/src/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
