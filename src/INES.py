@@ -96,10 +96,10 @@ class INES():
         #This is important to variious files afterwards
         self.h_network_data,self.h_rates_data,self.h_primEvents,self.h_instances,self.h_nodes = initialize_globals(self.network)
         #print(f"DATA {self.h_network_data} and NETWORK {self.h_nodes}")
+        self.h_eventNodes,self.h_IndexEventNodes = initEventNodes(self.h_nodes,self.h_network_data)
         self.h_treeDict = treeDict(self.h_network_data, self.eList)
         #print(f"treeDict{self.h_treeDict}")
         self.graph = compressed_graph(self.graph, self.h_treeDict)
-        self.h_eventNodes,self.h_IndexEventNodes = initEventNodes(self.h_nodes,self.h_network_data)
         self.h_projlist,self.h_projrates,self.h_projsPerQuery,self.h_sharedProjectionsDict,self.h_sharedProjectionsList = generate_all_projections(self)
         self.h_projFilterDict = populate_projFilterDict(self)
         self.h_projFilterDict= removeFilters(self)
@@ -136,7 +136,7 @@ class INES():
 # )
 
 try:
-    my_ines = INES(20, 0.5, 6, 0.3, 4, 3, 5)
+    my_ines = INES(12, 0.5, 6, 0.3, 2, 3, 5)
 except Exception as e:
     error_message = f"❌ Exception: {str(e)}\n"
     print(error_message)  # Optional: also print to console
