@@ -17,26 +17,27 @@ from EvaluationPlan import Instance,Projection
 import numpy as np
 from helper.filter import getKeySingleSelect
 import networkx as nx
-from helper.structures import MSManageETBs
+from helper.structures import MSManageETBs, getETBs
 from networkx.algorithms.approximation import steiner_tree
 
-# def getFilters(self, projection, partType): # move to filter file eventually 
-#         IndexEventNodes = self.h_IndexEventNodes
-#         projrates = self.h_projrates
-#         totalETBs = 0
-#         for etb in IndexEventNodes[partType]: #for each multi-sink
+def getFilters(self, projection, partType): # move to filter file eventually 
+        IndexEventNodes = self.h_IndexEventNodes
+        projrates = self.h_projrates
+        eventNodes = self.h_eventNodes
+        totalETBs = 0
+        for etb in IndexEventNodes[partType]: #for each multi-sink
             
-#                 numETBs = 1
-#                 node = getNodes(etb)[0]        
-#                 myETBs = getETBs(node)       
-#                 if not set(IndexEventNodes[projection]).issubset(set(getETBs(node))): # it is  checked if the node already received all etbs of the projection, if this is the case its not necessary to reduce something here     
-#                     # jedes etb eines leaftypes von projection, aufsummieren, wenn von jedem mindestens 1 dann aufmultiplizieren und somit etbs ausrechnen und dann rate der etbs aufsummieren pro knoten
-#                     for primEvent in projection.leafs():
-#                         numETBs *= len(list(set(myETBs) & set(IndexEventNodes[primEvent])))
+                numETBs = 1
+                node = getNodes(etb, eventNodes, IndexEventNodes)[0]        
+                myETBs = getETBs(node, eventNodes,IndexEventNodes)       
+                if not set(IndexEventNodes[projection]).issubset(set(getETBs(node, eventNodes, IndexEventNodes))): # it is  checked if the node already received all etbs of the projection, if this is the case its not necessary to reduce something here     
+                    # jedes etb eines leaftypes von projection, aufsummieren, wenn von jedem mindestens 1 dann aufmultiplizieren und somit etbs ausrechnen und dann rate der etbs aufsummieren pro knoten
+                    for primEvent in projection.leafs():
+                        numETBs *= len(list(set(myETBs) & set(IndexEventNodes[primEvent])))
                        
-#                     totalETBs += numETBs
-#       #  print("AUTO FILTERS: " + str(totalETBs * projrates[projection][1]))    # if the projection is also input to another projection in the combination, it may also be the case that the nodes of the parttypes already received all instances of the projections, hence filters can't help anymore...
-#         return totalETBs * projrates[projection][1]
+                    totalETBs += numETBs
+      #  print("AUTO FILTERS: " + str(totalETBs * projrates[projection][1]))    # if the projection is also input to another projection in the combination, it may also be the case that the nodes of the parttypes already received all instances of the projections, hence filters can't help anymore...
+        return totalETBs * projrates[projection][1]
 
 def computeMSplacementCosts(self, projection, combination, partType, sharedDict, noFilter, G):
     #from allPairs import find_shortest_path_or_ancestor
@@ -62,8 +63,8 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
     
     automaticFilters = 0
     for proj in combination:
-        #if len(proj) > 1 and len(IndexEventNodes[proj]) == 1:     #here a node can only have already ALL events if the node is a sink for the projection, this case is however already covered in normal placement cost calculation
-            # automaticFilters +=  getFilters(proj, partType[0]) # TODO first version
+        if len(proj) > 1 and len(IndexEventNodes[proj]) == 1:     #here a node can only have already ALL events if the node is a sink for the projection, this case is however already covered in normal placement cost calculation
+            automaticFilters +=  getFilters(proj, partType[0]) # TODO first version
             
         intercombi.append(proj)
         if len(proj) > 1 and len(getMaximalFilter(projFilterDict, proj, noFilter)) > 0: # those are the extra events that need to be sent around due to filters
@@ -76,17 +77,29 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
   
     totalInstances = [] #!
     myNodes = []
-    valid_destinations = [node for node, neighbors in self.h_network_data.items() if not neighbors and self.network[node].computational_power >= projection.computing_requirements]
+    #valid_destinations = [node for node, neighbors in self.h_network_data.items() if not neighbors and self.network[node].computational_power >= projection.computing_requirements]
 
 
+    # for eventtype in mycombi.get(projection, []):
+    #     if eventtype not in IndexEventNodes:
+    #         continue
+    #     for etb in IndexEventNodes[eventtype]:
+    #         #candidate_nodes = getNodes(etb, eventNodes, IndexEventNodes)
+    #         for node in valid_destinations:
+    #             # if not G.nodes[node].get('relevant', False):  # Out of calculation if not relevant
+    #             #     continue
+    #             if self.network[node].computational_power >= projection.computing_requirements:
+    #                 myNodes.append(node)
+    #                 myNodes += getNodes(etb, eventNodes, IndexEventNodes)
+
+    # Remove duplicates
+    #myNodes = list(set(myNodes))
     for eventtype in mycombi.get(projection, []):
         if eventtype not in IndexEventNodes:
             continue
         for etb in IndexEventNodes[eventtype]:
-            #candidate_nodes = getNodes(etb, eventNodes, IndexEventNodes)
-            for node in valid_destinations:
-                # if not G.nodes[node].get('relevant', False):  # Out of calculation if not relevant
-                #     continue
+            candidates = getNodes(etb, eventNodes, IndexEventNodes)
+            for node in candidates:
                 if self.network[node].computational_power >= projection.computing_requirements:
                     myNodes.append(node)
 
@@ -483,8 +496,8 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
         
         mycosts = 0
         for eventtype in combination:
-                if not Graph.nodes[destination].get('relevant', False):  # Out of calculation if not relevant
-                    continue
+                # if not Graph.nodes[destination].get('relevant', False):  # Out of calculation if not relevant
+                #     continue
                 for etb in IndexEventNodes[eventtype]: #check for all sources #here iterated over length of IndesEventNodes to get all sources for etb Instances
                         
                         possibleSources = getNodes(etb,EventNodes,IndexEventNodes)

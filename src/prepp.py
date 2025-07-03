@@ -528,15 +528,32 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
                 select_split = line.split("SELECT")[1].split("FROM")
                 query = select_split[0].strip()  # Extract the query, it's the part between SELECT and FROM
                 
-                # Now split the line at "ON" to get the part with the node
-                on_split = line.split("ON")[1]
+                # # Now split the line at "ON" to get the part with the node
+                # on_split = line.split("ON")[1]
                 
-                # Extract the node(s), splitting by commas if there are multiple values
-                node_part = on_split.split("{")[1].split("}")[0].strip()
+                # # Extract the node(s), splitting by commas if there are multiple values
+                # node_part = on_split.split("{")[1].split("}")[0].strip()
                 
-                # Convert the node part into a list of integers (comma-separated values)
-                nodes = [int(n.strip()) for n in node_part.split(",")]
+                # # Convert the node part into a list of integers (comma-separated values)
+                # nodes = [int(n.strip()) for n in node_part.split(",")]
                 
+                # Debugging regarding errors in ms placement
+                try:
+                    on_split = line.split("ON", 1)[1]
+                    if "{" in on_split and "}" in on_split:
+                        node_part = on_split.split("{", 1)[1].split("}", 1)[0].strip()
+                        if node_part:
+                            nodes = [int(n.strip()) for n in node_part.split(",")]
+                        else:
+                            print(f"[Warning] Empty node block found in line: '{line}'")
+                            nodes = []
+                    else:
+                        print(f"[Warnung] No valid node block in '{{}}' found: '{on_split.strip()}'")
+                        nodes = []
+                except (IndexError, ValueError) as e:
+                    print(f"[Error] Parsing from line failed: '{line}' → {e}")
+                    nodes = []
+                    
                 # Store the query and the node(s) list in the dictionary
                 query_node_dict[query] = nodes
                 
