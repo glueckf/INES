@@ -77,23 +77,7 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
   
     totalInstances = [] #!
     myNodes = []
-    #valid_destinations = [node for node, neighbors in self.h_network_data.items() if not neighbors and self.network[node].computational_power >= projection.computing_requirements]
-
-
-    # for eventtype in mycombi.get(projection, []):
-    #     if eventtype not in IndexEventNodes:
-    #         continue
-    #     for etb in IndexEventNodes[eventtype]:
-    #         #candidate_nodes = getNodes(etb, eventNodes, IndexEventNodes)
-    #         for node in valid_destinations:
-    #             # if not G.nodes[node].get('relevant', False):  # Out of calculation if not relevant
-    #             #     continue
-    #             if self.network[node].computational_power >= projection.computing_requirements:
-    #                 myNodes.append(node)
-    #                 myNodes += getNodes(etb, eventNodes, IndexEventNodes)
-
-    # Remove duplicates
-    #myNodes = list(set(myNodes))
+    
     for eventtype in mycombi.get(projection, []):
         if eventtype not in IndexEventNodes:
             continue
@@ -255,7 +239,7 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
 
             # pathlength and costs
             costs += mycosts
-            longestPath = max([longestPath, len(shortestPath)])
+            longestPath = max(longestPath, len(shortestPath) - 1)
 
             # Convert all elements of destinationtypes to tuples if they are lists
             hashable_etb = tuple(sorted(etb.items())) if isinstance(etb, dict) else etb
