@@ -175,7 +175,7 @@ def compressed_graph(G, eList):
     
     # add relevant nodes into the compressed graph list
     for nodes, etypes in eList.items():
-        if len(etypes) > 2:
+        if len(etypes) > 1:
             compList.append(nodes)
 
     compressed_nodes = sorted(set(compList))

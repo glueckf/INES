@@ -1,5 +1,5 @@
 from Node import Node
-from network import generate_eventrates, create_random_tree,generate_events, compressed_graph, treeDict
+from network import generate_eventrates, create_random_tree,generate_events#, compressed_graph, treeDict
 from graph import create_fog_graph
 from graph import draw_graph
 from allPairs import populate_allPairs
@@ -136,7 +136,7 @@ class INES():
 # )
 
 try:
-    my_ines = INES(12, 0.5, 6, 0.3, 2, 3, 5)
+    my_ines = INES(50, 0.5, 6, 1.3, 8, 3, 5)
 except Exception as e:
     error_message = f"❌ Exception: {str(e)}\n"
     print(error_message)  # Optional: also print to console

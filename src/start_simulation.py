@@ -85,13 +85,13 @@ if __name__ == "__main__":
     for i in range(100):
        
        # parallel laufen lassen
-        result = run_simulation(20, 0.5, 6, 0.3, 4, 3, 5, i)
+        result = run_simulation(50, 0.5, 8, 1.3, 8, 5, 5, i)
         all_results.append(result)
         
         if all_results:
             all_results = [result for result in all_results if result is not None]  # Remove failed runs
             final_df = pd.concat(all_results, ignore_index=True)
-           # final_df.to_csv(f"./res/{file_name}", index=False)
+            final_df.to_csv(f"./res/{file_name}", index=False)
             print(f"✅ Results saved to: {file_name}")
         else:
             print("Nothing found")
