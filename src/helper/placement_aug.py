@@ -162,6 +162,15 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
     placementTreeDict = self.h_placementTreeDict
     eventNodes = self.h_eventNodes
     
+
+    # Check filter
+    etype = sourcetypes[0]
+    with open("msFilter.txt", "w") as f:
+        if etype in projFilterDict and getMaximalFilter(projFilterDict, etype, noFilter):
+            f.write("VAR=true")
+        else:
+            f.write("VAR=false")
+
     # search valid sinks
     destinationtypes = [node for node, neighbors in self.h_network_data.items() if not neighbors and self.network[node].computational_power >= projection.computing_requirements]
 
@@ -189,66 +198,60 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
         if not skip:
             destinationNodes.append(destination)
 
-    # Check filter
-    etype = sourcetypes[0]
-    with open("msFilter.txt", "w") as f:
-        if etype in projFilterDict and getMaximalFilter(projFilterDict, etype, noFilter):
-            f.write("VAR=true")
-        else:
-            f.write("VAR=false")
 
     # Main logic: for all event types that belong to the projection
         # for eventtype in mycombi[projection]:
         #     if eventtype not in IndexEventNodes:  # Out of calculation if not relevant
         #             continue
-        for etb in IndexEventNodes[etype]:
-            currentSources = getNodes(etb, eventNodes, IndexEventNodes)
-            MydestinationNodes = list(set(destinationNodes) - set(currentSources))
+            for etb in IndexEventNodes[etype]:
+                currentSources = getNodes(etb, eventNodes, IndexEventNodes)
+                MydestinationNodes = list(set(destinationNodes) - set(currentSources))
 
-        for dest in MydestinationNodes:
-            if not currentSources:
-                continue
-            mySource = currentSources[0]
-            for source in currentSources:
-                if allPairs[dest][source] < allPairs[dest][mySource]:
-                    mySource = source
+                if MydestinationNodes:     
+                        for dest in MydestinationNodes:
+                            if not dest in getNodes(etb, eventNodes, IndexEventNodes): 
+                                mySource = currentSources[0]
+                            for source in currentSources:
+                                if allPairs[dest][source] < allPairs[dest][mySource]:
+                                    mySource = source
 
-            #node = findBestSource(self,mySource,dest)
-            shortestPath = find_shortest_path_or_ancestor(routingAlgo, mySource, dest)
-            if not shortestPath or not isinstance(shortestPath, list):
-                print(f"[Warning] No edge from {mySource} to {dest} for etb {etb}")
-                continue
+                                #node = findBestSource(self,mySource,dest)
+                                shortestPath = find_shortest_path_or_ancestor(routingAlgo, mySource, dest)
+                                if not shortestPath or not isinstance(shortestPath, list):
+                                    print(f"[Warning] No edge from {mySource} to {dest} for etb {etb}")
+                                    continue
 
-            edges = list(zip(shortestPath[:-1], shortestPath[1:]))
-            myInstance = Instance(etype, etb, [mySource], {projection: edges}) #! #append routing tree information for instance/etb  
-            newInstances.append(myInstance) #!
-            #print(f"[Tracking] send {etb} from {mySource} to {dest} over {shortestPath}")
+                                edges = list(zip(shortestPath[:-1], shortestPath[1:]))
+                                
+                                #print(f"[Tracking] send {etb} from {mySource} to {dest} over {shortestPath}")
 
-            # Cost calculation
-            if etype in projFilterDict.keys() and  getMaximalFilter(projFilterDict, etype, noFilter): #case input projection has filter
-                mycosts =  len(edges) * getDecomposedTotal(getMaximalFilter(projFilterDict, etype, noFilter), type)                    
-                if len(IndexEventNodes[etype]) > 1 : # filtered projection has ms placement
-                            partType = returnPartitioning(etype, mycombi[etype])[0]                     
-                            mycosts -= len(edges)  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] * len(IndexEventNodes[etype])
-                            mycosts += len(edges)  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] 
-            elif len(etype) == 1:
-                mycosts = len(edges) * rates[etype]
-            else:                                             
-                num = NumETBsByKey(etb, etype, IndexEventNodes)
-                mycosts = len(edges) *  projrates[etype][1] * num      # FILTER   
+                                # Cost calculation
+                                if etype in projFilterDict.keys() and  getMaximalFilter(projFilterDict, etype, noFilter): #case input projection has filter
+                                    mycosts =  len(edges) * getDecomposedTotal(getMaximalFilter(projFilterDict, etype, noFilter), type)                    
+                                    if len(IndexEventNodes[etype]) > 1 : # filtered projection has ms placement
+                                                partType = returnPartitioning(etype, mycombi[etype])[0]                     
+                                                mycosts -= len(edges)  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] * len(IndexEventNodes[etype])
+                                                mycosts += len(edges)  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] 
+                                elif len(etype) == 1:
+                                    mycosts = len(edges) * rates[etype]
+                                else:                                             
+                                    num = NumETBsByKey(etb, etype, IndexEventNodes)
+                                    mycosts = len(edges) *  projrates[etype][1] * num      # FILTER   
 
-            # pathlength and costs
-            costs += mycosts
-            longestPath = max(longestPath, len(shortestPath) - 1)
+                        # pathlength and costs
+                        costs += mycosts
+                        longestPath = max(longestPath, len(shortestPath) - 1)
 
-            # Convert all elements of destinationtypes to tuples if they are lists
-            hashable_etb = tuple(sorted(etb.items())) if isinstance(etb, dict) else etb
-            placementTreeDict[(destinationtypes_hashed, hashable_etb)] = [mySource, MydestinationNodes, shortestPath]
+                        # Convert all elements of destinationtypes to tuples if they are lists
+                        hashable_etb = tuple(sorted(etb.items())) if isinstance(etb, dict) else etb
+                        placementTreeDict[(destinationtypes_hashed, hashable_etb)] = [mySource, MydestinationNodes, shortestPath]
 
-            # update events sent over network
-            for routingNode in shortestPath:
-                if routingNode not in getNodes(etb, eventNodes, IndexEventNodes):
-                    setEventNodes(routingNode, etb, eventNodes, IndexEventNodes)
+                        # update events sent over network
+                        for routingNode in shortestPath:
+                            if routingNode not in getNodes(etb, eventNodes, IndexEventNodes):
+                                setEventNodes(routingNode, etb, eventNodes, IndexEventNodes)
+                        myInstance = Instance(etype, etb, [mySource], {projection: edges}) #! #append routing tree information for instance/etb  
+                        newInstances.append(myInstance) #!
 
     if destinationNodes:
         sink_node = destinationNodes[0]
