@@ -128,7 +128,7 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
     for sink in myNodes:
         if self.network[sink].computational_power >= projection.computing_requirements:
             myProjection.sinks.append(sink)
-            self.network[sink].computational_power -= projection.computing_requirements
+            #self.network[sink].computational_power -= projection.computing_requirements
             
             # if G is not None and G.has_node(sink):
             #     G.nodes[sink]['relevant'] = True
@@ -181,7 +181,7 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
     destinationNodes = []
     for destination in destinationtypes:
         skip = False    # Flag to determine if we should skip this destination
-        for etype in mycombi[projection]:
+        for etype in mycombi.get(projection,[]):
             # if eventtype not in IndexEventNodes:
             #     continue
             for etb in IndexEventNodes.get(etype,[]):
@@ -200,10 +200,10 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
 
 
     # Main logic: for all event types that belong to the projection
-        # for eventtype in mycombi[projection]:
-        #     if eventtype not in IndexEventNodes:  # Out of calculation if not relevant
-        #             continue
-            for etb in IndexEventNodes[etype]:
+    # for etype in mycombi[projection]:
+    #         if etype not in IndexEventNodes:  # Out of calculation if not relevant
+    #                 continue
+            for etb in IndexEventNodes.get(etype,[]):
                 currentSources = getNodes(etb, eventNodes, IndexEventNodes)
                 MydestinationNodes = list(set(destinationNodes) - set(currentSources))
 
@@ -511,8 +511,8 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter,projFilterDict,
     myProjection.addSinks(node) #!
 
     # Remove computational power of sink for next iteration
-    if network[node].computational_power >= projection.computing_requirements:
-        network[node].computational_power -= projection.computing_requirements
+    # if network[node].computational_power >= projection.computing_requirements:
+    #     network[node].computational_power -= projection.computing_requirements
 
     newInstances = [] #!
     # Update Event Node Matrice, by adding events etbs sent to node through node x to events of node x
