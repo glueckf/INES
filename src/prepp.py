@@ -722,10 +722,11 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
                 print("Exact network costs:", exact_costs)
                 all_exact_costs += exact_costs
                 print("Exact Average:", all_exact_costs/idx)
-                if central_push_costs == 0:
-                    print("[Warnung] Zentrale Push-Kosten sind 0! Division übersprungen.")
-                else:
-                    print("Exact Average Transmission Ratio:", (all_exact_costs/idx) / central_push_costs)
+
+                endTransmissionRatio = (all_exact_costs/idx) / central_push_costs
+                print("Exact Average Transmission Ratio:", endTransmissionRatio)
+                    
+
                 #print("Exact Average Transsmission Ratio:", (all_exact_costs/idx) / central_push_costs)
                 if exact_costs < exact_best_generated_costs:
                     exact_best_generated_costs = exact_costs
@@ -749,4 +750,5 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
     exact_cost = sum(exact_costs_avg) / len(exact_costs_avg)
     pushPullTime = total_time
     maxPushPullLatency = max_latency
-    return [exact_cost,pushPullTime,maxPushPullLatency]
+
+    return [exact_cost,pushPullTime,maxPushPullLatency, endTransmissionRatio]

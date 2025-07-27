@@ -81,7 +81,7 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
     for eventtype in mycombi.get(projection, []):
         if eventtype not in IndexEventNodes:
             continue
-        for etb in IndexEventNodes[partType[0]]:
+        for etb in IndexEventNodes[eventtype]:
             candidates = getNodes(etb, eventNodes, IndexEventNodes)
             for node in candidates:
                 if self.network[node].computational_power >= projection.computing_requirements:
@@ -96,17 +96,17 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
         myNodes = [0]
 
         
-    myProjection = Projection(projection, {}, nodes[partType[0]], [], Filters) #!
+    myProjection = Projection(projection, {}, myNodes, [], Filters) #!
     for myInput in combination:
             if not partType[0] == myInput:
                     if myInput in sharedDict.keys():                         
                         #result = NEWcomputeMSplacementCosts_Path(projection, [myInput], sharedDict[myInput], noFilter)
-                        result = NEWcomputeMSplacementCosts(self, projection, [myInput], sharedDict[myInput], noFilter,self.graph)
+                        result = NEWcomputeMSplacementCosts(self, projection, [myInput], sharedDict[myInput], noFilter,G)
                         costs +=  result[0] #fix SharedDict with Filter Inputs
                         
                     else:
                         #result = NEWcomputeMSplacementCosts_Path(projection, [myInput],  partType[0], noFilter) 
-                        result = NEWcomputeMSplacementCosts(self, projection, [myInput],  partType[0], noFilter, self.graph) 
+                        result = NEWcomputeMSplacementCosts(self, projection, [myInput],  partType[0], noFilter, G) 
 
                         costs +=  result[0]
                     if result[1] > myPathLength:
@@ -124,15 +124,15 @@ def computeMSplacementCosts(self, projection, combination, partType, sharedDict,
     
     spawnedInstances = IndexEventNodes[projection]
     myProjection.addSpawned(spawnedInstances)
-    myProjection.sinks = []
-    for sink in myNodes:
-        if self.network[sink].computational_power >= projection.computing_requirements:
-            myProjection.sinks.append(sink)
-            #self.network[sink].computational_power -= projection.computing_requirements
+    # myProjection.sinks = []
+    # for sink in myNodes:
+    #     if self.network[sink].computational_power >= projection.computing_requirements:
+    #         myProjection.sinks.append(sink)
+    #         #self.network[sink].computational_power -= projection.computing_requirements
             
-            # if G is not None and G.has_node(sink):
-            #     G.nodes[sink]['relevant'] = True
-            print(f"[Placement] Projection {projection} assigned to Node {sink}, remaining power: {self.network[sink].computational_power}")
+    #         # if G is not None and G.has_node(sink):
+    #         #     G.nodes[sink]['relevant'] = True
+    #         print(f"[Placement] Projection {projection} assigned to Node {sink}, remaining power: {self.network[sink].computational_power}")
 
     
     
@@ -161,6 +161,7 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
     rates = self.h_rates_data
     placementTreeDict = self.h_placementTreeDict
     eventNodes = self.h_eventNodes
+    routingInfo = []
     
 
     # Check filter
@@ -197,13 +198,15 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
                 break  # Break out of the eventtype loop
         if not skip:
             destinationNodes.append(destination)
-
+            if skip:
+                break
 
     # Main logic: for all event types that belong to the projection
-    # for etype in mycombi[projection]:
-    #         if etype not in IndexEventNodes:  # Out of calculation if not relevant
-    #                 continue
-            for etb in IndexEventNodes.get(etype,[]):
+    # for etype in mycombi.get(projection,[]):
+        if etype not in IndexEventNodes:  # Out of calculation if not relevant
+            continue
+    for etb in IndexEventNodes.get(etype,[]):
+                newInstance = False
                 currentSources = getNodes(etb, eventNodes, IndexEventNodes)
                 MydestinationNodes = list(set(destinationNodes) - set(currentSources))
 
@@ -245,13 +248,17 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
                         # Convert all elements of destinationtypes to tuples if they are lists
                         hashable_etb = tuple(sorted(etb.items())) if isinstance(etb, dict) else etb
                         placementTreeDict[(destinationtypes_hashed, hashable_etb)] = [mySource, MydestinationNodes, shortestPath]
+                        routingInfo.append(shortestPath)
 
                         # update events sent over network
                         for routingNode in shortestPath:
                             if routingNode not in getNodes(etb, eventNodes, IndexEventNodes):
                                 setEventNodes(routingNode, etb, eventNodes, IndexEventNodes)
-                        myInstance = Instance(etype, etb, [mySource], {projection: edges}) #! #append routing tree information for instance/etb  
-                        newInstances.append(myInstance) #!
+                        newInstance = True
+
+                if newInstance:      
+                    myInstance = Instance(etype, etb, [mySource], {projection: routingInfo}) #! #append routing tree information for instance/etb  
+                    newInstances.append(myInstance) #!
 
     if destinationNodes:
         sink_node = destinationNodes[0]
