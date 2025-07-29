@@ -230,16 +230,16 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
 
                                 # Cost calculation
                                 if etype in projFilterDict.keys() and  getMaximalFilter(projFilterDict, etype, noFilter): #case input projection has filter
-                                    mycosts =  len(edges) * getDecomposedTotal(getMaximalFilter(projFilterDict, etype, noFilter), type)                    
+                                    mycosts =  allPairs[dest][mySource] * getDecomposedTotal(getMaximalFilter(projFilterDict, etype, noFilter), type)                    
                                     if len(IndexEventNodes[etype]) > 1 : # filtered projection has ms placement
                                                 partType = returnPartitioning(etype, mycombi[etype])[0]                     
-                                                mycosts -= len(edges)  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] * len(IndexEventNodes[etype])
-                                                mycosts += len(edges)  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] 
+                                                mycosts -= allPairs[dest][mySource]  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] * len(IndexEventNodes[etype])
+                                                mycosts += allPairs[dest][mySource]  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] 
                                 elif len(etype) == 1:
-                                    mycosts = len(edges) * rates[etype]
+                                    mycosts = allPairs[dest][mySource] * rates[etype]
                                 else:                                             
                                     num = NumETBsByKey(etb, etype, IndexEventNodes)
-                                    mycosts = len(edges) *  projrates[etype][1] * num      # FILTER   
+                                    mycosts = allPairs[dest][mySource] *  projrates[etype][1] * num      # FILTER   
 
                         # pathlength and costs
                         costs += mycosts
