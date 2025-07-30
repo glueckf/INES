@@ -188,9 +188,8 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
             for etb in IndexEventNodes.get(etype,[]):
                 possibleSources = getNodes(etb, eventNodes, IndexEventNodes)
                 for source in possibleSources:
-                    # Use the routing_dict to get the common ancestor
+                    # Use the routing_dict to get the common ancesto
                     common_ancestor = routingDict[destination][source]['common_ancestor']
-                   #destinationNodes.append(destination)
                     if common_ancestor != destination:
                         skip = True
                         break
@@ -198,11 +197,11 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
                     break  # Break out of the etb loop
             if skip: 
                 break  # Break out of the eventtype loop
-        if not skip:
-            destinationNodes.append(destination)
+        if skip:
             continue
+        destinationNodes.append(destination)
     
-        mycosts = 0
+    mycosts = 0
         # Main logic: for all event types that belong to the projection
         #for etype in mycombi.get(projection,[]):
                 # if etype not in IndexEventNodes:  # Out of calculation if not relevant
@@ -214,7 +213,7 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
             if MydestinationNodes:     
                     for dest in MydestinationNodes:
                         if not dest in getNodes(etb, eventNodes, IndexEventNodes): 
-                            node.append(dest)
+                            #node.append(destinationNodes)
                             mySource = currentSources[0]
                             for source in currentSources:
                                 if allPairs[dest][source] < allPairs[dest][mySource]:
@@ -251,7 +250,8 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
         #     costs += mycosts
     #costs += mycosts
     #desti = dest
-    node.append(dest)
+    for de in destinationNodes:
+        node.append(de)
     for n in node:
         myProjection.addSinks(n)
     
