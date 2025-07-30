@@ -251,7 +251,7 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
         #     costs += mycosts
     #costs += mycosts
     #desti = dest
-    node = list(set(node))
+    node.append(dest)
     for n in node:
         myProjection.addSinks(n)
     
@@ -260,6 +260,11 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
     for etype in mycombi.get(projection, []):
             curInstances = [] #!
             for etb in IndexEventNodes[etype]:
+                # MydestinationNodes = list(set(destinationNodes) - set(currentSources))
+                # if MydestinationNodes:     
+                #         for dest in MydestinationNodes:
+                #             if not dest in getNodes(etb, eventNodes, IndexEventNodes):
+                #                  continue
                 possibleSources = getNodes(etb, eventNodes, IndexEventNodes)
                 mySource = possibleSources[0] #??
                 for source in possibleSources:                    
