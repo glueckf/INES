@@ -201,46 +201,47 @@ def NEWcomputeMSplacementCosts(self, projection, sourcetypes, destinationtypes, 
             continue
         destinationNodes.append(destination)
     
-    mycosts = 0
-        # Main logic: for all event types that belong to the projection
-        #for etype in mycombi.get(projection,[]):
-                # if etype not in IndexEventNodes:  # Out of calculation if not relevant
-                #     continue
-    for etb in IndexEventNodes.get(etype,[]):
-            newInstance = False
-            currentSources = getNodes(etb, eventNodes, IndexEventNodes)
-            MydestinationNodes = list(set(destinationNodes) - set(currentSources))
-            if MydestinationNodes:     
-                    for dest in MydestinationNodes:
-                        if not dest in getNodes(etb, eventNodes, IndexEventNodes): 
-                            #node.append(destinationNodes)
-                            mySource = currentSources[0]
-                            for source in currentSources:
-                                if allPairs[dest][source] < allPairs[dest][mySource]:
-                                    mySource = source
-                            #node = findBestSource(self,mySource,dest)
-                            # shortestPath = find_shortest_path_or_ancestor(routingAlgo, mySource, dest)
-                            # if not shortestPath or not isinstance(shortestPath, list):
-                            #     print(f"[Warning] No edge from {mySource} to {dest} for etb {etb}")
-                            #     continue
-                            # edges = list(zip(shortestPath[:-1], shortestPath[1:]))
-                                    
-                                    #print(f"[Tracking] send {etb} from {mySource} to {dest} over {shortestPath}")
-                                    # Cost calculation
-                            if etype in projFilterDict.keys() and  getMaximalFilter(projFilterDict, etype, noFilter): #case input projection has filter
-                                mycosts =  allPairs[dest][mySource] * getDecomposedTotal(getMaximalFilter(projFilterDict, etype, noFilter), type)                    
-                                if len(IndexEventNodes[etype]) > 1 : # filtered projection has ms placement
-                                            partType = returnPartitioning(etype, mycombi[etype])[0]                     
-                                            mycosts -= allPairs[dest][mySource]  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] * len(IndexEventNodes[etype])
-                                            mycosts += allPairs[dest][mySource]  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] 
-                            elif len(etype) == 1:
-                                mycosts = allPairs[dest][mySource] * rates[etype]
-                            else:                                             
-                                num = NumETBsByKey(etb, etype, IndexEventNodes)
-                                mycosts = allPairs[dest][mySource] *  projrates[etype][1] * num      # FILTER   
-                                                # pathlength and costs
-                                    #print(mycosts)
-    #costs += mycosts
+        mycosts = 0
+            # Main logic: for all event types that belong to the projection
+    for etype in mycombi.get(projection,[]):
+            # if etype not in IndexEventNodes:  # Out of calculation if not relevant
+            #     continue
+            for etb in IndexEventNodes.get(etype,[]):
+                    newInstance = False
+                    currentSources = getNodes(etb, eventNodes, IndexEventNodes)
+                    MydestinationNodes = list(set(destinationNodes) - set(currentSources))
+                    if MydestinationNodes:     
+                            for dest in MydestinationNodes:
+                                if not dest in getNodes(etb, eventNodes, IndexEventNodes): 
+                                    #node.append(destinationNodes)
+                                    mySource = currentSources[0]
+                                    for source in currentSources:
+                                        if allPairs[dest][source] < allPairs[dest][mySource]:
+                                            mySource = source
+                                    #node = findBestSource(self,mySource,dest)
+                                    # shortestPath = find_shortest_path_or_ancestor(routingAlgo, mySource, dest)
+                                    # if not shortestPath or not isinstance(shortestPath, list):
+                                    #     print(f"[Warning] No edge from {mySource} to {dest} for etb {etb}")
+                                    #     continue
+                                    # edges = list(zip(shortestPath[:-1], shortestPath[1:]))
+                                            
+                                            #print(f"[Tracking] send {etb} from {mySource} to {dest} over {shortestPath}")
+                                            # Cost calculation
+                                    if etype in projFilterDict.keys() and  getMaximalFilter(projFilterDict, etype, noFilter): #case input projection has filter
+                                        mycosts =  allPairs[dest][mySource] * getDecomposedTotal(getMaximalFilter(projFilterDict, etype, noFilter), type)                    
+                                        if len(IndexEventNodes[etype]) > 1 : # filtered projection has ms placement
+                                                    partType = returnPartitioning(etype, mycombi[etype])[0]                     
+                                                    mycosts -= allPairs[dest][mySource]  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] * len(IndexEventNodes[etype])
+                                                    mycosts += allPairs[dest][mySource]  * rates[partType] * singleSelectivities[getKeySingleSelect(partType, etype)] 
+                                    elif len(etype) == 1:
+                                        mycosts = allPairs[dest][mySource] * rates[etype]
+                                    else:                                             
+                                        num = NumETBsByKey(etb, etype, IndexEventNodes)
+                                        mycosts = allPairs[dest][mySource] *  projrates[etype][1] * num      # FILTER   
+                                                        # pathlength and costs
+                                            #print(mycosts)
+            #costs += mycosts
+            if MydestinationNodes:
                     costs += mycosts
         #print(mycosts)
         # if mycosts < costs and mycosts != 0:
