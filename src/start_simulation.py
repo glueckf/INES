@@ -1,97 +1,151 @@
-from INES import INES
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, List
 import traceback
 import logging
-from datetime import datetime
-from concurrent.futures import ProcessPoolExecutor
-import os
 import pandas as pd
-import sys
 
-# logging.basicConfig(
-#     filename="simulation_errors.log",  # Save errors in a .log file
-#     level=logging.ERROR,
-#     format="%(asctime)s - %(levelname)s - %(message)s"
-# )
+from INES import INES, SimulationConfig, SimulationMode
 
-def run_simulation(nodes,node_event_ratio,num_eventtypes,eventskew,max_parents,query_size,query_length,run):
-    
-    log_file_name = f"simulation_{os.getpid()}.log"  # Unique log per process
-    sys.stdout = open(log_file_name, "a")  # Redirect stdout
-    
-    run_timestamp = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-    log_separator = f"\n{'='*40}\nSimulation Run #{run} - {run_timestamp}\n{'='*40}\n"
-    
-    print(f"\n==== Simulation Run {run} Started ====\n")
-    sys.stdout.flush()  # Force immediate write
-    try:
-        print(f"\n==== Initaiting Run {run} Started ====\n")
-        simulation = INES(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length)
-        sys.stdout.flush()
-        return pd.DataFrame([simulation.results], columns=simulation.schema)  # Convert results to DataFrame
 
-    except Exception as e:
-        error_message = f"❌ Exception: {str(e)}\n{traceback.format_exc()}"
-        log_file_name = f"simulation_errors_{os.getpid()}.log"
-        print(error_message)
-        sys.stdout.flush()
-        # Log with a separator for each simulation run
-        with open(log_file_name, "a") as log_file:
-            log_file.write(log_separator)
-            log_file.write(error_message)
+@dataclass
+class SimulationRunner:
+    """Configuration and execution class for running multiple INES simulations."""
+    
+    config: SimulationConfig
+    num_runs: int = 1
+    output_dir: Path = Path("./res")
+    
+    def __post_init__(self):
+        """Initialize output directory if it doesn't exist."""
+        self.output_dir.mkdir(exist_ok=True)
+    
+    def run_single_simulation(self, run_id: int) -> Optional[pd.DataFrame]:
+        """
+        Execute a single simulation run.
         
-        print(f"Error in simulation run {run} logged.")
+        Args:
+            run_id: Unique identifier for this simulation run
+            
+        Returns:
+            DataFrame containing simulation results, or None if simulation failed
+        """
+        try:
+            print(f"[SIMULATION] Run {run_id + 1}/{self.num_runs} started")
+            simulation = INES(self.config)
+            return pd.DataFrame([simulation.results], columns=simulation.schema)
+            
+        except Exception as e:
+            error_message = f"Exception in run {run_id}: {str(e)}\n{traceback.format_exc()}"
+            print(f"[ERROR] {error_message}")
+            return None
     
-        return None
+    def run_simulation_batch(self) -> None:
+        """
+        Execute multiple simulation runs and save results to CSV.
+        
+        Runs simulations sequentially to avoid multiprocessing complexities.
+        Results are aggregated and saved to a timestamped CSV file.
+        """
+        timestamp = datetime.now().strftime("%d%m%Y%H%M%S")
+        filename = f"INES-simulation_{timestamp}.csv"
+        filepath = self.output_dir / filename
+        
+        print(f"[INES] Starting {self.num_runs} simulation runs...")
+        print(f"[CONFIG] Mode: {self.config.mode.value}")
+        print(f"[CONFIG] Network size: {self.config.network_size}")
+        print(f"[CONFIG] Query parameters: size={self.config.query_size}, length={self.config.query_length}")
+        
+        successful_results: List[pd.DataFrame] = []
+        
+        for run_id in range(self.num_runs):
+            result = self.run_single_simulation(run_id)
+            if result is not None:
+                successful_results.append(result)
+        
+        self._save_results(successful_results, filepath)
+    
+    def _save_results(self, results: List[pd.DataFrame], filepath: Path) -> None:
+        """
+        Save aggregated results to CSV file.
+        
+        Args:
+            results: List of DataFrames containing simulation results
+            filepath: Path where results should be saved
+        """
+        if not results:
+            print("[RESULTS] Warning: No successful runs to save")
+            return
+            
+        final_df = pd.concat(results, ignore_index=True)
+        final_df.to_csv(filepath, index=False)
+        print(f"[RESULTS] {len(results)} successful runs saved to: {filepath.name}")
+        
+        if len(results) < self.num_runs:
+            failed_runs = self.num_runs - len(results)
+            print(f"[RESULTS] Warning: {failed_runs} run(s) failed")
 
 
-def start_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length, runs):
-    """Runs multiple simulations in parallel."""
-    file_name = f"INES-simulation_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"
-    result = run_simulation(nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length,0)
-    print(result)
-    all_results = []
+def create_simulation_runner(
+    network_size: int = 12,
+    node_event_ratio: float = 0.5,
+    num_event_types: int = 6,
+    event_skew: float = 0.3,
+    max_parents: int = 10,
+    query_size: int = 3,
+    query_length: int = 5,
+    num_runs: int = 1,
+    mode: SimulationMode = SimulationMode.FULLY_DETERMINISTIC
+) -> SimulationRunner:
+    """
+    Create a SimulationRunner with the specified parameters.
+    
+    Args:
+        network_size: Number of nodes in the network topology
+        node_event_ratio: Ratio of nodes that generate events
+        num_event_types: Number of different event types
+        event_skew: Skewness parameter for event distribution
+        max_parents: Maximum number of parent nodes per node
+        query_size: Number of queries in the workload
+        query_length: Average length of each query
+        num_runs: Number of simulation runs to execute
+        mode: Simulation mode determining what components are fixed/random
+        
+    Returns:
+        Configured SimulationRunner instance
+    """
+    config = SimulationConfig(
+        network_size=network_size,
+        node_event_ratio=node_event_ratio,
+        num_event_types=num_event_types,
+        event_skew=event_skew,
+        max_parents=max_parents,
+        query_size=query_size,
+        query_length=query_length,
+        mode=mode
+    )
+    
+    return SimulationRunner(config=config, num_runs=num_runs)
 
-    with ProcessPoolExecutor(max_workers=4) as executor:  # Adjust max_workers as needed
-        futures = [
-            executor.submit(run_simulation, nodes, node_event_ratio, num_eventtypes, eventskew, max_parents, query_size, query_length, run)
-            for run in range(runs)
-        ]
 
-        for future in futures:
-            print(f"🔄 Checking result for run {future}")
-            sys.stdout.flush()  # Ensure logs are visible
+def main() -> None:
+    """Main entry point for simulation execution."""
+    runner = create_simulation_runner(
+        network_size=12,
+        node_event_ratio=0.5,
+        num_event_types=6,
+        event_skew=0.3,
+        max_parents=10,
+        query_size=3,
+        query_length=5,
+        num_runs=10,
+        mode=SimulationMode.FULLY_DETERMINISTIC
+    )
+    
+    runner.run_simulation_batch()
+    print("[INES] Simulation completed successfully")
 
-            try:
-                result = future.result(timeout=300)  # Set timeout to avoid infinite wait
-                if result is not None:
-                    all_results.append(result)
-            except Exception as e:
-                print(f"⚠️ Error in process: {e}")
-            except TimeoutError:
-                print(f"⏳ Timeout! Process took too long.")
-
-
-    # Combine all DataFrames and write to CSV
-    if all_results:
-        all_results = [result for result in all_results if result is not None]  # Remove failed runs
-        final_df = pd.concat(all_results, ignore_index=True)
-        final_df.to_csv(f"./res/{file_name}", index=False)
-        print(f"Results saved to: {file_name}")
 
 if __name__ == "__main__":
-   # start_simulation(12, 0.5, 6, 0.3, 10, 3, 5, 4)
-    file_name = f"INES-simulation_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"  
-    all_results = []
-    for i in range(100):
-       
-       # parallel laufen lassen
-        result = run_simulation(50, 0.5, 8, 1.3, 8, 5, 5, i)
-        all_results.append(result)
-        
-        if all_results:
-            all_results = [result for result in all_results if result is not None]  # Remove failed runs
-            final_df = pd.concat(all_results, ignore_index=True)
-            final_df.to_csv(f"./res/{file_name}", index=False)
-            print(f"✅ Results saved to: {file_name}")
-        else:
-            print("Nothing found")
+    main()

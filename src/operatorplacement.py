@@ -1,4 +1,4 @@
-from helper.placement_aug import NEWcomputeCentralCosts,ComputeSingleSinkPlacement, computeMSplacementCosts
+from helper.placement_aug import NEWcomputeCentralCosts,ComputeSingleSinkPlacement, computeMSplacementCosts, compute_operator_placement_with_prepp
 from helper.processCombination_aug import compute_dependencies, getSharedMSinput
 import time
 import csv
@@ -70,16 +70,15 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     filename = file_path
     number_parents = max_parents
 
-    print(filename)
-    print("Here")
-    print(IndexEventNodes)
+    print(f"[PLACEMENT] Processing file: {filename}")
+    print(f"[PLACEMENT] Index Event Nodes: {IndexEventNodes}")
     ccosts = NEWcomputeCentralCosts(wl,IndexEventNodes,allPairs,rates,EventNodes,self.graph)
     #print("central costs : " + str(ccosts))
     centralHopLatency = max(allPairs[ccosts[1]])
     numberHops = sum(allPairs[ccosts[1]])
-    print("centralCosts: " + str(ccosts[0]))
-    print("Central Hops: " + str(numberHops))
-    print("central Hop Latency: " + str(centralHopLatency))
+    print(f"[CENTRAL COSTS] Cost: {ccosts[0]:.2f}")
+    print(f"[CENTRAL COSTS] Total Hops: {numberHops}")
+    print(f"[CENTRAL COSTS] Hop Latency: {centralHopLatency:.2f}")
     MSPlacements = {}
     curcosts = 1 
     start_time = time.time()
@@ -101,11 +100,13 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     unfolded = self.h_mycombi
     criticalMSTypes = self.h_criticalMSTypes
     sharedDict = getSharedMSinput(self, unfolded, projFilterDict)
-    print(unfolded)
-    print(criticalMSTypes)
+    # print(f"[MS PLACEMENT] Unfolded projections: {unfolded}")
+    # print(f"[MS PLACEMENT] Critical MS types: {criticalMSTypes}")
     dependencies = compute_dependencies(self,unfolded,criticalMSTypes)
     processingOrder = sorted(dependencies.keys(), key = lambda x : dependencies[x] ) # unfolded enthält kombi   
     costs = 0
+
+    central_eval_plan = [ccosts[1], ccosts[3], wl]
 
     for projection in processingOrder:  #parallelize computation for all projections at the same level
             if set(unfolded[projection]) == set(projection.leafs()): #initialize hop latency with maximum of children
@@ -116,9 +117,11 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
           
             #partType = returnPartitioning(self,projection, unfolded[projection], self.h_projrates,criticalMSTypes)
 
-            #ComputeMSPlacement
-            partType,_,_ = returnPartitioning(self, projection, unfolded[projection], projrates ,criticalMSTypes)
-            if partType : 
+            # ComputeMSPlacement
+            # TODO: Currntly leave out MS placement for integrated approach, as it is not yet implemented
+            # partType,_,_ = returnPartitioning(self, projection, unfolded[projection], projrates ,criticalMSTypes)
+            partType = False
+            if partType:
                 MSPlacements[projection] = partType
                 result = computeMSplacementCosts(self, projection, unfolded[projection], partType, sharedDict, noFilter, G)
                 # if not result:
@@ -145,7 +148,7 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
 
                 Filters += result[4]
                 #if partType, and projection in wl and partType kleene component of projection, add sink
-                print("MS " + str(projection) + " At: " + str(partType) + " For: " + str(projection)+ " PC: " + str(additional) + " Hops:" + str(result[1]))
+                # print(f"[MS PLACEMENT] {projection} → Node: {partType}, Cost: {additional:.2f}, Hops: {result[1]}")
 
 
                 if projection.get_original(wl) in wl and partType[0] in list(map(lambda x: str(x), projection.get_original(wl).kleene_components())):
@@ -154,10 +157,28 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
                     result = ComputeSingleSinkPlacement(projection.get_original(wl), [projection], noFilter)
                     additional = result[0]
                     costs += additional
-                    print("SiS Sink for Kleene:" + " At: " + str(partType) + str(projection.get_original(wl)) + " PC: " + str(additional) + " Hops:" + str(result[1]))
+                    # print(f"[SiS KLEENE] Sink at {partType}{projection.get_original(wl)}, Cost: {additional:.2f}, Hops: {result[1]}")
 
-            else: 
+            else:
+                # INFO: ComputeSingleSinkPlacement is called for the sequential approach.
+                # Implementing a new function for the integrated approach
                 result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter,projFilterDict,EventNodes,IndexEventNodes,self.h_network_data,allPairs,mycombi,rates,singleSelectivities,projrates,self.graph,self.network)
+                # compute_operator_placement_with_prepp(
+                #     self,
+                #     projection,
+                #     unfolded[projection],
+                #     noFilter,
+                #     projFilterDict,
+                #     EventNodes,
+                #     IndexEventNodes,
+                #     self.h_network_data,
+                #     allPairs, mycombi,
+                #     rates,
+                #     singleSelectivities,
+                #     projrates,
+                #     G,
+                #     network,
+                #     central_eval_plan)
                 additional = result[0]
                 costs += additional
                 hopLatency[projection] += result[2]
@@ -169,35 +190,35 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
                 myPlan.updateInstances(result[4]) #! update instances
                 Filters += result[5]
 
-                print("SiS " + str(projection) + " At: " + str(partType) + "PC: " + str(additional) + " Hops: " + str(result[2]))
+                # print(f"[SiS PLACEMENT] {projection} → Node: {partType}, Cost: {additional:.2f}, Hops: {result[2]}")
                 
     mycosts = costs/ccosts[0]
-    print("INEv Transmission with MS " + str(costs) )
+    print(f"[TRANSMISSION] INES with MS - Total Cost: {costs:.2f}")
     if len(wl)>1 or wl[0].hasKleene() or wl[0].hasNegation():
         lowerBound = 0
     else:
       for query in wl:
         lowerBound= getLowerBound(query,self)
-    print("Lower Bound: " + str(lowerBound / ccosts[0]))
+    print(f"[BOUNDS] Lower Bound Ratio: {lowerBound / ccosts[0]:.4f}")
 
-    print("Transmission Ratio: " + str(mycosts))
+    print(f"[TRANSMISSION] Ratio: {mycosts:.4f}")
     #print("INEv Depth: " + str(float(max(list(dependencies.values()))+1)/2))
     
     ID = int(np.random.uniform(0,10000000))
     
     totaltime = str(round(time.time() - start_time, 2))
 
-    print("Printing execution times")
-    print(start_time)
-    print(time.time())
-    print("Finished in " + totaltime + " seconds")
+    print(f"[TIMING] Execution Summary:")
+    print(f"[TIMING] Start: {start_time:.2f}")
+    print(f"[TIMING] End: {time.time():.2f}")
+    print(f"[TIMING] Duration: {totaltime} seconds")
     
             
       
                       
     ID = int(np.random.uniform(0,10000000))
     
-    print(dependencies)
+    print(f"[DEPENDENCIES] Final dependencies: {dependencies}")
     #hoplatency = max([hopLatency[x] for x in hopLatency.keys()])   
     if dependencies:
         max_dependency = float(max(list(dependencies.values())) / 2)
@@ -222,6 +243,5 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
     #with open('EvaluationPlan',  'wb') as EvaluationPlan_file:
        # pickle.dump([myPlan, ID, MSPlacements], EvaluationPlan_file)
     eval_Plan = [myPlan, ID, MSPlacements]
-    central_eval_plan = [ccosts[1],ccosts[3], wl]
     experiment_result = [ID,costs]
     return eval_Plan,central_eval_plan,experiment_result,myResult

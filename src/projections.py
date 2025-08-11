@@ -210,7 +210,7 @@ def minimum_subgraph(G, nodes_list):
                     
                 except nx.NetworkXNoPath:
                     # If there's no path to node 0, raise an exception or handle as needed
-                    print(f"Neither {source} nor {target} has a path to node 0, which shouldn't happen in our topology.")
+                    print(f"[TOPOLOGY ERROR] Neither {source} nor {target} can reach node 0 - topology issue detected")
     
     # Create the subgraph from the collected edges
     subgraph = G.edge_subgraph(subgraph_edges).copy()
@@ -222,6 +222,18 @@ def NEW_isPartitioning(self ,element, combi, proj,projrates:dict):
 	''' returns true if element partitioning input of proj generated with combi '''
 	MSTrees  = {}
 	DistMatrices =  {}
+
+	# Debug fix, because for fixed workload, an error occurs.
+	# Check if MSTrees and DistMatrices are initialized
+	if not hasattr(self, 'MSTrees'):
+		self.MSTrees= {}
+	if not hasattr(self, 'DistMatrices'):
+		self.DistMatrices = {}
+
+	# Assigning to the instance attributes
+	MSTrees = self.MSTrees
+	DistMatrices = self.DistMatrices
+
 	rates = self.h_rates_data
 	nodes = self.h_nodes
 	wl = self.query_workload
@@ -280,16 +292,22 @@ def fillMyMatrice(myNodes, myEdges, me):
            myDistances.append(len(nx.shortest_path(myG, me, j, method='dijkstra')) - 1)   
     return (me, myDistances)
 
-pool = multiprocessing.Pool()
 
 def fillMyDistMatrice(myG): #all pairs shortest path distance matrice -> also slow for big graphs
     myNodes = list(myG.nodes)
     myPairs = [[] for x in myNodes ]
     mytuple = (list(myNodes),list(myG.edges))
     args  = [(mytuple[0], mytuple[1], x) for x in myNodes ]
-    result = pool.starmap(fillMyMatrice, args)
-    for i in result:
-        myPairs.append(i[1])
+    if __name__ == '__main__':
+        with multiprocessing.Pool() as pool:
+            result = pool.starmap(fillMyMatrice, args)
+        for i in result:
+            myPairs.append(i[1])
+    else:
+        # Run sequentially when imported as module to avoid multiprocessing issues
+        for nodes_arg, edges_arg, node in args:
+            result = fillMyMatrice(nodes_arg, edges_arg, node)
+            myPairs.append(result[1])
     return myPairs
 
 
@@ -331,20 +349,32 @@ def totalRate(self, projection, projrates: dict):
     nodes = self.h_nodes
     IndexEventNodes = self.h_IndexEventNodes
 
-    print("Current projrates:", projrates)
-    print("Type of projection:", type(projection), "Value:", projection)
+    # print("Current projrates:", projrates)
+    # print("Type of projection:", type(projection), "Value:", projection)
 
     # Catch the problematic case early
     if isinstance(projection, list):
-        print("⚠️ WARNING: projection is a LIST here! Investigating...")
+        # print("[WARNING] Projection is unexpectedly a LIST - investigating...")
         import traceback
         traceback.print_stack()  # Print the call stack to see where this was called
 
     if projection in projrates.keys():  # is complex event
-        return projrates[projection][1] * getNumETBs(projection,IndexEventNodes)
+        try:
+            return projrates[projection][1] * getNumETBs(projection,IndexEventNodes)
+        except KeyError as e:
+            # print(f"[ERROR] KeyError accessing projrates['{projection}']. Available keys: {list(projrates.keys())}")
+            # print(f"[DEBUG] projection type: {type(projection)}, len: {len(str(projection))}")
+            raise e
     
     elif len(projection) == 1:
-        return rates[str(projection)] * len(nodes[str(projection)])
+        proj_str = str(projection)
+        if proj_str not in rates:
+            # print(f"[ERROR] Projection '{proj_str}' not found in rates. Available rates: {list(rates.keys())}")
+            return 0  # or some default value
+        if proj_str not in nodes:
+            # print(f"[ERROR] Projection '{proj_str}' not found in nodes. Available nodes: {list(nodes.keys())}")
+            return 0  # or some default value
+        return rates[proj_str] * len(nodes[proj_str])
     else:
         outrate = projection.evaluate() * getNumETBs(projection,IndexEventNodes)
         selectivity = return_selectivity(projection.leafs())

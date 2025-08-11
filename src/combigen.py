@@ -149,37 +149,37 @@ def getSavings(self,partType, combination, projection,DistMatrices,MSTrees): #OP
     longestPath = self.h_longestPath
     wl = self.query_workload
 
-    # Debug partType
-    print(f"getSavings called with partType: {partType}")
-
-    # Debug MSTrees lookup
-    if partType not in MSTrees:
-        print(f"❌ KeyError: partType '{partType}' not found in MSTrees keys: {list(MSTrees.keys())}")
-    else:
-        print(f"✅ Found partType '{partType}' in MSTrees")
-
-    # Debug DistMatrices lookup
-    if partType in MSTrees and MSTrees[partType] not in DistMatrices:
-        print(f"❌ KeyError: MSTrees[{partType}] -> '{MSTrees[partType]}' not found in DistMatrices keys: {list(DistMatrices.keys())}")
-    else:
-        print(f"✅ Found MSTrees[{partType}] in DistMatrices")
+    # # Debug partType
+    # print(f"[SAVINGS] Calculating savings for partType: {partType}")
+    #
+    # # Debug MSTrees lookup
+    # if partType not in MSTrees:
+    #     print(f"[ERROR] PartType '{partType}' not found in MSTrees. Available: {list(MSTrees.keys())}")
+    # else:
+    #     print(f"[DEBUG] PartType '{partType}' found in MSTrees")
+    #
+    # # Debug DistMatrices lookup
+    # if partType in MSTrees and MSTrees[partType] not in DistMatrices:
+    #     print(f"[ERROR] MSTrees[{partType}] -> '{MSTrees[partType]}' not found in DistMatrices. Available: {list(DistMatrices.keys())}")
+    # else:
+    #     print(f"[DEBUG] MSTrees[{partType}] found in DistMatrices")
 
     # Debug projection.get_original(wl)
     proj_original = projection.get_original(wl)
-    if proj_original not in wl:
-        print(f"⚠️ Warning: Projection '{proj_original}' not found in workload (wl)")
+    # if proj_original not in wl:
+    #     print(f"[WARNING] Projection '{proj_original}' not found in workload")
 
     # Debug totalRate calls
     try:
         rate = totalRate(self, partType, self.h_projrates)
     except KeyError as e:
-        print(f"❌ KeyError in totalRate: {e}")
-        print(f"Available projrates keys: {list(self.h_projrates.keys())}")
+        print(f"[ERROR] KeyError in totalRate: {e}")
+        print(f"[DEBUG] Available projrates keys: {list(self.h_projrates.keys())}")
 
     try:
         opt_rate = optimisticTotalRate(self,projection)
     except KeyError as e:
-        print(f"❌ KeyError in optimisticTotalRate: {e}")
+        print(f"[ERROR] KeyError in optimisticTotalRate: {e}")
 
     #TODO: it is not totalRate but only local Rate that we save for PartType
     if projection.get_original(wl) not in wl: #some intermediate projection
@@ -208,8 +208,6 @@ def getBestChainCombis(self,query, shared, criticalMSTypes, noFilter):
             else:
                 costs = sum(list(map(lambda x: totalRate(self,x,self.h_projrates), projection.leafs()))) * longestPath
                 combiDict[projection] = (projection.leafs(), [], 0 - costs)
-                    
-    
     for projection in sorted([x for x in myprojlist if len(x.leafs()) > 2], key = lambda x: len(x.leafs())):  # returns combination, that has only one input projection, the rest are primitive event types
             mycosts = 0
             for eventtype in myMSDict.keys():           
@@ -234,7 +232,7 @@ def getBestChainCombis(self,query, shared, criticalMSTypes, noFilter):
                                            
            
             mylist = [x for x in myprojlist if len(x.leafs()) < len(projection.leafs()) and set(x.leafs()).issubset(projection.leafs())]     
-            getBestTreeCombiRec(self,longestPath,query, projection, mylist, [], 0, shared , criticalMSTypes,DistMatrices,MSTrees)
+            getBestTreeCombiRec(self,longestPath,query, projection, mylist, [], 0, shared , criticalMSTypes, DistMatrices, MSTrees)
 
     return combiDict
 
@@ -421,9 +419,9 @@ def globalPartitioningOK(self, projection, combination,longestPath,MSTrees):    
         
         myMSDict[etype] = [x for x in ancestors if combiDict[x][1] and etype in combiDict[x][1]]
         myInputs = [x for x in list(set(sum([combiDict[y][0] for y in myMSDict[etype]],[]))) if not x == etype]
-        mycosts = sum(map(lambda x: totalRate(x), myInputs)) * len(MSTrees[etype].edges())
+        mycosts = sum(map(lambda x: totalRate(self, x, self.h_projrates), myInputs)) * len(MSTrees[etype].edges())
         
-        if longestPath * totalRate(etype) < mycosts:
+        if longestPath * totalRate(self, etype, self.h_projrates) < mycosts:
             additionalCriticals.append(etype)
        
     return additionalCriticals        
@@ -452,7 +450,7 @@ def outRateHigh(self, projection):
     combiDict = self.h_combiDict
     combi = combiDict[projection][0]
     partType = returnPartitioning(projection, combiDict[projection][0])
-    outRate = totalRate(projection) 
+    outRate = totalRate(self, projection, self.h_projrates) 
     return []
 
 def unfold_combi(self, query, combination): #unfolds a combination, however in the new version we will have only one combination which is provided in the same format as the unfolded dict

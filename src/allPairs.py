@@ -142,9 +142,15 @@ def populate_allPairs(graph: nx.digraph):
 
     args = [(routingDict, G, node) for node in myNodes]
 
-    pool = multiprocessing.Pool()
-    result = pool.starmap(compute_distances_for_node, args)
-    for i in result:
-        allPairs[i[0]] = i[1]
+    if __name__ == '__main__':
+        pool = multiprocessing.Pool()
+        result = pool.starmap(compute_distances_for_node, args)
+        for i in result:
+            allPairs[i[0]] = i[1]
+    else:
+        # Run sequentially when imported as module to avoid multiprocessing issues
+        for routingDict_arg, G_arg, node in args:
+            result = compute_distances_for_node(routingDict_arg, G_arg, node)
+            allPairs[result[0]] = result[1]
         
     return allPairs

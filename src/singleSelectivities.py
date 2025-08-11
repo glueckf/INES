@@ -263,7 +263,7 @@ def no_better_option_found_handling(query, upper_bounds_keys):
 
 
 
-def determine_randomized_single_selectivities_within_all_projections(query, upper_bounds_keys):  
+def determine_randomized_single_selectivities_within_all_projections(query, upper_bounds_keys, is_deterministic=False):  
     projection_selectivity = determine_total_query_selectivity(query)
     projection_outputrate = determine_total_query_outputrate(query)
     total_outputrate = projection_outputrate * projection_selectivity
@@ -287,7 +287,9 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
 
         current_idx = 0
         chosen_indices = [ele for ele in range(0,limit)]
-        random.shuffle(chosen_indices)
+        if not is_deterministic:
+            random.shuffle(chosen_indices)
+        # In deterministic mode, use indices in their natural order
 
         for n in range(0,len(chosen_indices)-1):
             if delta == 1000:
@@ -298,7 +300,12 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
             lower_bound = total_sel
             upper_bound = return_minimum_upper_bound(upper_bounds_keys, query[chosen_indices[n]])
             
-            first_n_random_values.append(random.uniform(lower_bound, upper_bound))
+            if is_deterministic:
+                # Use deterministic value: halfway between bounds
+                deterministic_value = (lower_bound + upper_bound) / 2.0
+                first_n_random_values.append(deterministic_value)
+            else:
+                first_n_random_values.append(random.uniform(lower_bound, upper_bound))
             product *= first_n_random_values[n]
         
         if total_sel/product <= 1.0:
@@ -401,7 +408,7 @@ def get_all_distinct_eventtypes_of_used_queries():
     return ''.join(sorted(total_list))
 
 
-def determine_all_single_selectivities_for_projection(projection):
+def determine_all_single_selectivities_for_projection(projection, is_deterministic=False):
     tmp = determine_all_primitive_events_of_projection(projection)
 
     global_total_query_length = len(tmp)
@@ -433,9 +440,9 @@ def determine_all_single_selectivities_for_projection(projection):
                 #determine all upper bounds of the previous length (e.g., AB, AC, for A in ABC)
                 upper_bound_keys = determine_next_smaller_dependencies(projection)
                 
-            determine_randomized_single_selectivities_within_all_projections(projection, upper_bound_keys)
+            determine_randomized_single_selectivities_within_all_projections(projection, upper_bound_keys, is_deterministic)
 
-def initializeSingleSelectivity(CURRENT_SECTION, config_single, workload):
+def initializeSingleSelectivity(CURRENT_SECTION, config_single, workload, is_deterministic=False):
 
 
     current_node = 0
@@ -483,6 +490,6 @@ def initializeSingleSelectivity(CURRENT_SECTION, config_single, workload):
     workload = [x.strip_NSEQ() for x in workload]
 
     for i in workload:
-        determine_all_single_selectivities_for_projection(str(i))
+        determine_all_single_selectivities_for_projection(str(i), is_deterministic)
     
     return single_selectivity_of_eventtype_within_projection
