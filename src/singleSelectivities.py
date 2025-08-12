@@ -184,7 +184,9 @@ def determine_total_query_outputrate(query):
 
 def extract_queries(line):
     if line != "queries" and len(line)>1:
-        queries_to_process.append(line[0:len(line)-1])
+        # Remove trailing newline/whitespace instead of just last character
+        clean_line = line.strip()
+        queries_to_process.append(clean_line)
         return line
 
     
