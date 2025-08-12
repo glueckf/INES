@@ -756,6 +756,9 @@ def compute_operator_placement_with_prepp(
         placement_state['routing_dict']
     )
 
+    # Reverse the order of the possible placement nodes to prioritize nodes closer to the source
+    possible_placement_nodes.reverse()
+
     for node in possible_placement_nodes:
 
         has_enough_resources = check_resources(node, projection, network, combination)
@@ -1246,46 +1249,7 @@ def calculate_prepp_costs_on_subgraph(self, node, subgraph, projection, central_
     print("Calculate prepp on subgraph")
 
     # Create evaluation plan for subgraph
-    subgraph_plan = EvaluationPlan([], [])
-    subgraph_plan.initInstances(subgraph['index_event_nodes_sub'])
-
-    # Create Projection with remapped sink node
-    remapped_node = subgraph['placement_node_remapped']
-    myProjection = Projection(name=projection, combination={}, sinks=[remapped_node], spawnedInstances=[], Filters=[])
-
-    for eventtype in projection.children:
-        curInstances = []  #!
-        for etb in subgraph['index_event_nodes_sub'][eventtype.evtype]:
-
-            possibleSources = getNodes(etb, subgraph['event_nodes_sub'], subgraph['index_event_nodes_sub'])
-            mySource = possibleSources[0]  #??
-            for source in possibleSources:
-                if subgraph['all_pairs_sub'][node][source] < subgraph['all_pairs_sub'][node][mySource]:
-                    mySource = source
-
-            shortestPath = find_shortest_path_or_ancestor(routingAlgo, mySource, node)
-
-            if len(shortestPath) - 1 > longestPath:
-                longestPath = len(shortestPath) - 1
-            newInstance = Instance(eventtype, etb, [mySource], {projection: shortestPath})  #!
-            curInstances.append(newInstance)  #!
-
-            for stop in shortestPath:
-                if not stop in getNodes(etb, EventNodes, IndexEventNodes):
-                    setEventNodes(stop, etb, EventNodes, IndexEventNodes)
-
-        newInstances += curInstances  #!
-        myProjection.addInstances(eventtype, curInstances)
-
-    # Add projection to subgraph plan
-    subgraph_plan.projections.append(myProjection)
-
-    # Generate selectivities for subgraph (simplified - using default values)
-    # In a real implementation, these should be extracted from the original selectivities
-    selectivities = {'AB': 0.5, 'BC': 0.5, 'AC': 0.5}  # Default selectivity values
-
-    # Create workload for this projection
-    workload = [projection]
+    subgraph_plan = central_eval_plan
 
     try:
         # Generate evaluation plan using existing function
