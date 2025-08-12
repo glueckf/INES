@@ -201,13 +201,13 @@ def generate_hardcoded_workload():
     # Query 2: Simple AND with shared elements - AND(A, B, D)
     q2 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
     q2 = number_children(q2)
-    queries.append(q2)
+    # queries.append(q2)
 
     # Query 3: Medium complexity - SEQ(A, B, AND(E, F))
     # Shares A, B with queries 1 and 2
     q3 = SEQ(PrimEvent('A'), PrimEvent('B'), AND(PrimEvent('E'), PrimEvent('F')))
     q3 = number_children(q3)
-    queries.append(q3)
+    # queries.append(q3)
 
     # Query 4: Complex nested - AND(SEQ(A, B, C), D, SEQ(E, F))
     # Shares SEQ(A, B, C) with query 1, and has synergy with query 3
@@ -215,7 +215,7 @@ def generate_hardcoded_workload():
              PrimEvent('D'),
              SEQ(PrimEvent('E'), PrimEvent('F')))
     q4 = number_children(q4)
-    queries.append(q4)
+    # queries.append(q4)
 
     return queries
 
@@ -265,7 +265,7 @@ def generate_hardcoded_primitive_events():
     """
     # Fixed primitive events distribution: A=1000, B=0, C=1000, D=0, E=0, F=0
     # This distribution is consistent with the hardcoded selectivities above
-    return [1000, 0, 1000, 0, 0, 0]
+    return [1000, 2, 45, 203, 800, 5]
 
 
 class INES():
@@ -379,7 +379,7 @@ class INES():
         # Add prepp results to complete the schema (4 additional columns)
         from generateEvalPlan import generate_eval_plan
         self.plan = generate_eval_plan(self.network, self.selectivities, self.eval_plan, self.central_eval_plan, self.query_workload)
-        prepp_results = generate_prePP(self.plan, 'ppmuse', 'e', 0, 0, 1, False, self.allPairs)
+        prepp_results = generate_prePP(self.plan, 'ppmuse', 'e', 1, 0, 1, True, self.allPairs)
         self.results += prepp_results
     
     def _initialize_network_topology(self):

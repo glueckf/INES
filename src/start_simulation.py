@@ -134,12 +134,12 @@ def main() -> None:
     runner = create_simulation_runner(
         network_size=12,
         node_event_ratio=0.5,
-        num_event_types=6,
+        num_event_types=3,
         event_skew=0.3,
         max_parents=10,
-        query_size=3,
-        query_length=5,
-        num_runs=10,
+        query_size=1,
+        query_length=3,
+        num_runs=1,
         mode=SimulationMode.FULLY_DETERMINISTIC
     )
     

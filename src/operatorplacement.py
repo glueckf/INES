@@ -183,25 +183,27 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
         else:
             # INFO: ComputeSingleSinkPlacement is called for the sequential approach.
             # Implementing a new function for the integrated approach
-            result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter, projFilterDict, EventNodes,
-                                                IndexEventNodes, self.h_network_data, allPairs, mycombi, rates,
-                                                singleSelectivities, projrates, self.graph, self.network)
-            # compute_operator_placement_with_prepp(
-            #     self,
-            #     projection,
-            #     unfolded[projection],
-            #     noFilter,
-            #     projFilterDict,
-            #     EventNodes,
-            #     IndexEventNodes,
-            #     self.h_network_data,
-            #     allPairs, mycombi,
-            #     rates,
-            #     singleSelectivities,
-            #     projrates,
-            #     G,
-            #     network,
-            #     central_eval_plan)
+            # result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter, projFilterDict, EventNodes,
+            #                                     IndexEventNodes, self.h_network_data, allPairs, mycombi, rates,
+            #                                     singleSelectivities, projrates, self.graph, self.network)
+            result = compute_operator_placement_with_prepp(
+                self,
+                projection,
+                unfolded[projection],
+                noFilter,
+                projFilterDict,
+                EventNodes,
+                IndexEventNodes,
+                self.h_network_data,
+                allPairs, mycombi,
+                rates,
+                singleSelectivities,
+                projrates,
+                G,
+                network,
+                central_eval_plan)
+
+            print(result)
             additional = result[0]
             costs += additional
             hopLatency[projection] += result[2]
