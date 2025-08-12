@@ -201,13 +201,13 @@ def generate_hardcoded_workload():
     # Query 2: Simple AND with shared elements - AND(A, B, D)
     q2 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
     q2 = number_children(q2)
-    # queries.append(q2)
+    queries.append(q2)
 
     # Query 3: Medium complexity - SEQ(A, B, AND(E, F))
     # Shares A, B with queries 1 and 2
     q3 = SEQ(PrimEvent('A'), PrimEvent('B'), AND(PrimEvent('E'), PrimEvent('F')))
     q3 = number_children(q3)
-    # queries.append(q3)
+    queries.append(q3)
 
     # Query 4: Complex nested - AND(SEQ(A, B, C), D, SEQ(E, F))
     # Shares SEQ(A, B, C) with query 1, and has synergy with query 3
@@ -215,7 +215,7 @@ def generate_hardcoded_workload():
              PrimEvent('D'),
              SEQ(PrimEvent('E'), PrimEvent('F')))
     q4 = number_children(q4)
-    # queries.append(q4)
+    queries.append(q4)
 
     return queries
 
