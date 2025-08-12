@@ -1,5 +1,4 @@
-from helper.placement_aug import NEWcomputeCentralCosts, ComputeSingleSinkPlacement, computeMSplacementCosts, \
-    compute_operator_placement_with_prepp
+from helper.placement_aug import NEWcomputeCentralCosts, ComputeSingleSinkPlacement, computeMSplacementCosts
 from helper.processCombination_aug import compute_dependencies, getSharedMSinput
 import time
 import csv
@@ -8,6 +7,7 @@ import argparse
 from EvaluationPlan import EvaluationPlan
 import numpy as np
 from projections import returnPartitioning, totalRate
+from placement_engine.core import compute_operator_placement_with_prepp
 
 
 #maxDist = max([max(x) for x in allPairs])
@@ -202,8 +202,8 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
                 G,
                 network,
                 central_eval_plan)
-
             print(result)
+            print("It should work now")
             additional = result[0]
             costs += additional
             hopLatency[projection] += result[2]

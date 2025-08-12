@@ -171,7 +171,11 @@ def compute_operator_placement_with_prepp(
         
         if best_decision:
             logger.info(f"Final placement decision: {best_decision}")
-            return best_decision
+            
+            # Convert to legacy format for backward compatibility
+            # Expected format: (costs, node, longestPath, myProjection, newInstances, Filters)
+            legacy_result = _convert_to_legacy_format(best_decision, placement_decisions)
+            return legacy_result
         else:
             logger.error("No valid placement found!")
             # Return a fallback decision or raise an exception
@@ -191,3 +195,47 @@ def compute_operator_placement_with_prepp(
         )
         
         return result
+
+
+def _convert_to_legacy_format(best_decision, placement_decisions):
+    """
+    Convert PlacementDecision to legacy tuple format for backward compatibility.
+    
+    Legacy format: (costs, node, longestPath, myProjection, newInstances, Filters)
+    
+    Args:
+        best_decision: PlacementDecision object
+        placement_decisions: PlacementDecisionTracker object
+        
+    Returns:
+        tuple: Legacy format tuple
+    """
+    from EvaluationPlan import Projection, Instance
+    
+    # Create minimal legacy structures
+    costs = best_decision.costs
+    node = best_decision.node
+    longestPath = 0  # Simplified - could be calculated from subgraph if needed
+    
+    # Use the original projection object as the name (from the tracker)
+    original_projection = placement_decisions.projection
+    
+    # Create a basic projection object with the original projection as name
+    myProjection = Projection(
+        name=original_projection,  # Use the original projection object, not a string
+        combination={},
+        sinks=[node],
+        spawnedInstances=[],
+        Filters=[]
+    )
+    
+    # Create empty instances list (simplified)
+    newInstances = []
+    
+    # Create empty filters list (simplified)
+    Filters = []
+    
+    logger = get_placement_logger(__name__)
+    logger.debug(f"Converting to legacy format: costs={costs}, node={node}, projection={original_projection}")
+    
+    return (costs, node, longestPath, myProjection, newInstances, Filters)
