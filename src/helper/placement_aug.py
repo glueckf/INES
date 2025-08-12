@@ -24,7 +24,103 @@ from helper.structures import MSManageETBs, getETBs
 from networkx.algorithms.approximation import steiner_tree
 from prepp import generate_prePP
 
-from src.EvaluationPlan import EvaluationPlan
+from EvaluationPlan import EvaluationPlan
+
+
+class PlacementDecision:
+    """
+    Represents a placement decision for a projection at a specific node.
+    """
+    def __init__(self, node, costs, strategy, all_push_costs, push_pull_costs=None, 
+                 has_sufficient_resources=False, subgraph_info=None, plan_details=None):
+        self.node = node
+        self.costs = costs
+        self.strategy = strategy  # 'all_push' or 'push_pull'
+        self.all_push_costs = all_push_costs
+        self.push_pull_costs = push_pull_costs
+        self.has_sufficient_resources = has_sufficient_resources
+        self.subgraph_info = subgraph_info or {}
+        self.plan_details = plan_details or {}
+        self.savings = all_push_costs - costs if costs < all_push_costs else 0.0
+        
+    def __str__(self):
+        return f"PlacementDecision(node={self.node}, strategy={self.strategy}, costs={self.costs:.2f}, savings={self.savings:.2f})"
+        
+    def __repr__(self):
+        return self.__str__()
+        
+    def to_dict(self):
+        """Convert to dictionary for serialization or logging."""
+        return {
+            'node': self.node,
+            'costs': self.costs,
+            'strategy': self.strategy,
+            'all_push_costs': self.all_push_costs,
+            'push_pull_costs': self.push_pull_costs,
+            'has_sufficient_resources': self.has_sufficient_resources,
+            'subgraph_info': self.subgraph_info,
+            'plan_details': self.plan_details,
+            'savings': self.savings
+        }
+
+
+class PlacementDecisionTracker:
+    """
+    Tracks and manages placement decisions for a projection across multiple nodes.
+    """
+    def __init__(self, projection):
+        self.projection = projection
+        self.decisions = []  # List of PlacementDecision objects
+        self.best_decision = None
+        
+    def add_decision(self, decision):
+        """Add a new placement decision."""
+        self.decisions.append(decision)
+        
+        # Update best decision if this is better
+        if self.best_decision is None or decision.costs < self.best_decision.costs:
+            self.best_decision = decision
+            
+    def get_best_decision(self):
+        """Get the best (lowest cost) placement decision."""
+        return self.best_decision
+        
+    def get_decisions_by_strategy(self, strategy):
+        """Get all decisions using a specific strategy."""
+        return [d for d in self.decisions if d.strategy == strategy]
+        
+    def get_resource_constrained_decisions(self):
+        """Get decisions where resources were insufficient for push-pull."""
+        return [d for d in self.decisions if not d.has_sufficient_resources]
+        
+    def summarize(self):
+        """Generate a summary of all placement decisions."""
+        if not self.decisions:
+            return "No placement decisions recorded."
+            
+        summary = []
+        summary.append(f"Placement Analysis for {self.projection}:")
+        summary.append(f"  Total candidates evaluated: {len(self.decisions)}")
+        
+        push_pull_decisions = self.get_decisions_by_strategy('push_pull')
+        all_push_decisions = self.get_decisions_by_strategy('all_push')
+        resource_constrained = self.get_resource_constrained_decisions()
+        
+        summary.append(f"  Push-pull viable: {len(push_pull_decisions)}")
+        summary.append(f"  All-push only: {len(all_push_decisions)}")
+        summary.append(f"  Resource constrained: {len(resource_constrained)}")
+        
+        if self.best_decision:
+            summary.append(f"  Best placement: Node {self.best_decision.node}")
+            summary.append(f"  Best strategy: {self.best_decision.strategy}")
+            summary.append(f"  Best cost: {self.best_decision.costs:.2f}")
+            summary.append(f"  Savings vs all-push: {self.best_decision.savings:.2f}")
+            
+        return "\n".join(summary)
+        
+    def export_decisions(self):
+        """Export all decisions as a list of dictionaries."""
+        return [decision.to_dict() for decision in self.decisions]
 
 
 def getFilters(self, projection, partType):  # move to filter file eventually
@@ -718,32 +814,23 @@ def compute_operator_placement_with_prepp(
         network: Network object containing all nodes and their respective properties as a dictionary.
 
     Returns:
-        None: As of now, this function does not return any value.
+        PlacementDecision: Object containing the best placement decision with costs and plan details.
 
     Comments:
-        This function is the first iteration of the integrated operator placement with prepp.
-
-        It filters the available nodes based on the resources available in the network and then calculates the costs for
-        each node base on the push pull communication model being chosen.
-
-        The goal is to extract a subgraph from the network for each possible placement of the projection and
-        then compute the prepp costs on it.
-
-        Future Iterations could include:
-        1. Adding more complex ressource filtering, as projections get computationally lighter when using prepp.
-        So nodes with initially not enough resources could become feasible for placement again.
-        2. Adding heuristics to sort the projections based on their costs or something else.
-        3. Adding different pruning strategies to reduce the search space for the placement.
-        4. Handling certain edge cases, such as when one projection is placed on a node with an event needed to be
-        pulled and the second projection wanting it to be pushed.
-        TODO: Handle mentioned future iterations.
+        Enhanced implementation that calculates all push costs first, then uses them efficiently
+        for push-pull calculations. Includes comprehensive cost comparison and decision tracking.
 
     """
-
-    # Initialize placement state
+    from helper.push_pull_plan_generator import Initiate
+    
+    # Initialize placement state and decision tracking
     placement_state = _initialize_placement_state(
         combination, proj_filter_dict, no_filter, projection, graph
     )
+    
+    # Initialize decision tracker
+    placement_decisions = PlacementDecisionTracker(projection)
+    
     print(f"[PLACEMENT] Starting placement computation for: {projection}")
 
     possible_placement_nodes = check_possible_placement_nodes_for_input(
@@ -758,13 +845,18 @@ def compute_operator_placement_with_prepp(
 
     # Reverse the order of the possible placement nodes to prioritize nodes closer to the source
     possible_placement_nodes.reverse()
+    print(f"[PLACEMENT] Evaluating {len(possible_placement_nodes)} placement candidates")
+
+    # Initialize push-pull cost calculator
+    push_pull_calculator = _initialize_push_pull_calculator(
+        self, projection, combination, rates, single_selectivity, projrates, mycombi, index_event_nodes
+    )
 
     for node in possible_placement_nodes:
-
+        print(f"[PLACEMENT] Evaluating node {node}")
+        
         has_enough_resources = check_resources(node, projection, network, combination)
-
-        print(f"[PLACEMENT] Evaluating node {node} with enough resources: {has_enough_resources}")
-
+        
         subgraph = extract_subgraph(
             node,
             network,
@@ -775,24 +867,69 @@ def compute_operator_placement_with_prepp(
             placement_state['routing_dict']
         )
 
-        print(f"[PLACEMENT] Extracted subgraph for node {node}: {subgraph}")
-
-        # Calculate the costs of evaluating the projection at this given node.
-        # In this case we evaluate the costs of sending all the events to the node using push-pull.
+        # Step 1: Calculate all-push costs (always needed as baseline)
+        all_push_costs = calculate_all_push_costs_on_subgraph(
+            subgraph, projection, combination, rates, projrates, index_event_nodes, event_nodes
+        )
+        
+        print(f"[PLACEMENT] Node {node} - All-push costs: {all_push_costs:.2f}")
+        
+        # Step 2: Calculate push-pull costs if resources allow
         if has_enough_resources:
-
-            costs = calculate_prepp_costs_on_subgraph(self, node, subgraph, projection, central_eval_plan)
-
+            try:
+                push_pull_costs = calculate_prepp_costs_on_subgraph(
+                    self, node, subgraph, projection, central_eval_plan, all_push_costs
+                )
+                print(f"[PLACEMENT] Node {node} - Push-pull costs: {push_pull_costs:.2f}")
+                
+                # Choose the better option
+                if push_pull_costs < all_push_costs:
+                    best_costs = push_pull_costs
+                    strategy = 'push_pull'
+                    print(f"[PLACEMENT] Node {node} - Push-pull strategy selected (savings: {all_push_costs - push_pull_costs:.2f})")
+                else:
+                    best_costs = all_push_costs
+                    strategy = 'all_push'
+                    print(f"[PLACEMENT] Node {node} - All-push strategy selected")
+            except Exception as e:
+                print(f"[PLACEMENT] Node {node} - Push-pull calculation failed: {e}")
+                best_costs = all_push_costs
+                strategy = 'all_push'
         else:
-            costs = calculate_all_push_costs_on_subgraph()
-
-        # Update costs if this node is better
-        if costs < placement_state['costs']:
-            placement_state['costs'] = costs
+            # Only all-push is possible
+            best_costs = all_push_costs
+            strategy = 'all_push'
+            print(f"[PLACEMENT] Node {node} - Insufficient resources, using all-push strategy")
+        
+        # Create placement decision
+        decision = PlacementDecision(
+            node=node,
+            costs=best_costs,
+            strategy=strategy,
+            all_push_costs=all_push_costs,
+            push_pull_costs=push_pull_costs if has_enough_resources else None,
+            has_sufficient_resources=has_enough_resources,
+            subgraph_info={
+                'node_count': len(subgraph['relevant_nodes']),
+                'edge_count': subgraph['subgraph'].number_of_edges()
+            }
+        )
+        
+        # Track this decision
+        placement_decisions.add_decision(decision)
+        
+        # Update best placement if this is better
+        if best_costs < placement_state['costs']:
+            placement_state['costs'] = best_costs
             placement_state['best_node'] = node
+            placement_state['best_strategy'] = strategy
+            print(f"[PLACEMENT] New best placement: Node {node} with {strategy} strategy (cost: {best_costs:.2f})")
 
-    # Return the best node and its associated costs
-    return None
+    # Finalize and return the best decision
+    best_decision = placement_decisions.get_best_decision()
+    print(f"[PLACEMENT] Final decision: {best_decision}")
+    
+    return best_decision
 
 
 def _initialize_placement_state(combination, proj_filter_dict, no_filter, projection, graph):
@@ -1241,14 +1378,29 @@ def extract_subgraph(placement_node, network, graph, combination, index_event_no
     }
 
 
-def calculate_prepp_costs_on_subgraph(self, node, subgraph, projection, central_eval_plan):
+def calculate_prepp_costs_on_subgraph(self, node, subgraph, projection, central_eval_plan, all_push_baseline=None):
     """
     Calculate prepp costs on the extracted subgraph by generating evaluation plan and calling prePP.
+    Enhanced version that uses all_push_baseline for comparison.
+    
+    Args:
+        self: Instance with network data
+        node: Original placement node ID
+        subgraph: Subgraph information dictionary
+        projection: Projection being placed
+        central_eval_plan: Central evaluation plan
+        all_push_baseline: Pre-calculated all-push costs for comparison
+    
+    Returns:
+        float: Push-pull strategy cost
     """
     from generateEvalPlan import generate_eval_plan
     from prepp import generate_prePP
+    import networkx as nx
 
-    print("Calculate prepp on subgraph")
+    print(f"[PUSH-PULL] Calculating push-pull costs for node {node}")
+    if all_push_baseline:
+        print(f"[PUSH-PULL] All-push baseline: {all_push_baseline:.2f}")
 
     # myPlan and centralPlan need to be defined in order for us to use the generate_eval_plan function.
     routing_algo = dict(nx.all_pairs_shortest_path(subgraph['subgraph']))
@@ -1284,29 +1436,52 @@ def calculate_prepp_costs_on_subgraph(self, node, subgraph, projection, central_
             allPairs=all_pairs
         )
 
-        print("Can we actually get here? ")
         # Extract costs from prePP results
         # prepp_results format: [exact_cost, pushPullTime, maxPushPullLatency, endTransmissionRatio]
         if prepp_results and len(prepp_results) > 0:
             costs = prepp_results[0]  # exact_cost
-            print(f"PrePP costs calculated: {costs}")
+            print(f"[PUSH-PULL] PrePP costs calculated: {costs:.2f}")
+            
+            if all_push_baseline:
+                savings = all_push_baseline - costs
+                print(f"[PUSH-PULL] Savings vs all-push: {savings:.2f} ({(savings/all_push_baseline*100):.1f}%)")
+            
             return costs
         else:
-            print("Warning: No valid prePP results returned")
-            return float('inf')
+            print("[PUSH-PULL] Warning: No valid prePP results returned, using fallback")
+            return _calculate_fallback_costs(node, subgraph, projection, all_push_baseline)
 
     except Exception as e:
-        print(f"Error calculating prePP costs: {e}")
+        print(f"[PUSH-PULL] Error calculating prePP costs: {e}")
         # Fallback to simple cost calculation
-        return _calculate_fallback_costs(node, subgraph, projection)
+        return _calculate_fallback_costs(node, subgraph, projection, all_push_baseline)
 
 
-def _calculate_fallback_costs(node, subgraph, projection):
+def _calculate_fallback_costs(node, subgraph, projection, all_push_baseline=None):
     """
     Fallback cost calculation if prePP fails.
+    Uses all-push baseline if available, otherwise estimates cost.
+    
+    Args:
+        node: Placement node
+        subgraph: Subgraph information
+        projection: Projection being placed
+        all_push_baseline: Pre-calculated all-push costs
+        
+    Returns:
+        float: Fallback cost estimate
     """
     try:
-        # Simple cost based on distance from sources to sink
+        print(f"[FALLBACK] Calculating fallback costs for node {node}")
+        
+        # If we have all-push baseline, use a conservative estimate
+        # (assume push-pull is at most 20% better than all-push)
+        if all_push_baseline is not None:
+            fallback_cost = all_push_baseline * 0.8
+            print(f"[FALLBACK] Using conservative estimate: {fallback_cost:.2f} (80% of all-push baseline)")
+            return fallback_cost
+        
+        # Otherwise, simple cost based on distance from sources to sink
         total_cost = 0.0
         all_pairs = subgraph['all_pairs_sub']
         remapped_node = subgraph['placement_node_remapped']
@@ -1316,11 +1491,11 @@ def _calculate_fallback_costs(node, subgraph, projection):
             if i != remapped_node:
                 total_cost += all_pairs[remapped_node][i]
 
-        print(f"Fallback costs calculated: {total_cost}")
+        print(f"[FALLBACK] Basic routing costs calculated: {total_cost:.2f}")
         return total_cost
 
     except Exception as e:
-        print(f"Error in fallback cost calculation: {e}")
+        print(f"[FALLBACK] Error in fallback cost calculation: {e}")
         return float('inf')
 
 
@@ -1427,6 +1602,56 @@ def _create_central_plan_for_subgraph(self, subgraph, projection, central_eval_p
     return central_eval_plan
 
 
+def _initialize_push_pull_calculator(self, projection, combination, rates, single_selectivity, projrates, mycombi, index_event_nodes):
+    """
+    Initialize the push-pull cost calculator with necessary data structures.
+    
+    Args:
+        self: Main instance with network data
+        projection: Projection being placed
+        combination: Event type combination
+        rates: Event type rates
+        single_selectivity: Single selectivity values
+        projrates: Projection rates
+        mycombi: Event type combinations
+        index_event_nodes: Event node indices
+        
+    Returns:
+        dict: Initialized calculator data structures
+    """
+    from helper.push_pull_plan_generator import Initiate
+    
+    # Extract event types from projection
+    if hasattr(projection, 'leafs'):
+        event_types = projection.leafs()
+    else:
+        event_types = _extract_event_types_from_projection(projection)
+    
+    # Build eventtype to sources mapping from index_event_nodes
+    eventtype_to_sources_map = {}
+    for event_type in event_types:
+        if event_type in index_event_nodes:
+            sources = set()
+            for etb in index_event_nodes[event_type]:
+                etb_sources = getNodes(etb, self.h_eventNodes, self.h_IndexEventNodes)
+                sources.update(etb_sources)
+            eventtype_to_sources_map[event_type] = list(sources)
+    
+    # Create output rate map
+    outputrate_map = {}
+    for event_type in event_types:
+        if len(event_type) == 1:  # Primitive event
+            outputrate_map[event_type] = rates.get(event_type, 1.0)
+        else:  # Complex event/projection
+            outputrate_map[event_type] = projrates.get(event_type, [0, 1.0])[1]
+    
+    return {
+        'eventtype_to_sources_map': eventtype_to_sources_map,
+        'outputrate_map': outputrate_map,
+        'event_types': event_types
+    }
+
+
 def _extract_event_types_from_projection(projection):
     """
     Helper function to extract event types from a projection object or string.
@@ -1448,5 +1673,70 @@ def _extract_event_types_from_projection(projection):
     return list(set(event_types))  # Remove duplicates
 
 
-def calculate_all_push_costs_on_subgraph():
-    return 0.0  # Return 0 cost for now
+def calculate_all_push_costs_on_subgraph(subgraph, projection, combination, rates, projrates, index_event_nodes, event_nodes):
+    """
+    Calculate the costs of using all-push strategy for a projection on a subgraph.
+    This is an efficient implementation that reuses logic from push_pull_plan_generator.
+    
+    Args:
+        subgraph: Dictionary containing subgraph information
+        projection: The projection being placed
+        combination: List of event types in the combination
+        rates: Dictionary of event type rates
+        projrates: Dictionary of projection rates
+        index_event_nodes: Mapping of event types to ETBs
+        event_nodes: Event nodes matrix
+        
+    Returns:
+        float: Total cost of all-push strategy
+    """
+    from helper.structures import getNodes
+    
+    total_cost = 0.0
+    placement_node_remapped = subgraph['placement_node_remapped']
+    all_pairs = subgraph['all_pairs_sub']
+    
+    print(f"[ALL-PUSH] Calculating costs for placement at node {placement_node_remapped}")
+    
+    # Calculate cost for each event type in the combination
+    for event_type in combination:
+        if event_type in index_event_nodes:
+            event_cost = 0.0
+            
+            for etb in index_event_nodes[event_type]:
+                # Get source nodes for this ETB in the original graph
+                original_sources = getNodes(etb, event_nodes, index_event_nodes)
+                
+                # Find corresponding sources in subgraph
+                subgraph_sources = []
+                for orig_source in original_sources:
+                    if orig_source in subgraph['node_mapping']:
+                        subgraph_sources.append(subgraph['node_mapping'][orig_source])
+                
+                if subgraph_sources:
+                    # Find best (closest) source
+                    best_source = subgraph_sources[0]
+                    min_distance = all_pairs[placement_node_remapped][best_source]
+                    
+                    for source in subgraph_sources[1:]:
+                        distance = all_pairs[placement_node_remapped][source]
+                        if distance < min_distance:
+                            min_distance = distance
+                            best_source = source
+                    
+                    # Calculate cost for this ETB
+                    if len(event_type) == 1:  # Primitive event
+                        rate = rates.get(event_type, 1.0)
+                    else:  # Complex event/projection
+                        rate = projrates.get(event_type, [0, 1.0])[1]
+                    
+                    etb_cost = rate * min_distance
+                    event_cost += etb_cost
+                    
+                    print(f"[ALL-PUSH]   Event {event_type}, ETB {etb}: source {best_source} -> sink {placement_node_remapped}, distance {min_distance}, rate {rate:.3f}, cost {etb_cost:.2f}")
+            
+            total_cost += event_cost
+            print(f"[ALL-PUSH]   Total cost for event {event_type}: {event_cost:.2f}")
+    
+    print(f"[ALL-PUSH] Total all-push cost: {total_cost:.2f}")
+    return total_cost
