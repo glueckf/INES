@@ -62,31 +62,73 @@ def check_possible_placement_nodes_for_input(projection: Any, combination: List[
 
             logger.debug(f"Processing event type: {eventtype}")
 
-            # Check all ETBs for this event type
-            for etb in index_event_nodes[eventtype]:
-                if skip_destination:
-                    break
+            # Handle Tree objects by getting their leaf events instead of treating them as single entities
+            if hasattr(eventtype, 'children') and hasattr(eventtype, 'leafs'):
+                # This is a Tree object (AND, SEQ, etc.), get its leaf events
+                leaf_events = eventtype.leafs()
+                logger.debug(f"Tree object {eventtype} has leaf events: {leaf_events}")
+                for leaf_event in leaf_events:
+                    if skip_destination:
+                        break
+                    logger.debug(f"Processing leaf event: {leaf_event}")
+                    # Check all ETBs for this leaf event type
+                    for etb in index_event_nodes[leaf_event]:
+                        if skip_destination:
+                            break
 
-                logger.debug(f"Analyzing ETB: {etb}")
-                possible_sources = getNodes(etb, event_nodes, index_event_nodes)
-                logger.debug(
-                    f"Available sources: {len(possible_sources)} - {possible_sources[:3]}{'...' if len(possible_sources) > 3 else ''}")
-
-                # Check each source for this ETB
-                for source in possible_sources:
-                    # Use the routing_dict to get the common ancestor
-                    common_ancestor = routing_dict[destination][source]['common_ancestor']
-                    logger.debug(
-                        f"Source {source} -> Destination {destination}, Common ancestor: {common_ancestor}")
-
-                    if common_ancestor != destination:
+                        logger.debug(f"Analyzing ETB: {etb}")
+                        possible_sources = getNodes(etb, event_nodes, index_event_nodes)
                         logger.debug(
-                            f"SKIP: Node {destination} cannot be common ancestor for source {source}")
-                        skip_destination = True
+                            f"Available sources: {len(possible_sources)} - {possible_sources[:3]}{'...' if len(possible_sources) > 3 else ''}")
+
+                        # Check each source for this ETB
+                        for source in possible_sources:
+                            # Use the routing_dict to get the common ancestor
+                            common_ancestor = routing_dict[destination][source]['common_ancestor']
+                            logger.debug(
+                                f"Source {source} -> Destination {destination}, Common ancestor: {common_ancestor}")
+
+                            if common_ancestor != destination:
+                                logger.debug(
+                                    f"SKIP: Node {destination} cannot be common ancestor for source {source}")
+                                skip_destination = True
+                                break
+
+                        if skip_destination:
+                            break  # Break out of the etb loop
+
+                    if skip_destination:
+                        break  # Break out of the leaf_events loop
+            else:
+                # This is a primitive event type (string)
+                eventtype_key = eventtype
+                logger.debug(f"Processing primitive event: {eventtype_key}")
+
+                # Check all ETBs for this event type
+                for etb in index_event_nodes[eventtype_key]:
+                    if skip_destination:
                         break
 
-                if skip_destination:
-                    break  # Break out of the etb loop
+                    logger.debug(f"Analyzing ETB: {etb}")
+                    possible_sources = getNodes(etb, event_nodes, index_event_nodes)
+                    logger.debug(
+                        f"Available sources: {len(possible_sources)} - {possible_sources[:3]}{'...' if len(possible_sources) > 3 else ''}")
+
+                    # Check each source for this ETB
+                    for source in possible_sources:
+                        # Use the routing_dict to get the common ancestor
+                        common_ancestor = routing_dict[destination][source]['common_ancestor']
+                        logger.debug(
+                            f"Source {source} -> Destination {destination}, Common ancestor: {common_ancestor}")
+
+                        if common_ancestor != destination:
+                            logger.debug(
+                                f"SKIP: Node {destination} cannot be common ancestor for source {source}")
+                            skip_destination = True
+                            break
+
+                    if skip_destination:
+                        break  # Break out of the etb loop
 
             if skip_destination:
                 break  # Break out of the eventtype loop
