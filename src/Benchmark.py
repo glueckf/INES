@@ -1,7 +1,7 @@
 import time
 import matplotlib.pyplot as plt
 from Node import Node
-from network import generate_eventrates, create_random_tree,generate_events
+from network import generate_eventrates, create_random_tree,generate_events, compressed_graph, treeDict
 from graph import create_fog_graph
 from graph import draw_graph
 from allPairs import populate_allPairs
@@ -17,8 +17,6 @@ from operatorplacement import calculate_operatorPlacement
 from generateEvalPlan import generate_eval_plan
 from prepp import generate_prePP
 import csv
-from projections import generate_all_projections
-
 
 class INES():
     allPairs: list
@@ -43,6 +41,8 @@ class INES():
     experiment_result = None
     prim = None
     CURRENT_SECTION = ''
+    eList = {}
+    h_treeDict = {}
     
     "Helper Variables from different Files - namespace issues"
     h_network_data = None
@@ -56,11 +56,11 @@ class INES():
     h_sharedProjectionsDict = {}
     h_sharedProjectionsList = []
     h_eventNodes = None
-    h_IndexEventNodes = None    
+    h_IndexEventNodes = None
     h_projFilterDict = None
     h_longestPath = None
     h_mycombi = None
-    h_combiDict = None
+    #h_combiDict = None
     h_criticalMSTypes_criticalMSProjs = None
     h_combiExperimentData = None
     h_criticalMSTypes = None
@@ -68,11 +68,12 @@ class INES():
     h_combiDict = {}
     h_globalPartitioninInputTypes = {}
     h_globalSiSInputTypes = {}
+    h_placementTreeDict = {}
 
     
 
     def __init__(self, nwSize: int, node_event_ratio: float, num_eventtypes: int, eventskew: float, max_parents: int, query_size: int, query_length:int):
-        self.schema = ["generate_eventrates", "networkParams", "generate_events", "create_random_tree", "create_fog_graph", "populate_allPairs", "getLongest", "generate_workload", "initialize_selectivities", "generate_config_buffer", "initializeSingleSelectivity", "initialize_globals", "initEventNodes", "generate_all_projections", "populate_projFilterDict", "removeFilters", "generate_combigen", "set_criticalMSTypes", "calculate_operatorPlacement", "generate_eval_plan", "generate_prePP"]
+        self.schema = ["generate_eventrates", "networkParams", "generate_events", "create_random_tree", "create_fog_graph", "populate_allPairs", "getLongest", "generate_workload", "initialize_selectivities", "generate_config_buffer", "initializeSingleSelectivity", "initialize_globals", "initEventNodes", "treeDict", "compressed_graph", "generate_all_projections", "populate_projFilterDict", "removeFilters", "generate_combigen", "set_criticalMSTypes", "calculate_operatorPlacement", "generate_eval_plan", "generate_prePP"] #"treeDict", "compressed_graph",
         #self.schema = ["ID", "TransmissionRatio", "Transmission","INEvTransmission","FilterUsed", "Nodes", "EventSkew", "EventNodeRatio", "WorkloadSize", "NumberProjections", "MinimalSelectivity", "MedianSelectivity","CombigenComputationTime", "Efficiency", "PlacementComputationTime", "centralHopLatency", "Depth",  "CentralTransmission", "LowerBound", "EventTypes", "MaximumParents", "exact_costs","PushPullTime","MaxPushPullLatency"] 
         self.nwSize = nwSize
         self.node_event_ratio = node_event_ratio
@@ -81,6 +82,8 @@ class INES():
         self.max_parents = max_parents
         self.query_size = query_size
         self.query_length = query_length
+
+        from projections import generate_all_projections
 
         # Add a dictionary to store the times of each function call
         self.function_times = {}
@@ -99,7 +102,7 @@ class INES():
         self.function_times["generate_events"] = time.time() - start_time
 
         start_time = time.time()
-        root, self.network = create_random_tree(nwSize, self.eventrates, node_event_ratio, max_parents)
+        self.root, self.network, self.eList = create_random_tree(nwSize, self.eventrates, node_event_ratio, max_parents)
         self.function_times["create_random_tree"] = time.time() - start_time
 
         start_time = time.time()
@@ -139,6 +142,14 @@ class INES():
         self.function_times["initEventNodes"] = time.time() - start_time
 
         start_time = time.time()
+        self.h_treeDict = treeDict(self.h_network_data, self.eList)
+        self.function_times["treeDict"] = time.time() - start_time
+
+        start_time = time.time()
+        self.graph = compressed_graph(self.graph, self.h_treeDict)
+        self.function_times["compressed_graph"] = time.time() - start_time
+
+        start_time = time.time()
         self.h_projlist, self.h_projrates, self.h_projsPerQuery, self.h_sharedProjectionsDict, self.h_sharedProjectionsList = generate_all_projections(self)
         self.function_times["generate_all_projections"] = time.time() - start_time
 
@@ -169,86 +180,6 @@ class INES():
         start_time = time.time()
         self.results += generate_prePP(self.plan, 'ppmuse', 'e', 0, 0, 1, False, self.allPairs)
         self.function_times["generate_prePP"] = time.time() - start_time
-
-    def plot_benchmark_times3cat(self):
-    # Zusammenfassen der Zeiten pro Kategorie
-        function_times = {
-            "Functions": self.function_times.get("Functions", 0),
-            "INEv": self.function_times.get("INEv", 0),
-            "PrePP": self.function_times.get("PrePP", 0)
-        }
-
-        categories = list(function_times.keys())
-        times = list(function_times.values())
-        colors = ["#4CAF50", "#2196F3", "#FF9800"]  # Grün, Blau, Orange
-
-        plt.figure(figsize=(10, 6))
-        bars = plt.barh(categories, times, color=colors)
-
-        # Beschriftung der Balken mit den Werten
-        for bar in bars:
-            width = bar.get_width()
-            plt.text(width + 0.1, bar.get_y() + bar.get_height() / 2,
-                    f"{width:.2f}s", va='center')
-
-        plt.xlabel("Execution Time (seconds)")
-        plt.ylabel("Component")
-        plt.title("Benchmark: Execution Time per Component")
-
-        # Zusatzinfo unten
-        info_text = f"Nodes: {self.nwSize} | Max Parents: {self.max_parents} | Query size: {self.query_size} | Query length {self.query_length}"
-        plt.figtext(0.5, 0.01, info_text, wrap=True, horizontalalignment='center', fontsize=10)
-
-        plt.tight_layout(rect=[0, 0.03, 1, 1])  # Platz unten lassen für Info
-        plt.grid(axis='x', linestyle='--', alpha=0.4)
-        plt.savefig('Benchmark.png')
-        plt.close()
-
-    def avg_function_times(self, all_function_times):
-        avg_function_times = {
-            key: sum(times) / len(times) if times else 0
-            for key, times in all_function_times.items()
-        }
-
-        print("\n📊 Durchschnittliche Laufzeiten:")
-        for key, value in avg_function_times.items():
-            print(f"{key}: {value:.4f}s")
-
-        # Durchschnittswerte plotten
-        categories = list(avg_function_times.keys())
-        times = list(avg_function_times.values())
-        colors = ["#4CAF50", "#2196F3", "#FF9800"]
-
-        plt.figure(figsize=(10, 6))
-        bars = plt.barh(categories, times, color=colors)
-        info_text = f"Nodes: {self.nwSize} | Max Parents: {self.max_parents} | Query size: {self.query_size} | Query length {self.query_length}"
-        plt.figtext(0.5, 0.01, info_text, wrap=True, horizontalalignment='center', fontsize=10)
-
-        for bar in bars:
-            width = bar.get_width()
-            plt.text(width + 0.1, bar.get_y() + bar.get_height() / 2,
-                     f"{width:.2f}s", va='center')
-
-        plt.xlabel("Average Execution Time (seconds)")
-        plt.ylabel("Component")
-        plt.title("Benchmark: Average Execution Time")
-        plt.tight_layout()
-        plt.grid(axis='x', linestyle='--', alpha=0.4)
-        plt.savefig("Benchmark_Average.png")
-        plt.show()
-
-    def plot_benchmark_times(self):
-        # Create a bar plot for the execution times of each function
-        functions = list(self.function_times.keys())
-        times = list(self.function_times.values())
-
-        plt.figure(figsize=(10, 6))
-        plt.barh(functions, times, color='skyblue')
-        plt.xlabel('Execution Time (seconds)')
-        plt.ylabel('Function Calls')
-        plt.title('Benchmark: Execution Time of Each Function')
-        plt.tight_layout()
-        plt.show()
 
 # my_ines = INES(12, 0.5, 6, 0.3, 4, 5, 10)
 # my_ines.plot_benchmark_times()

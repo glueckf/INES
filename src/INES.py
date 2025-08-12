@@ -1,5 +1,5 @@
 from Node import Node
-from network import generate_eventrates, create_random_tree,generate_events#, compressed_graph, treeDict
+from network import generate_eventrates, create_random_tree,generate_events, compressed_graph, treeDict
 from graph import create_fog_graph
 from graph import draw_graph
 from allPairs import populate_allPairs
@@ -71,7 +71,7 @@ class INES():
     
 
     def __init__(self, nwSize: int, node_event_ratio: float, num_eventtypes: int, eventskew: float, max_partens: int, query_size: int, query_length:int):
-        self.schema = ["ID", "TransmissionRatio", "Transmission","INEvTransmission","FilterUsed", "Nodes", "EventSkew", "EventNodeRatio", "WorkloadSize", "NumberProjections", "MinimalSelectivity", "MedianSelectivity","CombigenComputationTime", "Efficiency", "PlacementComputationTime", "centralHopLatency", "Depth",  "CentralTransmission", "LowerBound", "EventTypes", "MaximumParents", "exact_costs","PushPullTime","MaxPushPullLatency", "endTransmissionRatio"] 
+        self.schema = ["ID", "TransmissionRatio", "Transmission","INEvTransmission","FilterUsed", "Nodes", "EventSkew", "EventNodeRatio", "WorkloadSize", "NumberProjections", "MinimalSelectivity", "MedianSelectivity","CombigenComputationTime", "Efficiency", "PlacementComputationTime", "centralHopLatency", "Depth",  "CentralTransmission", "LowerBound", "EventTypes", "MaximumParents", "exact_costs","PushPullTime","MaxPushPullLatency"] 
         self.nwSize = nwSize
         self.node_event_ratio = node_event_ratio
         self.number_eventtypes = num_eventtypes
@@ -97,9 +97,11 @@ class INES():
         self.h_network_data,self.h_rates_data,self.h_primEvents,self.h_instances,self.h_nodes = initialize_globals(self.network)
         #print(f"DATA {self.h_network_data} and NETWORK {self.h_nodes}")
         self.h_eventNodes,self.h_IndexEventNodes = initEventNodes(self.h_nodes,self.h_network_data)
-        # self.h_treeDict = treeDict(self.h_network_data, self.eList)
-        # #print(f"treeDict{self.h_treeDict}")
-        # self.graph = compressed_graph(self.graph, self.h_treeDict)
+        # treeDict for graph compression
+        self.h_treeDict = treeDict(self.h_network_data, self.eList)
+        #print(f"treeDict{self.h_treeDict}")
+        # call graph compression function
+        self.graph = compressed_graph(self.graph, self.h_treeDict)
         self.h_projlist,self.h_projrates,self.h_projsPerQuery,self.h_sharedProjectionsDict,self.h_sharedProjectionsList = generate_all_projections(self)
         self.h_projFilterDict = populate_projFilterDict(self)
         self.h_projFilterDict= removeFilters(self)
@@ -136,7 +138,7 @@ class INES():
 # )
 
 try:
-    my_ines = INES(50, 0.5, 6, 1.3, 8, 3, 5)
+    my_ines = INES(50, 0.5, 8, 1.3, 10, 5, 5)
 except Exception as e:
     error_message = f"❌ Exception: {str(e)}\n"
     print(error_message)  # Optional: also print to console

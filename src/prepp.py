@@ -751,4 +751,4 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
     pushPullTime = total_time
     maxPushPullLatency = max_latency
 
-    return [exact_cost,pushPullTime,maxPushPullLatency, endTransmissionRatio]
+    return [exact_cost,pushPullTime,maxPushPullLatency]

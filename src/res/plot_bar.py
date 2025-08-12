@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Original Author: samira
+Modified by Assistant.
+"""
+
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -59,12 +66,13 @@ def plot_bar(files, y_column, labels, output_file, x_label="MaxParents", y_label
 def main():
     parser = argparse.ArgumentParser(description="Plot bar graph from CSV files.")
     parser.add_argument('-i', '--input_files', nargs='+', required=True, help="List of input CSV files.")
-    parser.add_argument('-y', '--y_column', required=True, help="Column name for y-axis (e.g., TransmissionRatio)")
+    parser.add_argument('-y', '--y_column', nargs='+', required=True, help="Column names for y-axis")
     parser.add_argument('-l', '--labels', nargs='+', required=True, help="Labels for the files (e.g., MaxParents_2 MaxParents_3)")
     parser.add_argument('-o', '--output_file', required=True, help="Output file for the bar plot")
     parser.add_argument('--x_label', default="MaxParents", help="Custom label for the x-axis")
     parser.add_argument('--y_label', help="Custom label for the y-axis (defaults to y_column)")
-    parser.add_argument('--legend_title', default="Trend", help="Title for the legend")
+    parser.add_argument('--legend_title', nargs='+', help="Custom legend tags for each y-column")
+
 
     args = parser.parse_args()
 

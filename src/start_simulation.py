@@ -82,10 +82,11 @@ if __name__ == "__main__":
    # start_simulation(12, 0.5, 6, 0.3, 10, 3, 5, 4)
     file_name = f"INES-simulation_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"  
     all_results = []
-    for i in range(100):
+
        
-       # parallel laufen lassen
-        result = run_simulation(50, 0.5, 8, 1.3, 8, 5, 5, i)
+    # parallel laufen lassen
+    for i in range(50):        
+        result = run_simulation(50, 0.5, 8, 1.3, 10, 5, 5, i)
         all_results.append(result)
         
         if all_results:

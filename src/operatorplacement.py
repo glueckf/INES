@@ -118,18 +118,11 @@ def calculate_operatorPlacement(self,file_path: str, max_parents: int):
 
             #ComputeMSPlacement
             partType,_,_ = returnPartitioning(self, projection, unfolded[projection], projrates ,criticalMSTypes)
+            # MS Placement if return anchor event type
             if partType : 
                 MSPlacements[projection] = partType
                 result = computeMSplacementCosts(self, projection, unfolded[projection], partType, sharedDict, noFilter, G)
-                # if not result:
-                #     print(f"[Fehler] Leeres Ergebnis für MS-Placement von {projection} erhalten. Überspringe...")
-                #     continue  # continue / return / break
                 additional = result[0]
-            #     print(f"[DEBUG] MS Projection: {projection}")
-            #     print(f"        → PlacementCost: {additional}")
-            #     print(f"        → Sink: {result[2].sinks}")
-            #    #print(f"        → Used Nodes: {[inst.nodes for inst in result[3]]}")
-            #     print(f"        → Routes: {[inst.routingDict.get(projection) for inst in result[3] if projection in inst.routingDict]}")
 
                 costs += additional
                 hopLatency[projection] += result[1]
