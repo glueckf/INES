@@ -565,10 +565,15 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
             
         if CURRENT_SECTION == MUSE_GRAPH:
             if "SELECT" in line and "ON" in line:
-                # Split the line at "SELECT" and "FROM"
+                # Split the line at "SELECT" and "ON"
                 print("SPlitting")
-                select_split = line.split("SELECT")[1].split("FROM")
-                query = select_split[0].strip()  # Extract the query, it's the part between SELECT and FROM
+                select_part = line.split("SELECT")[1]  # Get everything after SELECT
+                if "FROM" in select_part:
+                    # Old format: SELECT query FROM ... ON
+                    query = select_part.split("FROM")[0].strip()
+                else:
+                    # New format: SELECT query ON
+                    query = select_part.split("ON")[0].strip()
                 
                 # # Now split the line at "ON" to get the part with the node
                 # on_split = line.split("ON")[1]
@@ -639,26 +644,41 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
                     single_sink_evaluation_node = node_idx
                 current_value = 0
                         
-            query = Query_fragment("",[],[],"")
-            if extract_muse_graph_queries(line) != None:
-                query.query = extract_muse_graph_queries(line)
+            query_obj = Query_fragment("",[],[],"")
+            if query:  # Use the correctly parsed query from above
+                query_obj.query = query
 
-            if query.query in queries_to_process:
+            if query_obj.query in queries_to_process:
                 print("single_sink_evaluation_node",single_sink_evaluation_node)
-                single_sink_query_network.append(Query_fragment(query.query,determine_all_primitive_events_of_projection(query.query),[single_sink_evaluation_node],""))
+                single_sink_query_network.append(Query_fragment(query_obj.query,determine_all_primitive_events_of_projection(query_obj.query),[single_sink_evaluation_node],""))
             
             if extract_muse_graph_sources(line) != None:
-                query.primitive_operators = extract_muse_graph_sub_queries(line)
+                query_obj.primitive_operators = extract_muse_graph_sub_queries(line)
+            
+            # If primitive_operators is still None (new format without FROM), derive from query
+            if query_obj.primitive_operators is None and query:
+                # Extract primitive events from the query structure
+                # For SEQ(A, B, C), AND(A, B), etc., extract the letters inside parentheses
+                import re
+                # Look for content within parentheses, then extract single uppercase letters
+                match = re.search(r'\((.*?)\)', query)
+                if match:
+                    content = match.group(1)
+                    # Extract individual event types (single uppercase letters)
+                    primitive_events = re.findall(r'\b[A-Z]\b', content)
+                    query_obj.primitive_operators = primitive_events
+                else:
+                    query_obj.primitive_operators = []
                 
             if extract_muse_graph_sources(line) != None:
-                query.node_placement = extract_muse_graph_sources(line)
+                query_obj.node_placement = extract_muse_graph_sources(line)
 
             if extract_muse_graph_forbidden(line) != None:
-                query.forbidden_event_types = extract_muse_graph_forbidden(line)
+                query_obj.forbidden_event_types = extract_muse_graph_forbidden(line)
 
 
-            print(f"[DEBUG] Adding query to network: query='{query.query}', node_placement={getattr(query, 'node_placement', 'None')}")
-            query_network.append(query)
+            print(f"[DEBUG] Adding query to network: query='{query_obj.query}', node_placement={getattr(query_obj, 'node_placement', 'None')}")
+            query_network.append(query_obj)
         all_event_combinations = []
         if CURRENT_SECTION == SELECTIVITIES:
             extract_muse_graph_selectivities(line,all_event_combinations,eventtype_pair_to_selectivity)
@@ -771,7 +791,7 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
                 all_exact_costs += exact_costs
                 print("Exact Average:", all_exact_costs/idx)
 
-                endTransmissionRatio = (all_exact_costs/idx) / central_push_costs
+                endTransmissionRatio = (all_exact_costs/idx) / central_push_costs if central_push_costs != 0 else 0
                 print("Exact Average Transmission Ratio:", endTransmissionRatio)
                     
 
