@@ -195,9 +195,13 @@ def processingText(combinationDict,sinkDict,selectionRate):
     text = "muse graph\n"
     for projection in combinationDict.keys():
             text += "SELECT " + projection + " FROM "
-            for i in combinationDict[projection]:
-                        text += i +"; "
-            text = text[:-2]  
+            if combinationDict[projection]:  # Only add FROM section if we have items
+                for i in combinationDict[projection]:
+                    text += i +"; "
+                text = text[:-2]  # Remove the last "; "
+            else:
+                # Remove the " FROM " we just added since there are no items
+                text = text[:-6]  # Remove " FROM "
             text += " ON " + str(set(sinkDict[projection][0])) 
             if len(sinkDict[projection][0]) > 1:
                 text += "/n(" + sinkDict[projection][1] + ")"
@@ -286,6 +290,5 @@ def generate_eval_plan(nw,selectivities,myPlan,centralPlan,workload):
 
     config_buffer.write(generatePlan(nw,selectivities,workload,combinationDict,sinkDict,selectionRate)) 
     config_buffer.seek(0)
-    #print(config_buffer.getvalue())
     return config_buffer
             
