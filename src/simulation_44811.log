@@ -1,0 +1,243 @@
+
+==== Simulation Run 0 Started ====
+
+
+==== Initaiting Run 0 Started ====
+
+4
+[1000 1000 1000 1000 1000 1000]
+[TESTING eList: ]{6: [0, 1, 2, 3, 5], 7: [0, 1, 2, 3, 4, 5], 8: [0, 1, 2, 3, 4, 5], 9: [0, 1, 2, 5], 10: [0, 1, 2, 3, 4, 5], 11: [0, 1, 2, 3, 4, 5]}
+SEQ(C, D, F)
+
+SEQ(B, E, D)
+
+AND(E, D, C)
+
+None
+-----
+-----
+[NETWORK] {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: ['A', 'B', 'D'], 7: ['B', 'C', 'D', 'F'], 8: ['A', 'B', 'D', 'F'], 9: ['B', 'C', 'D', 'F'], 10: ['A', 'B', 'C', 'E'], 11: ['A', 'B']}
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: C
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: C
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: D
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: F
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: B
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: B
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: D
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: D
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: C
+SEQ(C, D, F) ['C', 'D', 'F']
+SEQ(B, E, D) ['B', 'E', 'D']
+AND(E, D, C) ['E', 'D', 'C']
+time: 2.0691659450531006
+0
+test
+Here
+{'A6': 0, 'A8': 1, 'A10': 2, 'A11': 3, 'A': ['A6', 'A8', 'A10', 'A11'], 'B6': 4, 'B7': 5, 'B8': 6, 'B9': 7, 'B10': 8, 'B11': 9, 'B': ['B6', 'B7', 'B8', 'B9', 'B10', 'B11'], 'D6': 10, 'D7': 11, 'D8': 12, 'D9': 13, 'D': ['D6', 'D7', 'D8', 'D9'], 'C7': 14, 'C9': 15, 'C10': 16, 'C': ['C7', 'C9', 'C10'], 'F7': 17, 'F8': 18, 'F9': 19, 'F': ['F7', 'F8', 'F9'], 'E10': 20, 'E': ['E10']}
+centralCosts: 51000.0
+Central Hops: 26
+central Hop Latency: 3
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: C
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: B
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: E
+{<helper.Tree.SEQ object at 0x11d1b8c70>: ['C', 'D', 'F'], <helper.Tree.SEQ object at 0x11d1b8490>: ['B', 'E', 'D'], <helper.Tree.AND object at 0x11d1b8880>: ['E', 'D', 'C']}
+[]
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: C
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: B
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: C
+Network
+[<Node.Node object at 0x11d46d6d0>, <Node.Node object at 0x11d46d910>, <Node.Node object at 0x11d46d430>, <Node.Node object at 0x11d46d370>, <Node.Node object at 0x11d46daf0>, <Node.Node object at 0x11d46db20>, <Node.Node object at 0x11d46db50>, <Node.Node object at 0x11d46db80>, <Node.Node object at 0x11d46dbb0>, <Node.Node object at 0x11d46dbe0>, <Node.Node object at 0x11d46dc10>, <Node.Node object at 0x11d46dc40>]
+{0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: ['A', 'B', 'D'], 7: ['B', 'C', 'D', 'F'], 8: ['A', 'B', 'D', 'F'], 9: ['B', 'C', 'D', 'F'], 10: ['A', 'B', 'C', 'E'], 11: ['A', 'B']}
+30000.0
+20000.0
+20000.0
+SiS SEQ(C, D, F) At: []PC: 20001.0 Hops: 2
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: B
+Network
+[<Node.Node object at 0x11d46d6d0>, <Node.Node object at 0x11d46d910>, <Node.Node object at 0x11d46d430>, <Node.Node object at 0x11d46d370>, <Node.Node object at 0x11d46daf0>, <Node.Node object at 0x11d46db20>, <Node.Node object at 0x11d46db50>, <Node.Node object at 0x11d46db80>, <Node.Node object at 0x11d46dbb0>, <Node.Node object at 0x11d46dbe0>, <Node.Node object at 0x11d46dc10>, <Node.Node object at 0x11d46dc40>]
+{0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: ['A', 'B', 'D'], 7: ['B', 'C', 'D', 'F'], 8: ['A', 'B', 'D', 'F'], 9: ['B', 'C', 'D', 'F'], 10: ['A', 'B', 'C', 'E'], 11: ['A', 'B']}
+25000.0
+14000.0
+SiS SEQ(B, E, D) At: []PC: 14001.0 Hops: 2
+Current projrates: {<helper.Tree.SEQ object at 0x11d143eb0>: (0.0008763105029306002, 347346.69928861375), <helper.Tree.SEQ object at 0x11d0b0c70>: (0.006031847459115325, 1643364.776541052), <helper.Tree.AND object at 0x11d0b0cd0>: (0.0003469645159355166, 599554.6835365727), <helper.Tree.SEQ object at 0x11d1ef0a0>: (0.0034964248112840514, 3496424.8112840513), <helper.Tree.SEQ object at 0x11d1ef580>: (0.015508757417665692, 15508757.417665692), <helper.Tree.AND object at 0x11d1effa0>: (0.015508757417665692, 46526272.25299708)}
+Type of projection: <class 'str'> Value: E
+MS AND(E, D, C) At: ['E', 0] For: AND(E, D, C) PC: 6000.0 Hops:1
+INEv Transmission with MS 40002.0
+Lower Bound: 0.0
+Transmission Ratio: 0.7843529411764706
+Printing execution times
+1754728364.821171
+1754728370.5192199
+Finished in 5.7 seconds
+{<helper.Tree.SEQ object at 0x11d1b8c70>: 0, <helper.Tree.SEQ object at 0x11d1b8490>: 0, <helper.Tree.AND object at 0x11d1b8880>: 0}
+Myplan is <EvaluationPlan(projections=[<EvaluationPlan.Projection object at 0x11d1fd220>, <EvaluationPlan.Projection object at 0x11d1fda30>, <EvaluationPlan.Projection object at 0x11d1fe4c0>], instances=[<EvaluationPlan.Instance object at 0x11d1b8bb0>, <EvaluationPlan.Instance object at 0x11d1b8820>, <EvaluationPlan.Instance object at 0x11d1f6fd0>, <EvaluationPlan.Instance object at 0x11d1f63a0>, <EvaluationPlan.Instance object at 0x11d1f65b0>, <EvaluationPlan.Instance object at 0x11d1f67f0>, <EvaluationPlan.Instance object at 0x11d1f6730>, <EvaluationPlan.Instance object at 0x11d1f67c0>, <EvaluationPlan.Instance object at 0x11d1f66d0>, <EvaluationPlan.Instance object at 0x11d1f6850>, <EvaluationPlan.Instance object at 0x11d1f6610>, <EvaluationPlan.Instance object at 0x11d1f6a60>, <EvaluationPlan.Instance object at 0x11d1f6910>, <EvaluationPlan.Instance object at 0x11d1f68b0>, <EvaluationPlan.Instance object at 0x11d1f69d0>, <EvaluationPlan.Instance object at 0x11d1f6ac0>, <EvaluationPlan.Instance object at 0x11d1f6be0>, <EvaluationPlan.Instance object at 0x11d1f6c40>, <EvaluationPlan.Instance object at 0x11d1fd880>, <EvaluationPlan.Instance object at 0x11d1fd850>, <EvaluationPlan.Instance object at 0x11d1fd520>, <EvaluationPlan.Instance object at 0x11d1fd610>, <EvaluationPlan.Instance object at 0x11d1fe460>, <EvaluationPlan.Instance object at 0x11d1fedc0>])>
+network
+Node 0 Node 0
+Computational Power: inf
+Memory: inf
+Eventrates: [0, 0, 0, 0, 0, 0]
+Parents: None
+Child: [1, 2]
+Siblings: None
+
+Node 1 Node 1
+Computational Power: 3
+Memory: 3
+Eventrates: [0, 0, 0, 0, 0, 0]
+Parents: [0]
+Child: [3, 4, 5]
+Siblings: None
+
+Node 2 Node 2
+Computational Power: 3
+Memory: 3
+Eventrates: [0, 0, 0, 0, 0, 0]
+Parents: [0]
+Child: [3, 4, 5]
+Siblings: None
+
+Node 3 Node 3
+Computational Power: 2
+Memory: 2
+Eventrates: [0, 0, 0, 0, 0, 0]
+Parents: [2, 1]
+Child: [6, 7, 8, 10, 11]
+Siblings: None
+
+Node 4 Node 4
+Computational Power: 2
+Memory: 2
+Eventrates: [0, 0, 0, 0, 0, 0]
+Parents: [1, 2]
+Child: [7, 8, 10, 11]
+Siblings: None
+
+Node 5 Node 5
+Computational Power: 2
+Memory: 2
+Eventrates: [0, 0, 0, 0, 0, 0]
+Parents: [1, 2]
+Child: [6, 7, 8, 9, 10, 11]
+Siblings: None
+
+Node 6 Node 6
+Computational Power: 1
+Memory: 1
+Eventrates: [1000, 1000, 0, 1000, 0, 0]
+Parents: [5, 3]
+Child: None
+Siblings: None
+
+Node 7 Node 7
+Computational Power: 1
+Memory: 1
+Eventrates: [0, 1000, 1000, 1000, 0, 1000]
+Parents: [3, 4, 5]
+Child: None
+Siblings: None
+
+Node 8 Node 8
+Computational Power: 1
+Memory: 1
+Eventrates: [1000, 1000, 0, 1000, 0, 1000]
+Parents: [3, 4, 5]
+Child: None
+Siblings: None
+
+Node 9 Node 9
+Computational Power: 1
+Memory: 1
+Eventrates: [0, 1000, 1000, 1000, 0, 1000]
+Parents: [5]
+Child: None
+Siblings: None
+
+Node 10 Node 10
+Computational Power: 1
+Memory: 1
+Eventrates: [1000, 1000, 1000, 0, 1000, 0]
+Parents: [3, 4, 5]
+Child: None
+Siblings: None
+
+Node 11 Node 11
+Computational Power: 1
+Memory: 1
+Eventrates: [1000, 1000, 0, 0, 0, 0]
+Parents: [3, 5, 4]
+Child: None
+Siblings: None
+
+
+selectivities
+{'DF': 0.08197934214289442, 'FD': 0.08197934214289442, 'CF': 0.04265007158985973, 'FC': 0.04265007158985973, 'AD': 0.0881615516001991, 'DA': 0.0881615516001991, 'EB': 1, 'BE': 1, 'AF': 0.05698717220088897, 'FA': 0.05698717220088897, 'DC': 1, 'CD': 1, 'DB': 1, 'BD': 1, 'BF': 1, 'FB': 1, 'EF': 0.047553943013314746, 'FE': 0.047553943013314746, 'CB': 0.05289251899163277, 'BC': 0.05289251899163277, 'AB': 0.02908997381495683, 'BA': 0.02908997381495683, 'AC': 1, 'CA': 1, 'CE': 1, 'EC': 1, 'DE': 0.015508757417665692, 'ED': 0.015508757417665692, 'AE': 0.09492454544991936, 'EA': 0.09492454544991936} 
+
+queries
+SEQ(C, D, F)
+SEQ(B, E, D)
+AND(E, D, C)
+
+muse graph
+SELECT SEQ(C, D, F) FROM D; F; C ON {1} WITH selectionRate= 0.0034964248112840514
+SELECT SEQ(B, E, D) FROM B; D; E ON {1} WITH selectionRate= 0.015508757417665692
+SELECT AND(E, D, C) FROM D; C; E ON {0, 1}/n() WITH selectionRate= 0.015508757417665692
+
+SPlitting
+SPlitting
+SPlitting
+total central push cost is 58003.0
+SEQ(C, D, F)
+SEQ(B, E, D)
+AND(E, D, C)
+~~
+['SEQ(C, D, F', 'SEQ(B, E, D', 'AND(E, D, C']
+greedy_costs: 0
+sampling_costs: 0
+factorial_costs: 0
+exact_costs: 16416.19736219303
+§§§§§§§§§§ Push-Pull MuSE costs §§§§§§§§§§
+####### EXACT #######
+Exact network costs: 16416.19736219303
+Exact Average: 16416.19736219303
+Exact Average Transmission Ratio: 0.28302324642161664
+Average exact algorithm execution time: 0.0005289170000004617
+[0]
+[0]
+[0]
+[16416.19736219303]
+        ID  TransmissionRatio  ...  MaxPushPullLatency  endTransmissionRatio
+0  2196506           0.784353  ...                   7              0.283023
+
+[1 rows x 25 columns]
+🔄 Checking result for run <Future at 0x11d1fef40 state=running>
+🔄 Checking result for run <Future at 0x11d1feac0 state=running>
+🔄 Checking result for run <Future at 0x11d46db50 state=running>
+🔄 Checking result for run <Future at 0x11d46df70 state=running>
+Results saved to: INES-simulation_09082025103241.csv
+Starting simulation...
+Simulation has been executed
+=== MAIN SECTION ENDING ===

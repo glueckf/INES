@@ -1,0 +1,61 @@
+
+==== Simulation Run 0 Started ====
+
+
+==== Initaiting Run 0 Started ====
+
+4
+[1000 1000 1000 1000 1000 1000]
+[TESTING eList: ]{6: [0, 1, 2, 3, 4, 5], 7: [0, 1, 2, 4, 5], 8: [0, 1, 2, 3, 4, 5], 9: [0, 1, 2, 3, 4, 5], 10: [0, 1, 2, 3, 4], 11: [0, 1, 2, 3, 4, 5]}
+AND(E, F, D)
+
+AND(A, D, E)
+
+AND(A, D, C)
+
+None
+-----
+-----
+[NETWORK] {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: ['B'], 7: ['A', 'C', 'D'], 8: ['D'], 9: ['B', 'D', 'F'], 10: ['B', 'C', 'E', 'F'], 11: ['A', 'B', 'F']}
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: E
+getSavings called with partType: E
+✅ Found partType 'E' in MSTrees
+✅ Found MSTrees[E] in DistMatrices
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: A
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: A
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: D
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: A
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: A
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: D
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: C
+AND(E, F, D) ['E', 'F', 'D']
+AND(A, D, E) ['A', 'D', 'E']
+AND(A, D, C) ['A', 'D', 'C']
+time: 6.721559047698975
+0
+test
+Here
+{'B6': 0, 'B9': 1, 'B10': 2, 'B11': 3, 'B': ['B6', 'B9', 'B10', 'B11'], 'A7': 4, 'A11': 5, 'A': ['A7', 'A11'], 'C7': 6, 'C10': 7, 'C': ['C7', 'C10'], 'D7': 8, 'D8': 9, 'D9': 10, 'D': ['D7', 'D8', 'D9'], 'F9': 11, 'F10': 12, 'F11': 13, 'F': ['F9', 'F10', 'F11'], 'E10': 14, 'E': ['E10']}
+centralCosts: 33000.0
+Central Hops: 26
+central Hop Latency: 3
+Current projrates: {<helper.Tree.AND object at 0x11fdbdf40>: (0.08061625098913129, 241848752.96739388), <helper.Tree.AND object at 0x11fdbdd90>: (0.0002625485516178439, 787645.6548535316), <helper.Tree.AND object at 0x11fd03940>: (0.003543503517522508, 10630510.552567523)}
+Type of projection: <class 'str'> Value: E
