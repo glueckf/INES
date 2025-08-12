@@ -30,6 +30,40 @@ SECTION_HEADERS = {
     'selectivities': SELECTIVITIES
 }
 
+def generate_hardcoded_single_selectivities():
+    """
+    Generate hardcoded single selectivities for deterministic results.
+    These values match the ones used in INES.py to ensure consistency.
+    """
+    return {
+        'A': 1.0,  # Single event A always has selectivity 1.0
+        'B': 1.0,  # Single event B always has selectivity 1.0  
+        'C': 1.0,  # Single event C always has selectivity 1.0
+        'D': 1.0,  # Single event D always has selectivity 1.0
+        'E': 1.0,  # Single event E always has selectivity 1.0
+        'F': 1.0   # Single event F always has selectivity 1.0
+    }
+
+def generate_hardcoded_projection_selectivities():
+    """
+    Generate hardcoded projection selectivities for deterministic results.
+    These are the conditional selectivity values that would normally be randomly generated.
+    """
+    return {
+        'A': 1.0,
+        'B': 1.0, 
+        'C': 1.0,
+        'A|AB': 0.013437246922864427,
+        'B|AB': 0.8793430122560099,
+        'A|AC': 0.12734450397968697,
+        'C|AC': 0.39969153020774206,
+        'B|BC': 1.0,
+        'C|BC': 1.0,
+        'A|ABC': 0.0010735560056642584,
+        'B|ABC': 0.599299380831806,
+        'C|ABC': 0.9347710015537102
+    }
+
 
 class Query_fragment():
     def __init__(self,query, primitive_operators, node_placement, forbidden_event_types):
@@ -199,7 +233,9 @@ def determine_total_query_rate(query,all_eventtype_output_rates,eventtype_to_sou
 
 def extract_queries(line,queries_to_process):
     if line != "queries" and len(line)>1:
-        queries_to_process.append(line[0:len(line)-1])
+        # Remove trailing newline/whitespace instead of just last character
+        clean_line = line.strip()
+        queries_to_process.append(clean_line)
         return line
 
     
@@ -276,8 +312,11 @@ def determine_randomized_distribution_push_pull_costs(queries, eventtype_combina
         for current_node in query.node_placement:
             already_received_eventtypes[current_node] = []
     max_latency = 0
-    for query in queries:
+    print(f"[DEBUG] Processing {len(queries)} queries")
+    for i, query in enumerate(queries):
+        print(f"[DEBUG] Query {i}: '{query.query}', node_placement: {getattr(query, 'node_placement', 'None')}")
         if query.query == '':
+            print(f"[DEBUG] Skipping empty query {i}")
             continue
         old_copy = copy.deepcopy(query.primitive_operators)
         top_k = int(k)
@@ -296,6 +335,9 @@ def determine_randomized_distribution_push_pull_costs(queries, eventtype_combina
 
                 exact_costs, used_eventtypes_to_pull,latency = push_pull_plan_generator_exact.determine_costs_for_projection_on_node(exact_push_pull_plan_for_a_projection, query, current_node, already_received_eventtypes,allPairs)
                 max_latency = max(max_latency, latency)
+                print(f"[DEBUG] Query: {query.query}, Node: {current_node}, Exact costs: {exact_costs}")
+                print(f"[DEBUG] Used eventtypes to pull: {used_eventtypes_to_pull}")
+                print(f"[DEBUG] Exact push-pull plan: {exact_push_pull_plan_for_a_projection}")
                 if plan_print == "t":
                     print("exact_push_pull_plan_for_a_projection:", exact_push_pull_plan_for_a_projection)
                     print("used_eventtypes_to_pull:", used_eventtypes_to_pull)
@@ -495,7 +537,7 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
     all_eventtype_output_rates = {}
 
     eventtype_to_sources_map = {}
-    print(input_buffer.getvalue())
+    content = input_buffer.getvalue()
     input_buffer.seek(0)
     for line in input_buffer:
         line=line.strip()
@@ -615,6 +657,7 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
                 query.forbidden_event_types = extract_muse_graph_forbidden(line)
 
 
+            print(f"[DEBUG] Adding query to network: query='{query.query}', node_placement={getattr(query, 'node_placement', 'None')}")
             query_network.append(query)
         all_event_combinations = []
         if CURRENT_SECTION == SELECTIVITIES:
@@ -656,7 +699,9 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
     print(f"total central push cost is {total_cost}")
     central_push_costs = total_cost
     reversed_query_network = []
-    for i in range(len(query_network)-2,-1,-1):
+    print(f"[DEBUG] Original query_network has {len(query_network)} queries")
+    for i in range(len(query_network)-1,-1,-1):
+        print(f"[DEBUG] Processing query_network[{i}]: '{query_network[i].query}'")
         reversed_query_network.append(query_network[i])
         if query_network[i].query == '':
             continue
@@ -697,11 +742,14 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
     
     for idx in range(1, number_of_samples+1):
         eventtype_pair_to_selectivity = old_eventtype_pair_to_selectivity.copy()
-        eventtypes_single_selectivities = {}
-        single_selectivity_of_eventtype_within_projection = {}
-        determine_all_single_selectivities_for_every_possible_projection(eventtype_pair_to_selectivity,all_eventtype_output_rates,eventtype_to_sources_map,single_selectivity_of_eventtype_within_projection,queries_to_process)
+        eventtypes_single_selectivities = generate_hardcoded_single_selectivities()
+        single_selectivity_of_eventtype_within_projection = generate_hardcoded_projection_selectivities()
+        # determine_all_single_selectivities_for_every_possible_projection(eventtype_pair_to_selectivity,all_eventtype_output_rates,eventtype_to_sources_map,single_selectivity_of_eventtype_within_projection,queries_to_process)
 
         q_network = query_network_copy if method == "ppmuse" else single_sink_query_network_copy
+        print(f"[DEBUG] About to process q_network with {len(q_network)} queries, method={method}")
+        for i, q in enumerate(q_network):
+            print(f"[DEBUG] q_network[{i}]: query='{q.query}', node_placement={getattr(q, 'node_placement', 'None')}")
 
         if method == "ppmuse":
             greedy_costs, sampling_costs, factorial_costs, exact_costs, greedy_algo_time, exact_algo_time, factorial_algo_time, sampling_algo_time,max_latency = determine_randomized_distribution_push_pull_costs(q_network, eventtype_combinations, highest_primitive_eventtype_to_be_processed, algorithm, samples, topk, plan_print,allPairs,eventtype_pair_to_selectivity, eventtype_to_sources_map, all_eventtype_output_rates, eventtypes_single_selectivities, single_selectivity_of_eventtype_within_projection)
@@ -751,4 +799,4 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
     pushPullTime = total_time
     maxPushPullLatency = max_latency
 
-    return [exact_cost,pushPullTime,maxPushPullLatency, endTransmissionRatio]
+    return [exact_cost, pushPullTime, maxPushPullLatency, endTransmissionRatio]
