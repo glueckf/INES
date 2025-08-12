@@ -21,8 +21,28 @@ def getLowerBound(query,
 
     MS = []
     for e in query.leafs():
-        myprojs = [p for p in list(set(projsPerQuery[query]).difference(set([query]))) if
-                   totalRate(p) < rates[e] and not e in p.leafs()]
+        # myprojs = [p for p in list(set(projsPerQuery[query]).difference(set([query]))) if
+        #            totalRate(p) < rates[e] and not e in p.leafs()]
+
+        # Step 1: Get projects for this query
+        projects_for_query = projsPerQuery[query]
+
+        # Step 2: Remove duplicates and convert to set
+        projects_set = set(projects_for_query)
+
+        # Step 3: Remove the query itself from the projects
+        query_set = set([query])
+        filtered_projects_set = projects_set.difference(query_set)
+
+        # Step 4: Convert back to list
+        filtered_projects_list = list(filtered_projects_set)
+
+        # Step 5: Filter by conditions
+        myprojs = []
+
+        for p in filtered_projects_list:
+            if totalRate(self, p, self.h_projrates) < rates[e] and not e in p.leafs():
+                myprojs.append(p)
         if myprojs:
             MS.append(e)
         for p in [x for x in projsPerQuery[query] if e in x.leafs()]:
@@ -163,25 +183,25 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
         else:
             # INFO: ComputeSingleSinkPlacement is called for the sequential approach.
             # Implementing a new function for the integrated approach
-            # result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter, projFilterDict, EventNodes,
-            #                                     IndexEventNodes, self.h_network_data, allPairs, mycombi, rates,
-            #                                     singleSelectivities, projrates, self.graph, self.network)
-            compute_operator_placement_with_prepp(
-                self,
-                projection,
-                unfolded[projection],
-                noFilter,
-                projFilterDict,
-                EventNodes,
-                IndexEventNodes,
-                self.h_network_data,
-                allPairs, mycombi,
-                rates,
-                singleSelectivities,
-                projrates,
-                G,
-                network,
-                central_eval_plan)
+            result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter, projFilterDict, EventNodes,
+                                                IndexEventNodes, self.h_network_data, allPairs, mycombi, rates,
+                                                singleSelectivities, projrates, self.graph, self.network)
+            # compute_operator_placement_with_prepp(
+            #     self,
+            #     projection,
+            #     unfolded[projection],
+            #     noFilter,
+            #     projFilterDict,
+            #     EventNodes,
+            #     IndexEventNodes,
+            #     self.h_network_data,
+            #     allPairs, mycombi,
+            #     rates,
+            #     singleSelectivities,
+            #     projrates,
+            #     G,
+            #     network,
+            #     central_eval_plan)
             additional = result[0]
             costs += additional
             hopLatency[projection] += result[2]
