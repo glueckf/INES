@@ -107,19 +107,19 @@ def create_hardcoded_tree():
 
     # Layer 1: Nodes 1, 2
     for node_id in [1, 2]:
-        nodes[node_id] = Node(id=node_id, compute_power=3, memory=3)
+        nodes[node_id] = Node(id=node_id, compute_power=30, memory=30)
         nodes[node_id].eventrates = [0] * len(base_eventrates)
         nw.append(nodes[node_id])
 
     # Layer 2: Nodes 3, 4, 5
     for node_id in [3, 4, 5]:
-        nodes[node_id] = Node(id=node_id, compute_power=2, memory=2)
+        nodes[node_id] = Node(id=node_id, compute_power=20, memory=20)
         nodes[node_id].eventrates = [0] * len(base_eventrates)
         nw.append(nodes[node_id])
 
     # Layer 3: Leaf nodes 6, 7, 8, 9, 10, 11
     for node_id in [6, 7, 8, 9, 10, 11]:
-        nodes[node_id] = Node(id=node_id, compute_power=1, memory=1)
+        nodes[node_id] = Node(id=node_id, compute_power=10, memory=10)
         nodes[node_id].eventrates = [0] * len(base_eventrates)
         nw.append(nodes[node_id])
 
@@ -140,12 +140,12 @@ def create_hardcoded_tree():
 
     # Layer 2 -> Layer 3 connections (realistic overlap with varied parent counts)
     nodes[3].Child = [nodes[6], nodes[7], nodes[8], nodes[9]]      # Node 3 connects to 6,7,8,9
-    nodes[4].Child = [nodes[6], nodes[8], nodes[9], nodes[10]]     # Node 4 connects to 6,8,9,10
+    nodes[4].Child = [nodes[6], nodes[7], nodes[8], nodes[9], nodes[10]]     # Node 4 connects to 6,7,8,9,10
     nodes[5].Child = [nodes[6], nodes[10], nodes[11]]             # Node 5 connects to 6,10,11
 
     # Realistic parent distribution: mix of 1, 2, and 3 parents per leaf node
     nodes[6].Parent = [nodes[3], nodes[4], nodes[5]]    # Node 6: 3 parents (3,4,5)
-    nodes[7].Parent = [nodes[3]]                        # Node 7: 1 parent (3)
+    nodes[7].Parent = [nodes[3], nodes[4]]              # Node 7: 1 parent (3, 4)
     nodes[8].Parent = [nodes[3], nodes[4]]              # Node 8: 2 parents (3,4)
     nodes[9].Parent = [nodes[3], nodes[4]]              # Node 9: 2 parents (3,4)
     nodes[10].Parent = [nodes[4], nodes[5]]             # Node 10: 2 parents (4,5)
@@ -169,7 +169,7 @@ def create_hardcoded_tree():
 
     # Build eList - each leaf node gets its actual ancestor IDs based on the new topology
     eList[6] = [0, 1, 2, 3, 4, 5]    # Node 6: ancestors through nodes 3, 4, and 5 (all paths)
-    eList[7] = [0, 1, 2, 3]          # Node 7: ancestors through node 3 only
+    eList[7] = [0, 1, 2, 3, 4]          # Node 7: ancestors through node 3 and 4
     eList[8] = [0, 1, 2, 3, 4]       # Node 8: ancestors through nodes 3 and 4
     eList[9] = [0, 1, 2, 3, 4]       # Node 9: ancestors through nodes 3 and 4
     eList[10] = [0, 1, 2, 4, 5]      # Node 10: ancestors through nodes 4 and 5
