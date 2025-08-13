@@ -6,7 +6,10 @@ strategies, coordinating with adapters for legacy function calls.
 """
 
 from typing import Dict, List, Any, Optional
+import re
 from helper.structures import getNodes
+from allPairs import find_shortest_path_or_ancestor
+from helper.placement_aug import NEWcomputeCentralCosts
 from .adapters import build_eval_plan, run_prepp
 from .logging import get_placement_logger
 from .fallback import calculate_fallback_costs
@@ -14,11 +17,8 @@ from .fallback import calculate_fallback_costs
 logger = get_placement_logger(__name__)
 
 
-def calculate_all_push_costs_on_subgraph(subgraph: Dict[str, Any], projection: Any, 
-                                       combination: List[Any], rates: Dict[str, float], 
-                                       projrates: Dict[str, List[float]], 
-                                       index_event_nodes: Dict[str, List[Any]], 
-                                       event_nodes: List[List[Any]]) -> float:
+def calculate_all_push_costs_on_subgraph(self, subgraph: Dict[str, Any], projection: Any):
+
     """
     Calculate the costs of using all-push strategy for a projection on a subgraph.
     This is an efficient implementation that reuses logic from push_pull_plan_generator.
@@ -26,69 +26,23 @@ def calculate_all_push_costs_on_subgraph(subgraph: Dict[str, Any], projection: A
     Args:
         subgraph: Dictionary containing subgraph information
         projection: The projection being placed
-        combination: List of event types in the combination
-        rates: Dictionary of event type rates
-        projrates: Dictionary of projection rates
-        index_event_nodes: Mapping of event types to ETBs
-        event_nodes: Event nodes matrix
         
     Returns:
         float: Total cost of all-push strategy
     """
-    logger.debug("Calculating all-push costs on subgraph")
-    
-    total_cost = 0.0
-    placement_node_remapped = subgraph['placement_node_remapped']
-    all_pairs = subgraph['all_pairs_sub']
-    
-    logger.debug(f"All-push calculation for placement at node {placement_node_remapped}")
-    
-    # Calculate cost for each event type in the combination
-    for event_type in combination:
-        if event_type in index_event_nodes:
-            event_cost = 0.0
-            
-            for etb in index_event_nodes[event_type]:
-                # Get source nodes for this ETB in the original graph
-                original_sources = getNodes(etb, event_nodes, index_event_nodes)
-                
-                # Find corresponding sources in subgraph
-                subgraph_sources = []
-                for orig_source in original_sources:
-                    if orig_source in subgraph['node_mapping']:
-                        subgraph_sources.append(subgraph['node_mapping'][orig_source])
-                
-                if subgraph_sources:
-                    # Find best (closest) source
-                    best_source = subgraph_sources[0]
-                    min_distance = all_pairs[placement_node_remapped][best_source]
-                    
-                    for source in subgraph_sources[1:]:
-                        distance = all_pairs[placement_node_remapped][source]
-                        if distance < min_distance:
-                            min_distance = distance
-                            best_source = source
-                    
-                    # Calculate cost for this ETB
-                    if len(event_type) == 1:  # Primitive event
-                        rate = rates.get(event_type, 1.0)
-                    else:  # Complex event/projection
-                        rate = projrates.get(event_type, [0, 1.0])[1]
-                    
-                    etb_cost = rate * min_distance
-                    event_cost += etb_cost
-                    
-                    logger.debug(f"Event {event_type}, ETB {etb}: source {best_source} -> sink {placement_node_remapped}, distance {min_distance}, rate {rate:.3f}, cost {etb_cost:.2f}")
-            
-            total_cost += event_cost
-            logger.debug(f"Total cost for event {event_type}: {event_cost:.2f}")
-    
-    logger.info(f"Total all-push cost: {total_cost:.2f}")
-    return total_cost
+    return NEWcomputeCentralCosts(
+        workload=[projection],
+        IndexEventNodes=subgraph['index_event_nodes_sub'],
+        allPairs=subgraph['all_pairs_sub'],
+        rates=self.h_rates_data,
+        EventNodes=subgraph['event_nodes_sub'],
+        G=subgraph['subgraph']
+    )
 
 
-def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any], projection: Any, 
-                                    central_eval_plan: Any, all_push_baseline: Optional[float] = None) -> float:
+def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any], projection: Any,
+                                      central_eval_plan: Any, routing_algo: Any, all_push_baseline: Optional[float] = 6278.0,
+                                      ) -> float:
     """
     Calculate prepp costs on the extracted subgraph by generating evaluation plan and calling prePP.
     Enhanced version that uses all_push_baseline for comparison.
@@ -110,10 +64,11 @@ def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any],
 
     try:
         # Create evaluation plan structures (simplified)
-        subgraph_plan = _create_basic_evaluation_plan(self, subgraph, projection)
-        central_plan_subgraph = _create_basic_central_plan(self, subgraph, central_eval_plan)
-        
+        subgraph_plan = _create_basic_evaluation_plan(self, subgraph, projection, routing_algo)
+        central_plan_subgraph = central_eval_plan
+
         # Generate evaluation plan using adapter
+        print("Debug hook")
         eval_plan_buffer = build_eval_plan(
             nw=subgraph['sub_network'],
             selectivities=self.selectivities,
@@ -121,7 +76,9 @@ def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any],
             central_plan=central_plan_subgraph,  # Format: [source, dict, workload]
             workload=[projection]  # Single projection as workload
         )
-        
+
+        content = eval_plan_buffer.getvalue()
+
         # Call generate_prePP using adapter
         prepp_results = run_prepp(
             input_buffer=eval_plan_buffer,
@@ -133,16 +90,16 @@ def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any],
             plan_print=True,
             all_pairs=subgraph['all_pairs_sub']
         )
-        
+
         # Extract costs from prePP results
         if prepp_results and len(prepp_results) > 0:
             costs = prepp_results[0]  # exact_cost
             logger.info(f"PrePP costs calculated: {costs:.2f}")
-            
+
             if all_push_baseline:
                 savings = all_push_baseline - costs
-                logger.info(f"Savings vs all-push: {savings:.2f} ({(savings/all_push_baseline*100):.1f}%)")
-            
+                logger.info(f"Savings vs all-push: {savings:.2f} ({(savings / all_push_baseline * 100):.1f}%)")
+
             return costs
         else:
             logger.warning("No valid prePP results returned, using fallback")
@@ -154,16 +111,88 @@ def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any],
         return calculate_fallback_costs(node, subgraph, projection, all_push_baseline)
 
 
-def _create_basic_evaluation_plan(self, subgraph: Dict[str, Any], projection: Any) -> Any:
-    """Create a basic evaluation plan structure for the subgraph."""
-    from EvaluationPlan import EvaluationPlan
+def _extract_event_types_from_projection(projection: Any) -> List[str]:
+    """
+    Extract event types from a projection.
     
+    Args:
+        projection: The projection object or string
+    
+    Returns:
+        List of event type strings
+    """
+    if hasattr(projection, 'leafs'):
+        return projection.leafs()
+
+    # Fallback: try to extract from string representation
+    projection_str = str(projection)
+    # Extract capital letters that represent event types
+    event_types = re.findall(r'[A-Z]', projection_str)
+    return list(set(event_types))  # Remove duplicates
+
+
+def _create_basic_evaluation_plan(self, subgraph: Dict[str, Any], projection: Any, routing_algo: Any) -> Any:
+    """Create a basic evaluation plan structure for the subgraph."""
+    from EvaluationPlan import EvaluationPlan, Projection, Instance
+
     # Create empty evaluation plan
     evaluation_plan = EvaluationPlan([], [])
-    
+
     # Initialize instances for primitive events in the subgraph
     evaluation_plan.initInstances(subgraph['index_event_nodes_sub'])
+
+    # Remap the placement node to the subgraph's placement node
+    remapped_placement_node = subgraph['placement_node_remapped']
+
+    # Create a relevant projection for the evaluation plan
+    current_projection = Projection(
+        name=projection,
+        combination={},
+        sinks=[remapped_placement_node],
+        spawnedInstances=[],
+        Filters=[])
+
+    # Extract event types from projection
+    event_types = _extract_event_types_from_projection(projection)
     
+    # Add instances to the projection based on the subgraph's event nodes
+    for event_type in event_types:
+        if event_type in subgraph['index_event_nodes_sub']:
+            instances_for_event = []
+            
+            for etb in subgraph['index_event_nodes_sub'][event_type]:
+                # Get source nodes for this ETB in the original graph
+                original_sources = getNodes(etb, self.h_eventNodes, self.h_IndexEventNodes)
+                
+                # Find corresponding sources in subgraph
+                subgraph_sources = []
+                for orig_source in original_sources:
+                    if orig_source in subgraph['node_mapping']:
+                        subgraph_sources.append(subgraph['node_mapping'][orig_source])
+                
+                if subgraph_sources:
+                    # Create routing info - use simple direct path for now
+
+                    routing_dict = find_shortest_path_or_ancestor(
+                        routingDict=routing_algo,
+                        me=subgraph_sources[0],
+                        j=remapped_placement_node)
+                    
+                    # Create instance for this ETB
+                    instance = Instance(
+                        name=event_type,
+                        projname=etb,
+                        sources=subgraph_sources,
+                        routingDict={projection: routing_dict}
+                    )
+                    instances_for_event.append(instance)
+            
+            if instances_for_event:
+                current_projection.addInstances(event_type, instances_for_event)
+
+    # Add the projection to the evaluation plan
+    evaluation_plan.addProjection(current_projection)
+
     return evaluation_plan
 
 
