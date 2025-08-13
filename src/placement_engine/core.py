@@ -71,11 +71,11 @@ def compute_operator_placement_with_prepp(
         from .initialization import initialize_placement_state
         from .candidate_selection import check_possible_placement_nodes_for_input, check_resources
         from .subgraph import extract_subgraph
-        from .cost_calculation import calculate_all_push_costs_on_subgraph, calculate_prepp_costs_on_subgraph
+        from .cost_calculation import calculate_prepp_costs_on_subgraph, calculate_all_push_costs_on_subgraph
         from .fallback import get_strategy_recommendation
         from .determinism import validate_deterministic_inputs
         from .state import PlacementDecision, PlacementDecisionTracker
-        
+
         # Initialize placement state
         placement_state = initialize_placement_state(
             combination, proj_filter_dict, no_filter, projection, graph
@@ -114,15 +114,26 @@ def compute_operator_placement_with_prepp(
             has_enough_resources = check_resources(node, projection, network, combination)
             
             # Extract subgraph for this placement node
+            if str(projection) == "AND(A, B, D)":
+                print("Debug hook")
             subgraph = extract_subgraph(
                 node, network, graph, placement_state['extended_combination'],
                 index_event_nodes, event_nodes, placement_state['routing_dict']
             )
+
+            if subgraph:
+                routing_algo = dict(networkx.all_pairs_shortest_path(subgraph['subgraph']))
+            else:
+                logger.warning(f"Subgraph extraction failed for node {node}, skipping")
+                continue
             
             # Step 1: Calculate all-push costs (always needed as baseline)
-            all_push_costs = calculate_all_push_costs_on_subgraph(
-                subgraph, projection, combination, rates, projrates, index_event_nodes, event_nodes
+            central_plan = calculate_all_push_costs_on_subgraph(
+                self, subgraph, projection
             )
+
+            all_push_costs = central_plan[0]
+            central_eval_plan = [central_plan[1], central_plan[3], projection]
             
             push_pull_costs = None
             
@@ -130,7 +141,13 @@ def compute_operator_placement_with_prepp(
             if has_enough_resources:
                 try:
                     push_pull_costs = calculate_prepp_costs_on_subgraph(
-                        self, node, subgraph, projection, central_eval_plan, all_push_costs
+                        self=self,
+                        node=node,
+                        subgraph=subgraph,
+                        projection=projection,
+                        central_eval_plan=central_eval_plan,
+                        all_push_baseline=all_push_costs,
+                        routing_algo=routing_algo
                     )
                 except Exception as e:
                     logger.warning(f"Node {node} - Push-pull calculation failed: {e}")
@@ -174,8 +191,9 @@ def compute_operator_placement_with_prepp(
             
             # Convert to legacy format for backward compatibility
             # Expected format: (costs, node, longestPath, myProjection, newInstances, Filters)
-            legacy_result = _convert_to_legacy_format(best_decision, placement_decisions)
-            return legacy_result
+            # legacy_result = _convert_to_legacy_format(best_decision, placement_decisions)
+            # return legacy_result
+            return best_decision
         else:
             logger.error("No valid placement found!")
             # Return a fallback decision or raise an exception
