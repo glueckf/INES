@@ -286,7 +286,9 @@ def _create_subgraph_network_objects(reverse_mapping: Dict[int, int], network: L
                                    node_mapping: Dict[int, int]) -> List[Node]:
     """Create Node objects for the subgraph with remapped relationships."""
     sub_network = []
+    node_objects_map = {}  # Map from new_node_id to Node object
     
+    # First pass: Create all node objects
     for new_node_id in sorted(reverse_mapping.keys()):
         orig_node_id = reverse_mapping[new_node_id]
         
@@ -297,11 +299,50 @@ def _create_subgraph_network_objects(reverse_mapping: Dict[int, int], network: L
             sub_node = Node(new_node_id, orig_node.computational_power, orig_node.memory)
             sub_node.eventrates = orig_node.eventrates.copy() if orig_node.eventrates else []
             
-            # Initialize empty relationships (will be populated later if needed)
+            # Initialize empty relationships (will be populated in second pass)
             sub_node.Parent = []
             sub_node.Child = []
             sub_node.Sibling = []
             
             sub_network.append(sub_node)
+            node_objects_map[new_node_id] = sub_node
+    
+    # Second pass: Populate parent/child relationships based on original network
+    for new_node_id in sorted(reverse_mapping.keys()):
+        orig_node_id = reverse_mapping[new_node_id]
+        
+        if orig_node_id < len(network):
+            orig_node = network[orig_node_id]
+            sub_node = node_objects_map[new_node_id]
+            
+            # Map parent relationships
+            if orig_node.Parent:
+                for orig_parent in orig_node.Parent:
+                    orig_parent_id = orig_parent.id
+                    # Check if this parent is in our subgraph
+                    if orig_parent_id in node_mapping:
+                        new_parent_id = node_mapping[orig_parent_id]
+                        if new_parent_id in node_objects_map:
+                            sub_node.Parent.append(node_objects_map[new_parent_id])
+            
+            # Map child relationships
+            if orig_node.Child:
+                for orig_child in orig_node.Child:
+                    orig_child_id = orig_child.id
+                    # Check if this child is in our subgraph
+                    if orig_child_id in node_mapping:
+                        new_child_id = node_mapping[orig_child_id]
+                        if new_child_id in node_objects_map:
+                            sub_node.Child.append(node_objects_map[new_child_id])
+            
+            # Map sibling relationships (if needed)
+            if orig_node.Sibling:
+                for orig_sibling in orig_node.Sibling:
+                    orig_sibling_id = orig_sibling.id
+                    # Check if this sibling is in our subgraph
+                    if orig_sibling_id in node_mapping:
+                        new_sibling_id = node_mapping[orig_sibling_id]
+                        if new_sibling_id in node_objects_map:
+                            sub_node.Sibling.append(node_objects_map[new_sibling_id])
     
     return sub_network
