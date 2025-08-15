@@ -41,7 +41,11 @@ def generate_hardcoded_single_selectivities():
         'C': 1.0,  # Single event C always has selectivity 1.0
         'D': 1.0,  # Single event D always has selectivity 1.0
         'E': 1.0,  # Single event E always has selectivity 1.0
-        'F': 1.0   # Single event F always has selectivity 1.0
+        'F': 1.0,  # Single event F always has selectivity 1.0
+        'G': 1.0,  # Single event G always has selectivity 1.0
+        'H': 1.0,  # Single event H always has selectivity 1.0
+        'I': 1.0,  # Single event I always has selectivity 1.0
+        'J': 1.0   # Single event J always has selectivity 1.0
     }
 
 def generate_hardcoded_projection_selectivities():
@@ -50,18 +54,125 @@ def generate_hardcoded_projection_selectivities():
     These are the conditional selectivity values that would normally be randomly generated.
     """
     return {
+        # Single event selectivities
         'A': 1.0,
         'B': 1.0, 
         'C': 1.0,
+        'D': 1.0,
+        'E': 1.0,
+        'F': 1.0,
+        
+        # Two-event combinations
         'A|AB': 0.013437246922864427,
         'B|AB': 0.8793430122560099,
         'A|AC': 0.12734450397968697,
         'C|AC': 0.39969153020774206,
+        'A|AD': 0.15,
+        'D|AD': 0.85,
+        'A|AE': 0.2,
+        'E|AE': 0.75,
+        'A|AF': 0.1,
+        'F|AF': 0.9,
         'B|BC': 1.0,
         'C|BC': 1.0,
+        'B|BD': 0.6,
+        'D|BD': 0.7,
+        'B|BE': 0.45,
+        'E|BE': 0.8,
+        'B|BF': 0.3,
+        'F|BF': 0.85,
+        'C|CD': 0.55,
+        'D|CD': 0.65,
+        'C|CE': 0.4,
+        'E|CE': 0.9,
+        'C|CF': 0.25,
+        'F|CF': 0.95,
+        'D|DE': 0.5,
+        'E|DE': 0.3,
+        'D|DF': 0.35,
+        'F|DF': 0.8,
+        'E|EF': 0.7,
+        'F|EF': 0.65,
+        
+        # Three-event combinations
         'A|ABC': 0.0010735560056642584,
         'B|ABC': 0.599299380831806,
-        'C|ABC': 0.9347710015537102
+        'C|ABC': 0.9347710015537102,
+        'A|ABD': 0.02,
+        'B|ABD': 0.55,
+        'D|ABD': 0.75,
+        'A|ABE': 0.015,
+        'B|ABE': 0.6,
+        'E|ABE': 0.7,
+        'A|ABF': 0.01,
+        'B|ABF': 0.5,
+        'F|ABF': 0.8,
+        'A|ACD': 0.025,
+        'C|ACD': 0.45,
+        'D|ACD': 0.65,
+        'A|ACE': 0.03,
+        'C|ACE': 0.4,
+        'E|ACE': 0.85,
+        'A|ACF': 0.005,
+        'C|ACF': 0.35,
+        'F|ACF': 0.9,
+        'A|ADE': 0.04,
+        'D|ADE': 0.5,
+        'E|ADE': 0.6,
+        'A|ADF': 0.035,
+        'D|ADF': 0.45,
+        'F|ADF': 0.75,
+        'A|AEF': 0.02,
+        'E|AEF': 0.55,
+        'F|AEF': 0.7,
+        'B|BCD': 0.6,
+        'C|BCD': 0.4,
+        'D|BCD': 0.55,
+        'B|BCE': 0.5,
+        'C|BCE': 0.45,
+        'E|BCE': 0.8,
+        'B|BCF': 0.4,
+        'C|BCF': 0.3,
+        'F|BCF': 0.85,
+        'B|BDE': 0.45,
+        'D|BDE': 0.6,
+        'E|BDE': 0.65,
+        'B|BDF': 0.35,
+        'D|BDF': 0.55,
+        'F|BDF': 0.8,
+        'B|BEF': 0.3,
+        'E|BEF': 0.7,
+        'F|BEF': 0.75,
+        'C|CDE': 0.4,
+        'D|CDE': 0.5,
+        'E|CDE': 0.85,
+        'C|CDF': 0.25,
+        'D|CDF': 0.45,
+        'F|CDF': 0.9,
+        'C|CEF': 0.2,
+        'E|CEF': 0.8,
+        'F|CEF': 0.85,
+        'D|DEF': 0.4,
+        'E|DEF': 0.6,
+        'F|DEF': 0.7,
+        
+        # Four-event combinations (some key ones)
+        'A|ABCD': 0.001,
+        'B|ABCD': 0.5,
+        'C|ABCD': 0.35,
+        'D|ABCD': 0.6,
+        'A|ABDE': 0.0015,
+        'B|ABDE': 0.45,
+        'D|ABDE': 0.55,
+        'E|ABDE': 0.7,
+        'A|ABDF': 0.001,
+        'B|ABDF': 0.4,
+        'D|ABDF': 0.5,
+        'F|ABDF': 0.75,
+        'A|ABEF': 0.0005,
+        'B|ABEF': 0.35,
+        'E|ABEF': 0.65,
+        'F|ABEF': 0.8
     }
 
 
@@ -322,7 +433,7 @@ def determine_randomized_distribution_push_pull_costs(queries, eventtype_combina
         top_k = int(k)
 
         for current_node in query.node_placement:
-            #print("~~~~~~~~")
+            print("~~~~~~~~")
             query.primitive_operators = copy.deepcopy(old_copy)
 
             if algorithm == "e":
@@ -341,6 +452,7 @@ def determine_randomized_distribution_push_pull_costs(queries, eventtype_combina
                 if plan_print == "t":
                     print("exact_push_pull_plan_for_a_projection:", exact_push_pull_plan_for_a_projection)
                     print("used_eventtypes_to_pull:", used_eventtypes_to_pull)
+                    pass
                 total_exact_costs += exact_costs
 
 
@@ -566,7 +678,7 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
         if CURRENT_SECTION == MUSE_GRAPH:
             if "SELECT" in line and "ON" in line:
                 # Split the line at "SELECT" and "ON"
-                print("SPlitting")
+                # print("SPlitting")
                 select_part = line.split("SELECT")[1]  # Get everything after SELECT
                 if "FROM" in select_part:
                     # Old format: SELECT query FROM ... ON
@@ -592,13 +704,13 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
                         if node_part:
                             nodes = [int(n.strip()) for n in node_part.split(",")]
                         else:
-                            print(f"[Warning] Empty node block found in line: '{line}'")
+                            # print(f"[Warning] Empty node block found in line: '{line}'")
                             nodes = []
                     else:
-                        print(f"[Warnung] No valid node block in '{{}}' found: '{on_split.strip()}'")
+                        # print(f"[Warnung] No valid node block in '{{}}' found: '{on_split.strip()}'")
                         nodes = []
                 except (IndexError, ValueError) as e:
-                    print(f"[Error] Parsing from line failed: '{line}' → {e}")
+                    # print(f"[Error] Parsing from line failed: '{line}' → {e}")
                     nodes = []
                     
                 # Store the query and the node(s) list in the dictionary
@@ -649,7 +761,7 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
                 query_obj.query = query
 
             if query_obj.query in queries_to_process:
-                print("single_sink_evaluation_node",single_sink_evaluation_node)
+                # print("single_sink_evaluation_node",single_sink_evaluation_node)
                 single_sink_query_network.append(Query_fragment(query_obj.query,determine_all_primitive_events_of_projection(query_obj.query),[single_sink_evaluation_node],""))
             
             if extract_muse_graph_sources(line) != None:
@@ -677,7 +789,7 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
                 query_obj.forbidden_event_types = extract_muse_graph_forbidden(line)
 
 
-            print(f"[DEBUG] Adding query to network: query='{query_obj.query}', node_placement={getattr(query_obj, 'node_placement', 'None')}")
+            # print(f"[DEBUG] Adding query to network: query='{query_obj.query}', node_placement={getattr(query_obj, 'node_placement', 'None')}")
             query_network.append(query_obj)
         all_event_combinations = []
         if CURRENT_SECTION == SELECTIVITIES:
@@ -716,12 +828,12 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
             total_cost += cost
     
     
-    print(f"total central push cost is {total_cost}")
+    # print(f"total central push cost is {total_cost}")
     central_push_costs = total_cost
     reversed_query_network = []
-    print(f"[DEBUG] Original query_network has {len(query_network)} queries")
+    # print(f"[DEBUG] Original query_network has {len(query_network)} queries")
     for i in range(len(query_network)-1,-1,-1):
-        print(f"[DEBUG] Processing query_network[{i}]: '{query_network[i].query}'")
+        # print(f"[DEBUG] Processing query_network[{i}]: '{query_network[i].query}'")
         reversed_query_network.append(query_network[i])
         if query_network[i].query == '':
             continue
@@ -729,17 +841,17 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
                 
         eventtype_to_sources_map[query_network[i].query] = query_network[i].node_placement
         all_eventtype_output_rates[query_network[i].query] = determine_total_query_rate(query_network[i],all_eventtype_output_rates,eventtype_to_sources_map,eventtype_pair_to_selectivity)
-    for query in query_network:
-        print(query.query)
-    print("~~")
+    # for query in query_network:
+    #     print(query.query)
+    # print("~~")
     query_network = reversed_query_network
-    for query in single_sink_query_network:
-        print(query.query)
+    # for query in single_sink_query_network:
+    #     print(query.query)
 
     all_needed_primitive_events, biggest_query_length_to_be_processed = get_all_distinct_eventtypes_of_used_queries_and_largest_query(queries_to_process)
     number_of_samples = int(runs)
     all_exact_costs = 0
-    print(queries_to_process)
+    # print(queries_to_process)
     old_eventtype_pair_to_selectivity = eventtype_pair_to_selectivity.copy()
     
     query_network_copy = copy.deepcopy(query_network)
@@ -767,9 +879,10 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
         # determine_all_single_selectivities_for_every_possible_projection(eventtype_pair_to_selectivity,all_eventtype_output_rates,eventtype_to_sources_map,single_selectivity_of_eventtype_within_projection,queries_to_process)
 
         q_network = query_network_copy if method == "ppmuse" else single_sink_query_network_copy
-        print(f"[DEBUG] About to process q_network with {len(q_network)} queries, method={method}")
+        # print(f"[DEBUG] About to process q_network with {len(q_network)} queries, method={method}")
         for i, q in enumerate(q_network):
-            print(f"[DEBUG] q_network[{i}]: query='{q.query}', node_placement={getattr(q, 'node_placement', 'None')}")
+            # print(f"[DEBUG] q_network[{i}]: query='{q.query}', node_placement={getattr(q, 'node_placement', 'None')}")
+            pass
 
         if method == "ppmuse":
             greedy_costs, sampling_costs, factorial_costs, exact_costs, greedy_algo_time, exact_algo_time, factorial_algo_time, sampling_algo_time,max_latency = determine_randomized_distribution_push_pull_costs(q_network, eventtype_combinations, highest_primitive_eventtype_to_be_processed, algorithm, samples, topk, plan_print,allPairs,eventtype_pair_to_selectivity, eventtype_to_sources_map, all_eventtype_output_rates, eventtypes_single_selectivities, single_selectivity_of_eventtype_within_projection)
@@ -778,21 +891,21 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
             sampling_costs_avg.append(sampling_costs)
             factorial_costs_avg.append(factorial_costs)
             exact_costs_avg.append(exact_costs)
-            print(f"greedy_costs: {greedy_costs}")
-            print(f"sampling_costs: {sampling_costs}")
-            print(f"factorial_costs: {factorial_costs}")
-            print(f"exact_costs: {exact_costs}")
+            # print(f"greedy_costs: {greedy_costs}")
+            # print(f"sampling_costs: {sampling_costs}")
+            # print(f"factorial_costs: {factorial_costs}")
+            # print(f"exact_costs: {exact_costs}")
             
            
-            print("§§§§§§§§§§ Push-Pull MuSE costs §§§§§§§§§§")
+            # print("§§§§§§§§§§ Push-Pull MuSE costs §§§§§§§§§§")
             if algorithm == "e":            
-                print("####### EXACT #######")
-                print("Exact network costs:", exact_costs)
+                # print("####### EXACT #######")
+                # print("Exact network costs:", exact_costs)
                 all_exact_costs += exact_costs
-                print("Exact Average:", all_exact_costs/idx)
+                # print("Exact Average:", all_exact_costs/idx)
 
                 endTransmissionRatio = (all_exact_costs/idx) / central_push_costs if central_push_costs != 0 else 0
-                print("Exact Average Transmission Ratio:", endTransmissionRatio)
+                # print("Exact Average Transmission Ratio:", endTransmissionRatio)
                     
 
                 #print("Exact Average Transsmission Ratio:", (all_exact_costs/idx) / central_push_costs)
@@ -803,20 +916,26 @@ def generate_prePP(input_buffer,method,algorithm,samples,top_k,runs,plan_print,a
                     exact_worst_generated_costs = exact_costs
 				
                 exact_accumulated_exec_time += exact_algo_time
-                print("Average exact algorithm execution time:", exact_accumulated_exec_time/idx)
+                # print("Average exact algorithm execution time:", exact_accumulated_exec_time/idx)
 
 
 
             query_network_copy = copy.deepcopy(query_network)
             single_sink_query_network_copy = copy.deepcopy(single_sink_query_network)
-    print(greedy_costs_avg)
-    print(sampling_costs_avg)
-    print(factorial_costs_avg)
-    print(exact_costs_avg)      
+    # print(greedy_costs_avg)
+    # print(sampling_costs_avg)
+    # print(factorial_costs_avg)
+    # print(exact_costs_avg)
     end_time = time.time()
     total_time = end_time - start_time
     exact_cost = sum(exact_costs_avg) / len(exact_costs_avg)
     pushPullTime = total_time
     maxPushPullLatency = max_latency
 
-    return [exact_cost, pushPullTime, maxPushPullLatency, endTransmissionRatio]
+    # TODO: Find a way to include the plan information in readable format:
+    # [DEBUG] Used eventtypes to pull: [[], ['B'], ['A']]
+    # [DEBUG] Exact push-pull plan: [['B'], ['A'], ['C']]
+
+    # TODO: Discuss and update costs
+
+    return [exact_cost, pushPullTime, maxPushPullLatency, endTransmissionRatio, total_cost]
