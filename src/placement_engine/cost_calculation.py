@@ -18,7 +18,6 @@ logger = get_placement_logger(__name__)
 
 
 def calculate_all_push_costs_on_subgraph(self, subgraph: Dict[str, Any], projection: Any):
-
     """
     Calculate the costs of using all-push strategy for a projection on a subgraph.
     This is an efficient implementation that reuses logic from push_pull_plan_generator.
@@ -41,7 +40,8 @@ def calculate_all_push_costs_on_subgraph(self, subgraph: Dict[str, Any], project
 
 
 def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any], projection: Any,
-                                      central_eval_plan: Any, routing_algo: Any, all_push_baseline: Optional[float] = 6278.0,
+                                      central_eval_plan: Any, routing_algo: Any,
+                                      all_push_baseline: Optional[float] = 6278.0,
                                       ) -> float:
     """
     Calculate prepp costs on the extracted subgraph by generating evaluation plan and calling prePP.
@@ -154,22 +154,22 @@ def _create_basic_evaluation_plan(self, subgraph: Dict[str, Any], projection: An
 
     # Extract event types from projection
     event_types = _extract_event_types_from_projection(projection)
-    
+
     # Add instances to the projection based on the subgraph's event nodes
     for event_type in event_types:
         if event_type in subgraph['index_event_nodes_sub']:
             instances_for_event = []
-            
+
             for etb in subgraph['index_event_nodes_sub'][event_type]:
                 # Get source nodes for this ETB in the original graph
                 original_sources = getNodes(etb, self.h_eventNodes, self.h_IndexEventNodes)
-                
+
                 # Find corresponding sources in subgraph
                 subgraph_sources = []
                 for orig_source in original_sources:
                     if orig_source in subgraph['node_mapping']:
                         subgraph_sources.append(subgraph['node_mapping'][orig_source])
-                
+
                 if subgraph_sources:
                     # Create routing info - use simple direct path for now
 
@@ -177,7 +177,7 @@ def _create_basic_evaluation_plan(self, subgraph: Dict[str, Any], projection: An
                         routingDict=routing_algo,
                         me=subgraph_sources[0],
                         j=remapped_placement_node)
-                    
+
                     # Create instance for this ETB
                     instance = Instance(
                         name=event_type,
@@ -186,7 +186,7 @@ def _create_basic_evaluation_plan(self, subgraph: Dict[str, Any], projection: An
                         routingDict={projection: routing_dict}
                     )
                     instances_for_event.append(instance)
-            
+
             if instances_for_event:
                 current_projection.addInstances(event_type, instances_for_event)
 
@@ -201,3 +201,386 @@ def _create_basic_central_plan(self, subgraph: Dict[str, Any], central_eval_plan
     # Simplified central plan - use first node as source
     source_node = 0 if subgraph['sub_network'] else 0
     return [source_node, {}, []]
+
+
+def calculate_prepp_with_placement(self, node: int, projection: Any, network):
+    selection_rate = getSelectionRate(projection, self.h_mycombi, self.selectivities)
+    update_selectivity(self, projection, selection_rate)
+    input_buffer = initiate_buffer(node, projection, network, self.selectivities, selection_rate)
+
+    content = input_buffer.getvalue()
+
+    # Select method and algorithm type for prePP
+    method = "ppmuse"
+    algorithm = "e"
+
+    results = run_prepp(
+        input_buffer=input_buffer,
+        method=method,
+        algorithm=algorithm,
+        samples=0,
+        top_k=0,
+        runs=1,
+        plan_print=True,
+        all_pairs=self.allPairs)
+
+    push_pull_costs = results[0]
+    logger.info(f"Calculated push-pull costs for projection {projection}: {push_pull_costs:.2f}")
+
+    computing_time = results[1]
+    logger.info(f"Computing time for prePP: {computing_time:.2f}")
+
+    # TODO: Discuss latency output because it seems fishy
+    latency = results[2] - 1
+    logger.info(f"Latency for prePP: {latency:.2f}")
+
+    transmission_ratio = results[3]
+    logger.info(f"Transmission ratio for prePP: {transmission_ratio:.2f}")
+
+    # TODO: Discuss all_push_costs.
+    #  PrePP adds 1 to all_push_costs because it assumes, that the costs are 1 after evaluating query
+    all_push_costs = results[4] - 1
+    logger.info(f"All-push costs for projection {projection}: {all_push_costs:.2f}")
+
+    return push_pull_costs, computing_time, latency, transmission_ratio, all_push_costs
+
+
+def initiate_buffer(node, projection, network, selectivities, selection_rate) -> Any:
+    """
+    Generate a configuration buffer similar to generate_eval_plan but for a single projection.
+    Creates evaluation dictionaries, combination mappings, and configuration data.
+    
+    Args:
+        node: The target node ID for placement
+        projection: The projection/query being processed  
+        network: List of network nodes
+        selectivities: Dictionary of selectivity values
+        selection_rate: Calculated selection rate for the projection
+        
+    Returns:
+        io.StringIO: Configuration buffer containing the generated plan
+    """
+    import io
+
+    print("Debug hook for initiate_buffer")
+
+    # Safety checks
+    if not _validate_buffer_inputs(node, projection, network, selectivities, selection_rate):
+        return None
+
+    try:
+        # Initialize dictionaries similar to generate_eval_plan
+        evaluation_dict = _initialize_evaluation_dict(network)
+        combination_dict = {}
+        forwarding_dict = {}
+        selection_rate_dict = {}
+        filter_dict = {}
+        sink_dict = {}
+
+        # Process the projection (mimicking the loop over myplan.projections)
+        if projection:
+            projection_str = str(projection)
+
+            # Extract filters if available
+            filters = _extract_projection_filters(projection)
+            if filters:
+                filter_dict.update(filters)
+
+            # Set evaluation node for this projection
+            evaluation_dict[node].append(projection_str)
+
+            # Create combination dictionary mapping
+            combination_keys = _extract_combination_keys(projection)
+            combination_dict[projection_str] = combination_keys
+
+            # Store selection rate
+            selection_rate_dict[projection_str] = selection_rate
+
+            # Create sink dictionary
+            sinks = _extract_projection_sinks(projection, node)
+            sink_dict[projection_str] = [sinks, ""]
+
+            # Process forwarding dictionary (simplified version)
+            forwarding_dict = _process_forwarding_dict(projection, forwarding_dict)
+
+        # Generate the configuration plan
+        workload = [projection_str] if projection else []
+
+        # Create configuration buffer
+        config_buffer = io.StringIO()
+
+        # Generate plan content (placeholder for actual generatePlan function)
+        plan_content = _generate_plan_content(
+            network=network,
+            selectivities=selectivities,
+            workload=workload,
+            combination_dict=combination_dict,
+            sink_dict=sink_dict,
+            selection_rate_dict=selection_rate_dict
+        )
+
+        config_buffer.write(plan_content)
+        config_buffer.seek(0)
+
+        return config_buffer
+
+    except Exception as e:
+        logger.error(f"Error creating buffer: {str(e)}")
+        return None
+
+
+def _validate_buffer_inputs(node, projection, network, selectivities, selection_rate):
+    """Validate all input parameters for initiate_buffer."""
+    if not isinstance(network, list) or not network:
+        logger.warning(f"Invalid network: expected non-empty list, got {type(network)}")
+        return False
+
+    if not isinstance(node, int) or node < 0 or node >= len(network):
+        logger.warning(f"Invalid node ID: {node}, network has {len(network)} nodes")
+        return False
+
+    if not isinstance(selectivities, dict):
+        logger.warning(f"Invalid selectivities: expected dict, got {type(selectivities)}")
+        return False
+
+    if not isinstance(selection_rate, (int, float)) or selection_rate < 0:
+        logger.warning(f"Invalid selection rate: {selection_rate}")
+        return False
+
+    return True
+
+
+def _initialize_evaluation_dict(network):
+    """Initialize evaluation dictionary with empty lists for each network node."""
+    return {i: [] for i in range(len(network))}
+
+
+def _extract_projection_filters(projection):
+    """Extract filters from projection if available."""
+    filters = {}
+    if hasattr(projection, 'Filters'):
+        for filter_tuple in projection.Filters:
+            if len(filter_tuple) >= 2:
+                filters[filter_tuple[0]] = filter_tuple[1]
+    return filters
+
+
+def _extract_combination_keys(projection):
+    """Extract combination keys from projection."""
+    if hasattr(projection, 'combination') and hasattr(projection.combination, 'keys'):
+        return list(map(str, projection.combination.keys()))
+    elif hasattr(projection, 'children'):
+        return list(map(str, projection.children))
+    else:
+        return [str(projection)]
+
+
+def _extract_projection_sinks(projection, default_node):
+    """Extract sink nodes from projection or use default."""
+    if hasattr(projection, 'sinks') and projection.sinks:
+        return projection.sinks
+    else:
+        return [default_node]
+
+
+def _process_forwarding_dict(projection, forwarding_dict):
+    """Process forwarding dictionary for the projection (simplified)."""
+    # Simplified version - would need actual instance processing logic
+    if hasattr(projection, 'combination'):
+        # This would contain the actual forwarding logic from the original
+        pass
+    return forwarding_dict
+
+
+def _generate_plan_content(network, selectivities, workload, combination_dict, sink_dict, selection_rate_dict):
+    """Generate the actual plan content string."""
+    lines = []
+
+    # Convert Node objects to node IDs
+    def extract_node_ids(node_list):
+        if node_list is None:
+            return None
+        if not hasattr(node_list, '__iter__') or isinstance(node_list, str):
+            return node_list
+
+        ids = []
+        for item in node_list:
+            if hasattr(item, 'id'):
+                ids.append(item.id)
+            elif hasattr(item, 'nodeID'):
+                ids.append(item.nodeID)
+            elif hasattr(item, 'node_id'):
+                ids.append(item.node_id)
+            elif isinstance(item, int):
+                ids.append(item)
+            else:
+                # Try to get index from network list
+                try:
+                    if item in network:
+                        ids.append(network.index(item))
+                    else:
+                        ids.append(str(item))
+                except:
+                    ids.append(str(item))
+        return ids if ids else None
+
+    # First pass: collect all children relationships to build parent map
+    parent_map = {}  # child_id -> [parent_ids]
+    all_children = {}  # node_id -> [child_ids]
+
+    for i, node in enumerate(network):
+        children_raw = (getattr(node, 'children', None) or
+                        getattr(node, 'child', None) or
+                        getattr(node, 'Child', None) or
+                        getattr(node, 'childs', None))
+
+        children = extract_node_ids(children_raw)
+        all_children[i] = children
+
+        if children:
+            for child_id in children:
+                if child_id not in parent_map:
+                    parent_map[child_id] = []
+                parent_map[child_id].append(i)
+
+    # Add network information
+    lines.append("network")
+    for i, node in enumerate(network):
+        lines.append(f"Node {i} Node {i}")
+
+        # Try different possible attribute names for computational power
+        comp_power = (getattr(node, 'computational_power', None) or
+                      getattr(node, 'computationalPower', None) or
+                      getattr(node, 'comp_power', None) or
+                      'inf')
+
+        # Try different possible attribute names for memory  
+        memory = (getattr(node, 'memory', None) or
+                  getattr(node, 'Memory', None) or
+                  'inf')
+
+        # Try different possible attribute names for event rates
+        event_rates = (getattr(node, 'event_rates', None) or
+                       getattr(node, 'eventrates', None) or
+                       getattr(node, 'Eventrates', None) or
+                       getattr(node, 'rates', None) or
+                       [0] * 6)
+
+        # Get parents from the parent map we built
+        parents = parent_map.get(i, None)
+
+        # Get children 
+        children = all_children[i]
+
+        # Try different possible attribute names for siblings
+        siblings_raw = (getattr(node, 'siblings', None) or
+                        getattr(node, 'Siblings', None) or
+                        getattr(node, 'sibling', None))
+        siblings = extract_node_ids(siblings_raw)
+
+        lines.append(f"Computational Power: {comp_power}")
+        lines.append(f"Memory: {memory}")
+        lines.append(
+            f"Eventrates: {list(event_rates) if hasattr(event_rates, '__iter__') and not isinstance(event_rates, str) else event_rates}")
+        lines.append(f"Parents: {parents}")
+        lines.append(f"Child: {children}")
+        lines.append(f"Siblings: {siblings}")
+        lines.append("")
+
+    # Add selectivities
+    lines.append("selectivities")
+    lines.append(str(selectivities))
+    lines.append("")
+
+    # Add queries
+    lines.append("queries")
+    for query in workload:
+        lines.append(str(query))
+    lines.append("")
+
+    # Add muse graph
+    if workload and selection_rate_dict:
+        query = workload[0]
+        rate = selection_rate_dict.get(query, 0)
+        sink_info = sink_dict.get(query, [[], ""])
+        sink_nodes = sink_info[0] if sink_info[0] else [0]
+
+        lines.append("muse graph")
+        combination_str = "; ".join(combination_dict.get(query, [query]))
+        lines.append(
+            f"SELECT {query} FROM {combination_str} ON {{{', '.join(map(str, sink_nodes))}}} WITH selectionRate= {rate}")
+
+    return "\n".join(lines)
+
+
+def getSelectionRate(projection: Any, combination_dict, selectivities):
+    """
+    Calculate selection rate for a projection based on combination dictionary and selectivities.
+    
+    Args:
+        projection: The projection to calculate selection rate for
+        combination_dict: Dictionary mapping projections to their event type combinations
+        selectivities: Dictionary mapping event type combinations to their selectivity values
+        
+    Returns:
+        float: The calculated selection rate (product of relevant selectivities)
+    """
+    print("Debug hook for getSelectionRate")
+
+    # Safety check: ensure projection exists in combination_dict
+    if projection not in combination_dict:
+        logger.warning(f"Projection {projection} not found in combination_dict")
+        return 1.0  # Return neutral value
+
+    combination_for_given_projection = combination_dict[projection]
+
+    # Safety check: ensure combination is not empty
+    if not combination_for_given_projection:
+        logger.warning(f"Empty combination for projection {projection}")
+        return 1.0
+
+    # Create all possible string combinations from the event types (1-element, 2-element, all-element)
+    from itertools import combinations
+
+    event_combinations = []
+
+    has_subquery = False
+    # Check if combination_for_given_projection has a subquery
+    if any(elem in combination_dict.keys() for elem in combination_for_given_projection):
+        has_subquery = True
+
+    # Generate all possible combinations of all lengths (1 to n)
+    if has_subquery:
+        for r in range(1, len(combination_for_given_projection) + 1):
+            for combo in combinations(combination_for_given_projection, r):
+                # Convert each element to string and concatenate them
+                # This handles both simple strings like "A" and complex expressions like "AND(A,B)"
+                combo_str = "".join(str(element) for element in combo)
+                event_combinations.append(combo_str)
+    else:
+        for r in range(2, len(combination_for_given_projection) + 1):
+            for combo in combinations(combination_for_given_projection, r):
+                # Convert each element to string and concatenate them
+                # This handles both simple strings like "A" and complex expressions like "AND(A,B)"
+                combo_str = "".join(str(element) for element in combo)
+                event_combinations.append(combo_str)
+
+    # Calculate selection rate as product of relevant selectivities
+    res = 1.0
+
+    for combo_str in event_combinations:
+        if combo_str in selectivities:
+            selectivity_value = selectivities[combo_str]
+            # Safety check: ensure selectivity is a valid number
+            if isinstance(selectivity_value, (int, float)) and selectivity_value > 0:
+                res *= selectivity_value
+            else:
+                logger.warning(f"Invalid selectivity value for {combo_str}: {selectivity_value}")
+        else:
+            logger.warning(f"Selectivity not found for combination: {combo_str}")
+
+    return res
+
+
+def update_selectivity(self, projection, selection_rate):
+    self.selectivities[str(projection)] = selection_rate
