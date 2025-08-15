@@ -89,9 +89,14 @@ class PlacementDecision:
     network node, including costs, strategy used, resource constraints, and metadata.
     """
     
-    def __init__(self, node: int, costs: float, strategy: str, all_push_costs: float, 
-                 push_pull_costs: Optional[float] = None, has_sufficient_resources: bool = False, 
-                 subgraph_info: Optional[Dict[str, Any]] = None, plan_details: Optional[Dict[str, Any]] = None):
+    def __init__(self,
+                 node: int,
+                 costs: float,
+                 strategy: str,
+                 all_push_costs: float,
+                 push_pull_costs: Optional[float] = None,
+                 has_sufficient_resources: bool = False,
+                 plan_details: Optional[Dict[str, Any]] = None):
         """
         Initialize a placement decision.
         
@@ -102,7 +107,6 @@ class PlacementDecision:
             all_push_costs: The cost if using all-push strategy
             push_pull_costs: The cost if using push-pull strategy (None if not calculated)
             has_sufficient_resources: Whether the node has sufficient resources for push-pull
-            subgraph_info: Metadata about the subgraph used in placement
             plan_details: Details about the evaluation plan generated
         """
         self.node = node
@@ -111,7 +115,6 @@ class PlacementDecision:
         self.all_push_costs = all_push_costs
         self.push_pull_costs = push_pull_costs
         self.has_sufficient_resources = has_sufficient_resources
-        self.subgraph_info = subgraph_info or {}
         self.plan_details = plan_details or {}
         self.savings = all_push_costs - costs if costs < all_push_costs else 0.0
         
@@ -130,7 +133,6 @@ class PlacementDecision:
             'all_push_costs': self.all_push_costs,
             'push_pull_costs': self.push_pull_costs,
             'has_sufficient_resources': self.has_sufficient_resources,
-            'subgraph_info': self.subgraph_info,
             'plan_details': self.plan_details,
             'savings': self.savings
         }
