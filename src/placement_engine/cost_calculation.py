@@ -203,9 +203,81 @@ def _create_basic_central_plan(self, subgraph: Dict[str, Any], central_eval_plan
     return [source_node, {}, []]
 
 
+def calculate_final_costs_for_sending_to_sinks(
+        cost_results: tuple,
+        placement_node: int,
+        query_projection: Any,
+        sink_nodes: List[int],
+        projection_rates: Dict[Any, tuple],
+        shortest_path_distances: Dict[int, Dict[int, int]]
+) -> tuple:
+    """
+    Calculate the final transmission costs for sending query results to sink nodes.
+    
+    This function takes initial push-pull costs and adds the network transmission
+    costs to reach all specified sink nodes, factoring in the output rate of the
+    projection and the shortest path distances.
+    
+    Args:
+        cost_results: Tuple containing (push_pull_costs, original_result_at_idx_1, 
+                     latency, transmission_ratio, all_push_costs)
+        placement_node: Node ID where the projection is placed
+        query_projection: The projection/query being processed
+        sink_nodes: List of destination node IDs to send results to
+        projection_rates: Dictionary mapping projections to their rate tuples
+        shortest_path_distances: All-pairs shortest path distance matrix
+        
+    Returns:
+        tuple: Updated costs tuple with transmission costs to sinks included,
+               or original results if costs cannot be calculated
+    """
+    print("Hook")
+    (push_pull_costs, original_result_at_idx_1, latency,
+     transmission_ratio, all_push_costs) = cost_results
+
+    # Extract the output rate for the given projection
+    projection_output_rate = (projection_rates[query_projection][1]
+                              if isinstance(projection_rates, dict) else 1)
+
+    # Calculate hop distances from placement node to all sink nodes
+    hop_distances_to_sinks = [shortest_path_distances[placement_node][sink]
+                              for sink in sink_nodes]
+
+    # Log transmission planning information
+    logger.info(f"Output rate for projection {query_projection}: {projection_output_rate}")
+    for sink in sink_nodes:
+        logger.info(f"Distance from node {placement_node} to sink {sink}: "
+                    f"{shortest_path_distances[placement_node][sink]}")
+
+    # Calculate final costs including transmission to sinks
+    if push_pull_costs is not None and hop_distances_to_sinks:
+        # Sum all hop distances and multiply by projection output rate
+        total_transmission_cost = sum(hop_distances_to_sinks) * projection_output_rate
+
+        # Add transmission costs to existing strategy costs
+        final_push_pull_costs = push_pull_costs + total_transmission_cost
+        final_all_push_costs = all_push_costs + total_transmission_cost
+
+        # Latency is dominated by the longest path to any sink
+        final_latency = latency + max(hop_distances_to_sinks)
+
+        # Recalculate transmission efficiency ratio
+        final_transmission_ratio = final_push_pull_costs / final_all_push_costs
+
+        return (
+            final_push_pull_costs,
+            original_result_at_idx_1,
+            final_latency,
+            final_transmission_ratio,
+            final_all_push_costs
+        )
+    else:
+        return cost_results
+
+
 def calculate_prepp_with_placement(self, node: int, projection: Any, network):
     selection_rate = getSelectionRate(projection, self.h_mycombi, self.selectivities)
-    update_selectivity(self, projection, selection_rate)
+    # update_selectivity(self, projection, selection_rate)
     input_buffer = initiate_buffer(node, projection, network, self.selectivities, selection_rate)
 
     content = input_buffer.getvalue()
@@ -239,7 +311,7 @@ def calculate_prepp_with_placement(self, node: int, projection: Any, network):
 
     # TODO: Discuss all_push_costs.
     #  PrePP adds 1 to all_push_costs because it assumes, that the costs are 1 after evaluating query
-    all_push_costs = results[4] - 1
+    all_push_costs = results[4]
     logger.info(f"All-push costs for projection {projection}: {all_push_costs:.2f}")
 
     return push_pull_costs, computing_time, latency, transmission_ratio, all_push_costs
