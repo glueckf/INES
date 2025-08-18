@@ -29,7 +29,8 @@ def compute_operator_placement_with_prepp(
         projrates: dict,
         graph: networkx.Graph,
         network: list,
-        central_eval_plan) -> Any:
+        central_eval_plan: list,
+        sinks: list[int] = [0]) -> Any:
     """
     Legacy facade — preserves signature. Calls internal engine steps.
     
@@ -54,6 +55,7 @@ def compute_operator_placement_with_prepp(
         graph: NetworkX graph representing the network topology
         network: Network object containing all nodes and their respective properties
         central_eval_plan: Central evaluation plan data
+        sinks: List of sink nodes to consider for the placement (default: [0] because of single sink placement)
         
     Returns:
         PlacementDecision: Object containing the best placement decision with costs and plan details
@@ -71,10 +73,11 @@ def compute_operator_placement_with_prepp(
         from .initialization import initialize_placement_state
         from .candidate_selection import check_possible_placement_nodes_for_input, check_resources
         from .subgraph import extract_subgraph
-        from .cost_calculation import calculate_prepp_with_placement
+        from .cost_calculation import calculate_prepp_with_placement, calculate_final_costs_for_sending_to_sinks
         from .fallback import get_strategy_recommendation
         from .determinism import validate_deterministic_inputs
         from .state import PlacementDecision, PlacementDecisionTracker
+        from .placement_state import update_placement_state_with_best_decision
 
         # Initialize placement state
         placement_state = initialize_placement_state(
@@ -116,7 +119,31 @@ def compute_operator_placement_with_prepp(
                 logger.warning(f"Node {node} - No results from prepp_with_placement")
                 return None
 
+            # If projection is not a subquery, we need to calculate the costs of sending the projection to the cloud
+            if projection in self.query_workload and node not in sinks:
+                logger.info(f"Node {node} is not a sink, calculating costs for sending projection to cloud")
+                # Calculate costs of sending the projection to the cloud
+                results = calculate_final_costs_for_sending_to_sinks(
+                    cost_results=results,
+                    placement_node=node,
+                    query_projection=projection,
+                    sink_nodes=sinks,
+                    projection_rates=self.h_projrates,
+                    shortest_path_distances=self.allPairs
+                )
+            # TODO: Discuss with Ariane since this makes placement @ the cloud more attractive
+            #  because push-pull can be used on the whole graph and cuts costs by a lot compared to subgraph placement
             push_pull_costs, computing_time, latency, transmission_ratio, all_push_costs = results
+
+            # Log final calculated costs
+            logger.info(f"Final push-pull costs for projection {projection} "
+                        f"at node {node}: {push_pull_costs:.2f}")
+            logger.info(f"Final all-push costs for projection {projection} "
+                        f"at node {node}: {all_push_costs:.2f}")
+            logger.info(f"Final latency for projection {projection} "
+                        f"at node {node}: {latency:.2f}")
+            logger.info(f"Final transmission ratio for projection {projection} "
+                        f"at node {node}: {transmission_ratio:.2f}")
 
             # Check resource availability
             has_enough_resources = check_resources(node, projection, network, combination)
@@ -192,6 +219,30 @@ def compute_operator_placement_with_prepp(
 
         # Get the final best decision
         best_decision = placement_decisions.get_best_decision()
+
+        # # Update the structure with the best decision
+        # update_placement_state_with_best_decision(
+        #     self,
+        #     projection,
+        #     combination,
+        #     no_filter,
+        #     proj_filter_dict,
+        #     event_nodes,
+        #     index_event_nodes,
+        #     network_data,
+        #     all_pairs,
+        #     mycombi,
+        #     rates,
+        #     single_selectivity,
+        #     projrates,
+        #     graph,
+        #     network,
+        #     central_eval_plan,
+        #     placement_decisions,
+        #     sinks=sinks
+        # )
+
+
 
         if best_decision:
             logger.info(f"Final placement decision: {best_decision}")
