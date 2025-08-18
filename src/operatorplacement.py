@@ -134,6 +134,8 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
 
     central_eval_plan = [ccosts[1], ccosts[3], wl]
 
+    temp_results_dict = {}
+
     for projection in processingOrder:  #parallelize computation for all projections at the same level
         if set(unfolded[projection]) == set(projection.leafs()):  #initialize hop latency with maximum of children
             hopLatency[projection] = 0
@@ -183,27 +185,31 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
         else:
             # INFO: ComputeSingleSinkPlacement is called for the sequential approach.
             # Implementing a new function for the integrated approach
-            # result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter, projFilterDict, EventNodes,
-            #                                     IndexEventNodes, self.h_network_data, allPairs, mycombi, rates,
-            #                                     singleSelectivities, projrates, self.graph, self.network)
-            result = compute_operator_placement_with_prepp(
-                self,
-                projection,
-                unfolded[projection],
-                noFilter,
-                projFilterDict,
-                EventNodes,
-                IndexEventNodes,
-                self.h_network_data,
-                allPairs, mycombi,
-                rates,
-                singleSelectivities,
-                projrates,
-                G,
-                network,
-                central_eval_plan)
+            print(projection)
+
+            result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter, projFilterDict, EventNodes,
+                                                IndexEventNodes, self.h_network_data, allPairs, mycombi, rates,
+                                                singleSelectivities, projrates, self.graph, self.network)
+
+            # result = compute_operator_placement_with_prepp(
+            #     self,
+            #     projection,
+            #     unfolded[projection],
+            #     noFilter,
+            #     projFilterDict,
+            #     EventNodes,
+            #     IndexEventNodes,
+            #     self.h_network_data,
+            #     allPairs, mycombi,
+            #     rates,
+            #     singleSelectivities,
+            #     projrates,
+            #     G,
+            #     network,
+            #     central_eval_plan)
+
+            temp_results_dict[projection] = result
             print(result)
-            print("It should work now")
             additional = result[0]
             costs += additional
             hopLatency[projection] += result[2]
@@ -215,8 +221,10 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
             myPlan.updateInstances(result[4])  #! update instances
             Filters += result[5]
 
-            # print(f"[SiS PLACEMENT] {projection} → Node: {partType}, Cost: {additional:.2f}, Hops: {result[2]}")
 
+
+            # print(f"[SiS PLACEMENT] {projection} → Node: {partType}, Cost: {additional:.2f}, Hops: {result[2]}")
+    print(temp_results_dict)
     mycosts = costs / ccosts[0]
     print(f"[TRANSMISSION] INES with MS - Total Cost: {costs:.2f}")
     if len(wl) > 1 or wl[0].hasKleene() or wl[0].hasNegation():
