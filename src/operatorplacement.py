@@ -187,40 +187,39 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
             # Implementing a new function for the integrated approach
             print(projection)
 
-            result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter, projFilterDict, EventNodes,
-                                                IndexEventNodes, self.h_network_data, allPairs, mycombi, rates,
-                                                singleSelectivities, projrates, self.graph, self.network)
+            # result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter, projFilterDict, EventNodes,
+            #                                     IndexEventNodes, self.h_network_data, allPairs, mycombi, rates,
+            #                                     singleSelectivities, projrates, self.graph, self.network)
 
-            # result = compute_operator_placement_with_prepp(
-            #     self,
-            #     projection,
-            #     unfolded[projection],
-            #     noFilter,
-            #     projFilterDict,
-            #     EventNodes,
-            #     IndexEventNodes,
-            #     self.h_network_data,
-            #     allPairs, mycombi,
-            #     rates,
-            #     singleSelectivities,
-            #     projrates,
-            #     G,
-            #     network,
-            #     central_eval_plan)
+            result = compute_operator_placement_with_prepp(
+                self,
+                projection,
+                unfolded[projection],
+                noFilter,
+                projFilterDict,
+                EventNodes,
+                IndexEventNodes,
+                self.h_network_data,
+                allPairs, mycombi,
+                rates,
+                singleSelectivities,
+                projrates,
+                G,
+                network,
+                central_eval_plan)
 
             temp_results_dict[projection] = result
             print(result)
-            additional = result[0]
-            costs += additional
-            hopLatency[projection] += result[2]
-            myPlan.addProjection(result[3])  #!
-            for newin in result[3].spawnedInstances:  # add new spawned instances
-
-                myPlan.addInstances(projection, newin)
-
-            myPlan.updateInstances(result[4])  #! update instances
-            Filters += result[5]
-
+            # additional = result[0]
+            # costs += additional
+            # hopLatency[projection] += result[2]
+            # myPlan.addProjection(result[3])  #!
+            # for newin in result[3].spawnedInstances:  # add new spawned instances
+            #
+            #     myPlan.addInstances(projection, newin)
+            #
+            # myPlan.updateInstances(result[4])  #! update instances
+            # Filters += result[5]
 
 
             # print(f"[SiS PLACEMENT] {projection} → Node: {partType}, Cost: {additional:.2f}, Hops: {result[2]}")
