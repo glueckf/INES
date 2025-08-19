@@ -114,10 +114,10 @@ class TestAdapters:
         all_pairs = [[0, 1], [1, 0]]
         
         # Call adapter
-        result = run_prepp(input_buffer, method, algorithm, samples, top_k, runs, plan_print, all_pairs)
+        result = run_prepp(input_buffer, method, algorithm, samples, top_k, runs, plan_print, all_pairs, False)
         
         # Verify call forwarding
-        mock_generate.assert_called_once_with(input_buffer, method, algorithm, samples, top_k, runs, plan_print, all_pairs)
+        mock_generate.assert_called_once_with(input_buffer, method, algorithm, samples, top_k, runs, plan_print, all_pairs, False)
         assert result == mock_result
     
     def test_compute_central_plan_input_validation(self):
