@@ -14,6 +14,14 @@ from .adapters import build_eval_plan, run_prepp
 from .logging import get_placement_logger
 from .fallback import calculate_fallback_costs
 
+# Import SimulationMode for deterministic mode checking
+try:
+    from INES import SimulationMode
+except ImportError:
+    # Fallback if import fails
+    class SimulationMode:
+        FULLY_DETERMINISTIC = "deterministic"
+
 logger = get_placement_logger(__name__)
 
 
@@ -79,6 +87,9 @@ def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any],
 
         content = eval_plan_buffer.getvalue()
 
+        # Check if we should use deterministic behavior
+        is_deterministic = getattr(self, 'config', None) and getattr(self.config, 'mode', None) == SimulationMode.FULLY_DETERMINISTIC
+        
         # Call generate_prePP using adapter
         prepp_results = run_prepp(
             input_buffer=eval_plan_buffer,
@@ -88,7 +99,8 @@ def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any],
             top_k=0,
             runs=1,
             plan_print=True,
-            all_pairs=subgraph['all_pairs_sub']
+            all_pairs=subgraph['all_pairs_sub'],
+            is_deterministic=is_deterministic
         )
 
         # Extract costs from prePP results
@@ -286,6 +298,9 @@ def calculate_prepp_with_placement(self, node: int, projection: Any, network):
     method = "ppmuse"
     algorithm = "e"
 
+    # Check if we should use deterministic behavior
+    is_deterministic = getattr(self, 'config', None) and getattr(self.config, 'mode', None) == SimulationMode.FULLY_DETERMINISTIC
+    
     results = run_prepp(
         input_buffer=input_buffer,
         method=method,
@@ -294,7 +309,8 @@ def calculate_prepp_with_placement(self, node: int, projection: Any, network):
         top_k=0,
         runs=1,
         plan_print=True,
-        all_pairs=self.allPairs)
+        all_pairs=self.allPairs,
+        is_deterministic=is_deterministic)
 
     push_pull_costs = results[0]
     logger.info(f"Calculated push-pull costs for projection {projection}: {push_pull_costs:.2f}")

@@ -258,7 +258,7 @@ def generate_hardcoded_selectivities():
         'CF': 0.032539286285100014, 'FC': 0.032539286285100014,  # C-F and F-C: ~3.3%
         'EC': 0.09001062335728674, 'CE': 0.09001062335728674,  # E-C and C-E: ~9.0%
         'CD': 1, 'DC': 1,  # C-D and D-C: 100% selectivity
-        'AB': 0.011815949185579405, 'BA': 0.011815949185579405,  # A-B and B-A: ~1.2%
+        'AB': 0.0013437, 'BA': 0.0013437,  # A-B and B-A: ~0.13%
         'EF': 0.04513571523602232, 'FE': 0.04513571523602232,  # E-F and F-E: ~4.5%
         'BF': 0.09888225719599508, 'FB': 0.09888225719599508,  # B-F and F-B: ~9.9%
         'AF': 0.024810748715466777, 'FA': 0.024810748715466777  # A-F and F-A: ~2.5%
@@ -403,8 +403,10 @@ class INES():
 
         # Generate configuration and single selectivities for detailed analysis
         self.config_single = generate_config_buffer(self.network, self.query_workload, self.selectivities)
+        deterministic_flag = self.config.is_selectivities_fixed()
+        print(f"[INES_DEBUG] Calling initializeSingleSelectivity with is_deterministic={deterministic_flag} (mode={self.config.mode})")
         self.single_selectivity = initializeSingleSelectivity(self.CURRENT_SECTION, self.config_single,
-                                                              self.query_workload, self.config.is_selectivities_fixed())
+                                                              self.query_workload, deterministic_flag)
 
         # Initialize remaining simulation components (legacy processing pipeline)
         self.h_network_data, self.h_rates_data, self.h_primEvents, self.h_instances, self.h_nodes = initialize_globals(
@@ -425,7 +427,9 @@ class INES():
         from generateEvalPlan import generate_eval_plan
         self.plan = generate_eval_plan(self.network, self.selectivities, self.eval_plan, self.central_eval_plan,
                                        self.query_workload)
-        prepp_results = generate_prePP(self.plan, 'ppmuse', 'e', 1, 0, 1, True, self.allPairs)
+        deterministic_flag = self.config.is_selectivities_fixed()
+        print(f"[INES_DEBUG] Calling generate_prePP with is_deterministic={deterministic_flag} (mode={self.config.mode})")
+        prepp_results = generate_prePP(self.plan, 'ppmuse', 'e', 1, 0, 1, True, self.allPairs, deterministic_flag)
         self.results += prepp_results
 
     def _initialize_network_topology(self):
@@ -512,7 +516,9 @@ class INES():
                                                                                                                    self.max_parents)
         self.plan = generate_eval_plan(self.network, self.selectivities, self.eval_plan, self.central_eval_plan,
                                        self.query_workload)
-        self.results += generate_prePP(self.plan, 'ppmuse', 'e', 0, 0, 1, False, self.allPairs)
+        deterministic_flag = self.config.is_selectivities_fixed()
+        print(f"[INES_DEBUG] Calling generate_prePP (second call) with is_deterministic={deterministic_flag} (mode={self.config.mode})")
+        self.results += generate_prePP(self.plan, 'ppmuse', 'e', 0, 0, 1, False, self.allPairs, deterministic_flag)
         # new =False
         # try:
         #      f = open("./res/"+str(filename)+".csv")   

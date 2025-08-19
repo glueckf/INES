@@ -63,7 +63,7 @@ def generate_hardcoded_projection_selectivities():
         'F': 1.0,
 
         # Two-event combinations
-        'A|AB': 0.013437246922864427,
+        'A|AB': 0.0013437,
         'B|AB': 0.8793430122560099,
         'A|AC': 0.12734450397968697,
         'C|AC': 0.39969153020774206,
@@ -563,7 +563,17 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
                                                                      eventtype_pair_to_selectivity,
                                                                      all_eventtype_output_rates,
                                                                      eventtype_to_sources_map,
-                                                                     single_selectivity_of_eventtype_within_projection):
+                                                                     single_selectivity_of_eventtype_within_projection,
+                                                                     is_deterministic=False):
+    # print(f"[PREPP_DEBUG] determine_randomized_single_selectivities (prepp.py) called for query={''.join(query)}, is_deterministic={is_deterministic}")
+    
+    # Ensure deterministic behavior with consistent seed for each query
+    if is_deterministic:
+        # Use a hash of the query to get consistent but query-specific deterministic values
+        query_hash = hash(''.join(sorted(query)))
+        # print(f"[PREPP_DEBUG] Setting deterministic seed: 42 + {query_hash} = {42 + query_hash}")
+        random.seed(42 + query_hash)
+        
     projection_selectivity = determine_total_query_selectivity(query, eventtype_pair_to_selectivity)
     projection_outputrate = determine_total_query_outputrate(query, all_eventtype_output_rates,
                                                              eventtype_to_sources_map)
@@ -588,7 +598,10 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
 
         current_idx = 0
         chosen_indices = [ele for ele in range(0, limit)]
-        random.shuffle(chosen_indices)
+        if not is_deterministic:
+            random.shuffle(chosen_indices)
+        
+        # print(f"[PREPP_DEBUG] Delta {delta}: chosen_indices={chosen_indices}")
 
         for n in range(0, len(chosen_indices) - 1):
             if delta == 2000:
@@ -600,7 +613,15 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
             upper_bound = return_minimum_upper_bound(upper_bounds_keys, query[chosen_indices[n]],
                                                      single_selectivity_of_eventtype_within_projection)
 
-            first_n_random_values.append(random.uniform(lower_bound, upper_bound))
+            if is_deterministic:
+                # Use deterministic value: halfway between bounds
+                deterministic_value = (lower_bound + upper_bound) / 2.0
+                # print(f"[PREPP_DEBUG] Deterministic value for index {chosen_indices[n]} (eventtype {query[chosen_indices[n]]}): bounds=[{lower_bound}, {upper_bound}] -> {deterministic_value}")
+                first_n_random_values.append(deterministic_value)
+            else:
+                random_value = random.uniform(lower_bound, upper_bound)
+                # print(f"[PREPP_DEBUG] Random value for index {chosen_indices[n]} (eventtype {query[chosen_indices[n]]}): bounds=[{lower_bound}, {upper_bound}] -> {random_value}")
+                first_n_random_values.append(random_value)
             product *= first_n_random_values[n]
 
         if total_sel / product <= 1.0:
@@ -622,9 +643,11 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
                 idx += 1
 
     idx = 0
+    # print(f"[PREPP_DEBUG] Final selectivity assignments:")
     for random_value in first_n_random_values:
         projection_key = str(query[chosen_indices[idx]]) + '|' + str(query)
         single_selectivity_of_eventtype_within_projection[projection_key] = first_n_random_values[idx]
+        # print(f"[PREPP_DEBUG] {projection_key} = {first_n_random_values[idx]}")
         idx += 1
 
 
@@ -666,7 +689,20 @@ def determine_all_single_selectivities_for_every_possible_projection(eventtype_p
                                                                      all_eventtype_output_rates,
                                                                      eventtype_to_sources_map,
                                                                      single_selectivity_of_eventtype_within_projection,
-                                                                     queries_to_process):
+                                                                     queries_to_process,
+                                                                     is_deterministic=False):
+    # If using deterministic mode, preserve hardcoded values and skip dynamic calculation
+    if is_deterministic:
+        # Only set single eventtype selectivities to 1.0, preserve existing projection selectivities
+        all_needed_eventtypes, max_needed_query_length = get_all_distinct_eventtypes_of_used_queries_and_largest_query(
+            queries_to_process)
+        
+        for eventtype in all_needed_eventtypes:
+            # Only set single eventtype selectivities if they don't already exist
+            if eventtype not in single_selectivity_of_eventtype_within_projection:
+                single_selectivity_of_eventtype_within_projection[eventtype] = 1.0
+        return
+
     all_needed_eventtypes, max_needed_query_length = get_all_distinct_eventtypes_of_used_queries_and_largest_query(
         queries_to_process)
 
@@ -701,7 +737,8 @@ def determine_all_single_selectivities_for_every_possible_projection(eventtype_p
                                                                              eventtype_pair_to_selectivity,
                                                                              all_eventtype_output_rates,
                                                                              eventtype_to_sources_map,
-                                                                             single_selectivity_of_eventtype_within_projection)
+                                                                             single_selectivity_of_eventtype_within_projection,
+                                                                             is_deterministic)
 
 
 def generate_prePP(
@@ -712,7 +749,10 @@ def generate_prePP(
         top_k,
         runs,
         plan_print,
-        allPairs):
+        allPairs,
+        is_deterministic=False):
+    
+    # print(f"[PREPP_DEBUG] generate_prePP called with is_deterministic={is_deterministic}")
     # Accessing the arguments
     #print(input_buffer.getvalue())
     method = method
@@ -981,7 +1021,8 @@ def generate_prePP(
                                                                          all_eventtype_output_rates,
                                                                          eventtype_to_sources_map,
                                                                          single_selectivity_of_eventtype_within_projection,
-                                                                         queries_to_process)
+                                                                         queries_to_process,
+                                                                         is_deterministic)
 
         q_network = query_network_copy if method == "ppmuse" else single_sink_query_network_copy
         # print(f"[DEBUG] About to process q_network with {len(q_network)} queries, method={method}")
