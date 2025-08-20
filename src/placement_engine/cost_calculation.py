@@ -106,6 +106,32 @@ def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any],
         # Extract costs from prePP results
         if prepp_results and len(prepp_results) > 0:
             costs = prepp_results[0]  # exact_cost
+            exec_time = prepp_results[1] if len(prepp_results) > 1 else 0
+            latency = prepp_results[2] if len(prepp_results) > 2 else 0
+            transmission_ratio = prepp_results[3] if len(prepp_results) > 3 else 0
+            central_costs = prepp_results[4] if len(prepp_results) > 4 else 0
+            
+            # ===========================================
+            # PREPP RESULT LOGGING FOR NODE
+            # ===========================================
+            print(f"\n{'='*50}")
+            print(f"PREPP RESULT FOR NODE {node}")
+            print(f"{'='*50}")
+            print(f"Projection: {projection}")
+            print(f"Push-Pull Cost: {costs:.4f}")
+            print(f"All-Push Baseline: {all_push_baseline:.4f}" if all_push_baseline else "All-Push Baseline: N/A")
+            print(f"Central Costs: {central_costs:.4f}")
+            print(f"Transmission Ratio: {transmission_ratio:.4f}")
+            print(f"Execution Time: {exec_time:.4f} seconds")
+            print(f"Latency: {latency}")
+            
+            if all_push_baseline:
+                savings = all_push_baseline - costs
+                savings_pct = (savings / all_push_baseline * 100) if all_push_baseline > 0 else 0
+                print(f"Cost Savings: {savings:.4f} ({savings_pct:.1f}%)")
+                print(f"Strategy Recommendation: {'Push-Pull' if costs < all_push_baseline else 'All-Push'}")
+            print(f"{'='*50}\n")
+            
             logger.info(f"PrePP costs calculated: {costs:.2f}")
 
             if all_push_baseline:

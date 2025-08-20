@@ -191,7 +191,8 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
         else:
             # INFO: ComputeSingleSinkPlacement is called for the sequential approach.
             # Implementing a new function for the integrated approach
-            print(projection)
+            # if str(projection) == 'AND(SEQ(B, C), F)':
+            #     print("Hook")
 
             # result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter, projFilterDict, EventNodes,
             #                                     IndexEventNodes, self.h_network_data, allPairs, mycombi, rates,
@@ -231,7 +232,13 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
 
             # print(f"[SiS PLACEMENT] {projection} → Node: {partType}, Cost: {additional:.2f}, Hops: {result[2]}")
     print(temp_results_dict)
-    
+
+    total_costs = 0
+    for projection in temp_results_dict:
+        if projection in self.query_workload:
+            total_costs += temp_results_dict[projection].costs
+
+
     # Print global placement tracker summary
     print(f"\n[PLACEMENT] Global Placement Tracker Summary:")
     print(global_tracker.get_summary())

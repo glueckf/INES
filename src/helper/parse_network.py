@@ -49,7 +49,7 @@ def initialize_globals(network_data):
     for i in primEvents:
         instances[i] = len(nodes[i])
     
-    print(f"[NETWORK] {network}")
+    # print(f"[NETWORK] {network}")
 
     return network,rates,primEvents,instances,nodes
 

@@ -73,6 +73,13 @@ def compute_operator_placement_with_prepp(
     # Get global placement tracker
     global_tracker = get_global_placement_tracker()
 
+    if str(projection) == 'AND(SEQ(B, C), F)':
+        logger.warning("Detected special case projection 'AND(SEQ(B, C), F)'. "
+                       "This may require special handling in the future.")
+    if str(projection) == 'AND(SEQ(A, B), SEQ(E, F))':
+        logger.warning("Detected special case projection 'AND(SEQ(A, B), SEQ(E, F))'. "
+                       "This may require special handling in the future.")
+
     # Check if this projection has subqueries that we've already placed
     has_placed_subqueries = check_if_projection_has_placed_subqueries(projection, mycombi, global_tracker)
 
@@ -139,6 +146,7 @@ def compute_operator_placement_with_prepp(
                     projection_rates=self.h_projrates,
                     shortest_path_distances=self.allPairs
                 )
+
             # TODO: Discuss with Ariane since this makes placement @ the cloud more attractive
             #  because push-pull can be used on the whole graph and cuts costs by a lot compared to subgraph placement
             push_pull_costs, computing_time, latency, transmission_ratio, all_push_costs = results

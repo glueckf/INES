@@ -470,11 +470,11 @@ def determine_randomized_distribution_push_pull_costs(
         for current_node in query.node_placement:
             already_received_eventtypes[current_node] = []
     max_latency = 0
-    print(f"[DEBUG] Processing {len(queries)} queries")
+    # print(f"[DEBUG] Processing {len(queries)} queries")
     for i, query in enumerate(queries):
-        print(f"[DEBUG] Query {i}: '{query.query}', node_placement: {getattr(query, 'node_placement', 'None')}")
+        # print(f"[DEBUG] Query {i}: '{query.query}', node_placement: {getattr(query, 'node_placement', 'None')}")
         if query.query == '':
-            print(f"[DEBUG] Skipping empty query {i}")
+            # print(f"[DEBUG] Skipping empty query {i}")
             continue
         old_copy = copy.deepcopy(query.primitive_operators)
         top_k = int(k)
@@ -502,6 +502,29 @@ def determine_randomized_distribution_push_pull_costs(
                 _, used_eventtypes_to_pull, latency = push_pull_plan_generator_exact.determine_costs_for_projection_on_node(
                     exact_push_pull_plan_for_a_projection, query, current_node, already_received_eventtypes, allPairs)
 
+                # ===========================================
+                # FINAL PREPP RESULT LOGGING
+                # ===========================================
+                print(f"PLACEMENT: {query.query} -> Node {current_node} (Cost: {exact_costs:.2f})")
+                print(f"  Push-Pull Plan: {exact_push_pull_plan_for_a_projection}")
+                print(f"  Events to Pull: {used_eventtypes_to_pull}")
+                print(f"  Latency: {latency:.2f}")
+                
+                # Determine events being pushed vs pulled
+                all_events = set()
+                for step in exact_push_pull_plan_for_a_projection:
+                    all_events.update(step)
+                
+                pulled_events = set()
+                for step_events in used_eventtypes_to_pull:
+                    pulled_events.update(step_events)
+                
+                pushed_events = all_events - pulled_events
+                
+                print(f"  Events PUSHED: {sorted(list(pushed_events))}")
+                print(f"  Events PULLED: {sorted(list(pulled_events))}")
+                print("")  # Empty line for readability
+
                 # # Check if we need to send the evaluated query to the cloud evaluation node or if we are already there
                 # if current_node != cloud_evaluation_node:
                 #     # We need to send the evaluated query to the cloud evaluation node
@@ -514,9 +537,9 @@ def determine_randomized_distribution_push_pull_costs(
                 #     )
 
                 max_latency = max(max_latency, latency)
-                print(f"[DEBUG] Query: {query.query}, Node: {current_node}, Exact costs: {exact_costs}")
-                print(f"[DEBUG] Used eventtypes to pull: {used_eventtypes_to_pull}")
-                print(f"[DEBUG] Exact push-pull plan: {exact_push_pull_plan_for_a_projection}")
+                # print(f"[DEBUG] Query: {query.query}, Node: {current_node}, Exact costs: {exact_costs}")
+                # print(f"[DEBUG] Used eventtypes to pull: {used_eventtypes_to_pull}")
+                # print(f"[DEBUG] Exact push-pull plan: {exact_push_pull_plan_for_a_projection}")
                 if plan_print == "t":
                     print("exact_push_pull_plan_for_a_projection:", exact_push_pull_plan_for_a_projection)
                     print("used_eventtypes_to_pull:", used_eventtypes_to_pull)
@@ -1113,6 +1136,33 @@ def generate_prePP(
     exact_cost = sum(exact_costs_avg) / len(exact_costs_avg)
     pushPullTime = total_time
     maxPushPullLatency = max_latency
+
+    # ===========================================
+    # FINAL PREPP SUMMARY
+    # ===========================================
+    # print(f"\n{'#'*80}")
+    # print(f"FINAL PREPP EXECUTION SUMMARY")
+    # print(f"{'#'*80}")
+    # print(f"Total Queries Processed: {len(queries_to_process)}")
+    # print(f"Method: {method}")
+    # print(f"Algorithm: {algorithm}")
+    # print(f"Runs/Samples: {number_of_samples}")
+    # print(f"")
+    # print(f"COST BREAKDOWN:")
+    # print(f"  Push-Pull Strategy Cost (Average): {exact_cost:.4f}")
+    # print(f"  All-Push Strategy Cost (Central): {central_push_costs:.4f}")
+    # print(f"  Transmission Ratio (PP/AP): {endTransmissionRatio:.4f}")
+    # print(f"  Cost Savings: {central_push_costs - exact_cost:.4f}")
+    # print(f"  Savings Percentage: {((central_push_costs - exact_cost) / central_push_costs * 100):.2f}%" if central_push_costs > 0 else "  Savings Percentage: N/A")
+    # print(f"")
+    # print(f"PERFORMANCE METRICS:")
+    # print(f"  Execution Time: {pushPullTime:.4f} seconds")
+    # print(f"  Maximum Latency: {maxPushPullLatency}")
+    # print(f"")
+    # print(f"RESULT SUMMARY:")
+    # print(f"  Best Strategy: {'Push-Pull' if exact_cost < central_push_costs else 'All-Push'}")
+    # print(f"  Efficiency Gain: {(1 - endTransmissionRatio) * 100:.2f}%" if endTransmissionRatio < 1 else f"  Efficiency Loss: {(endTransmissionRatio - 1) * 100:.2f}%")
+    # print(f"{'#'*80}\n")
 
     # TODO: Find a way to include the plan information in readable format:
     # [DEBUG] Used eventtypes to pull: [[], ['B'], ['A']]
