@@ -9,8 +9,10 @@ internal implementation.
 from typing import Any, Dict, List
 import networkx
 from .state import RuntimeServices
-from .determinism import setup_deterministic_environment, log_determinism_info
+from .determinism import setup_deterministic_environment, log_determinism_info, validate_deterministic_inputs
 from .logging import get_placement_logger
+from .global_placement_tracker import get_global_placement_tracker
+from .cost_calculation import get_selection_rate
 
 
 def compute_operator_placement_with_prepp(
@@ -68,6 +70,12 @@ def compute_operator_placement_with_prepp(
     log_determinism_info(services, logger)
     logger.info(f"Starting placement computation for projection: {projection}")
 
+    # Get global placement tracker
+    global_tracker = get_global_placement_tracker()
+
+    # Check if this projection has subqueries that we've already placed
+    has_placed_subqueries = check_if_projection_has_placed_subqueries(projection, mycombi, global_tracker)
+
     # New placement engine implementation
     try:
         from .initialization import initialize_placement_state
@@ -77,7 +85,6 @@ def compute_operator_placement_with_prepp(
         from .fallback import get_strategy_recommendation
         from .determinism import validate_deterministic_inputs
         from .state import PlacementDecision, PlacementDecisionTracker
-        from .placement_state import update_placement_state_with_best_decision
 
         # Initialize placement state
         placement_state = initialize_placement_state(
@@ -87,33 +94,34 @@ def compute_operator_placement_with_prepp(
         # Initialize decision tracker
         placement_decisions = PlacementDecisionTracker(projection)
 
-        # Find possible placement nodes
-        possible_placement_nodes = check_possible_placement_nodes_for_input(
-            projection,
-            placement_state['extended_combination'],
-            network_data,
-            network,
-            index_event_nodes,
-            event_nodes,
-            placement_state['routing_dict']
+        possible_placement_nodes = get_all_possible_placement_nodes(
+            projection=projection,
+            placement_state=placement_state,
+            network_data=network_data,
+            index_event_nodes=index_event_nodes,
+            event_nodes=event_nodes,
+            logger=logger
         )
 
-        # Validate and sort candidates for deterministic processing
-        possible_placement_nodes = validate_deterministic_inputs(possible_placement_nodes, logger)
-
-        # Reverse the order to prioritize nodes closer to the source (legacy behavior)
-        possible_placement_nodes.reverse()
         logger.info(f"Evaluating {len(possible_placement_nodes)} placement candidates")
 
         best_costs = float('inf')
-        best_node = None
-        best_strategy = 'all_push'
 
         # Evaluate each candidate node
         for node in possible_placement_nodes:
             logger.info(f"Evaluating node {node}")
 
-            results = calculate_prepp_with_placement(self, node, projection, network)
+            selection_rate = get_selection_rate(projection, self.h_mycombi, self.selectivities)
+
+            results = calculate_prepp_with_placement(
+                self=self,
+                node=node,
+                projection=projection,
+                network=network,
+                selectivity_rate=selection_rate,
+                global_placement_tracker=global_tracker,
+                has_placed_subqueries=has_placed_subqueries,
+            )
 
             if not results:
                 logger.warning(f"Node {node} - No results from prepp_with_placement")
@@ -148,46 +156,6 @@ def compute_operator_placement_with_prepp(
             # Check resource availability
             has_enough_resources = check_resources(node, projection, network, combination)
 
-            # # Extract subgraph for this placement node
-            # if str(projection) == "AND(A, B, D)":
-            #     print("Debug hook")
-            # subgraph = extract_subgraph(
-            #     node, network, graph, placement_state['extended_combination'],
-            #     index_event_nodes, event_nodes, placement_state['routing_dict']
-            # )
-            #
-            # if subgraph:
-            #     routing_algo = dict(networkx.all_pairs_shortest_path(subgraph['subgraph']))
-            # else:
-            #     logger.warning(f"Subgraph extraction failed for node {node}, skipping")
-            #     continue
-            #
-            # # Step 1: Calculate all-push costs (always needed as baseline)
-            # central_plan = calculate_all_push_costs_on_subgraph(
-            #     self, subgraph, projection
-            # )
-            #
-            # all_push_costs = central_plan[0]
-            # central_eval_plan = [central_plan[1], central_plan[3], projection]
-            #
-            # push_pull_costs = None
-            #
-            # # Step 2: Calculate push-pull costs if resources allow
-            # if has_enough_resources:
-            #     try:
-            #         push_pull_costs = calculate_prepp_costs_on_subgraph(
-            #             self=self,
-            #             node=node,
-            #             subgraph=subgraph,
-            #             projection=projection,
-            #             central_eval_plan=central_eval_plan,
-            #             all_push_baseline=all_push_costs,
-            #             routing_algo=routing_algo
-            #         )
-            #     except Exception as e:
-            #         logger.warning(f"Node {node} - Push-pull calculation failed: {e}")
-            #         push_pull_costs = None
-
             # Determine best strategy for this node
             strategy = get_strategy_recommendation(all_push_costs, push_pull_costs, has_enough_resources)
             final_costs = push_pull_costs if strategy == 'push_pull' else all_push_costs
@@ -220,32 +188,13 @@ def compute_operator_placement_with_prepp(
         # Get the final best decision
         best_decision = placement_decisions.get_best_decision()
 
-        # # Update the structure with the best decision
-        # update_placement_state_with_best_decision(
-        #     self,
-        #     projection,
-        #     combination,
-        #     no_filter,
-        #     proj_filter_dict,
-        #     event_nodes,
-        #     index_event_nodes,
-        #     network_data,
-        #     all_pairs,
-        #     mycombi,
-        #     rates,
-        #     single_selectivity,
-        #     projrates,
-        #     graph,
-        #     network,
-        #     central_eval_plan,
-        #     placement_decisions,
-        #     sinks=sinks
-        # )
-
-
+        # Store placement decisions in global tracker for future use
+        global_tracker.store_placement_decisions(projection, placement_decisions)
+        logger.info(f"Stored placement decisions for {projection} in global tracker")
 
         if best_decision:
             logger.info(f"Final placement decision: {best_decision}")
+            logger.info(f"Global tracker now contains decisions for: {list(global_tracker._placement_history.keys())}")
 
             # Convert to legacy format for backward compatibility
             # Expected format: (costs, node, longestPath, myProjection, newInstances, Filters)
@@ -315,3 +264,41 @@ def _convert_to_legacy_format(best_decision, placement_decisions):
     logger.debug(f"Converting to legacy format: costs={costs}, node={node}, projection={original_projection}")
 
     return (costs, node, longestPath, myProjection, newInstances, Filters)
+
+
+def check_if_projection_has_placed_subqueries(projection, mycombi, global_tracker, logger=None):
+    if projection in mycombi:
+        subqueries = mycombi[projection]
+        global_tracker.register_query_hierarchy(projection, subqueries)
+
+        # Check if any subqueries have existing placements
+        for subquery in subqueries:
+            if hasattr(subquery, 'leafs') and global_tracker.has_placement_for(subquery):
+                existing_decision = global_tracker.get_best_placement(subquery)
+                return True
+
+    return False
+
+
+def get_all_possible_placement_nodes(projection, placement_state, network_data, index_event_nodes, event_nodes, logger=None):
+    from .candidate_selection import check_possible_placement_nodes_for_input
+
+    possible_placement_nodes = []
+
+    # Find possible placement nodes
+    possible_placement_nodes = check_possible_placement_nodes_for_input(
+        projection=projection,
+        combination=placement_state['extended_combination'],
+        network_data=network_data,
+        index_event_nodes=index_event_nodes,
+        event_nodes=event_nodes,
+        routing_dict=placement_state['routing_dict']
+    )
+
+    # Validate and sort candidates for deterministic processing
+    possible_placement_nodes = validate_deterministic_inputs(possible_placement_nodes, logger)
+
+    # Reverse the order to prioritize nodes closer to the source (legacy behavior)
+    possible_placement_nodes.reverse()
+
+    return possible_placement_nodes

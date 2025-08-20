@@ -8,6 +8,7 @@ from EvaluationPlan import EvaluationPlan
 import numpy as np
 from projections import returnPartitioning, totalRate
 from placement_engine.core import compute_operator_placement_with_prepp
+from placement_engine.global_placement_tracker import get_global_placement_tracker, reset_global_placement_tracker
 
 
 #maxDist = max([max(x) for x in allPairs])
@@ -108,6 +109,11 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
     MSPlacements = {}
     curcosts = 1
     start_time = time.time()
+
+    # Initialize global placement tracker for this placement session
+    reset_global_placement_tracker()  # Start fresh for each placement calculation
+    global_tracker = get_global_placement_tracker()
+    print(f"[PLACEMENT] Initialized global placement tracker")
 
     hopLatency = {}
 
@@ -210,6 +216,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
 
             temp_results_dict[projection] = result
             print(result)
+
             # additional = result[0]
             # costs += additional
             # hopLatency[projection] += result[2]
@@ -224,6 +231,11 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
 
             # print(f"[SiS PLACEMENT] {projection} → Node: {partType}, Cost: {additional:.2f}, Hops: {result[2]}")
     print(temp_results_dict)
+    
+    # Print global placement tracker summary
+    print(f"\n[PLACEMENT] Global Placement Tracker Summary:")
+    print(global_tracker.get_summary())
+    
     mycosts = costs / ccosts[0]
     print(f"[TRANSMISSION] INES with MS - Total Cost: {costs:.2f}")
     if len(wl) > 1 or wl[0].hasKleene() or wl[0].hasNegation():

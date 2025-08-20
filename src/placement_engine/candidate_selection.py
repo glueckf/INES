@@ -13,11 +13,14 @@ from .state import ResourceReport
 logger = get_placement_logger(__name__)
 
 
-def check_possible_placement_nodes_for_input(projection: Any, combination: List[Any], 
-                                          network_data: Dict[int, List[str]], network: List[Any], 
-                                          index_event_nodes: Dict[str, List[Any]], 
-                                          event_nodes: List[List[Any]], 
-                                          routing_dict: Dict[int, Dict[int, Dict[str, Any]]]) -> List[int]:
+def check_possible_placement_nodes_for_input(
+        projection: Any,
+        combination: List[Any],
+        network_data: Dict[int, List[str]],
+        index_event_nodes: Dict[str, List[Any]],
+        event_nodes: List[List[Any]],
+        routing_dict: Dict[int, Dict[int, Dict[str, Any]]]
+) -> List[int]:
     """
     Check which non-leaf nodes are suitable for placing a projection based on common ancestor requirements.
     

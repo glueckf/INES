@@ -287,10 +287,29 @@ def calculate_final_costs_for_sending_to_sinks(
         return cost_results
 
 
-def calculate_prepp_with_placement(self, node: int, projection: Any, network):
-    selection_rate = getSelectionRate(projection, self.h_mycombi, self.selectivities)
-    # update_selectivity(self, projection, selection_rate)
-    input_buffer = initiate_buffer(node, projection, network, self.selectivities, selection_rate)
+def calculate_prepp_with_placement(
+        self,
+        node: int,
+        projection: Any,
+        network,
+        selectivity_rate: float,
+        global_placement_tracker,
+        has_placed_subqueries: bool = False,
+):
+
+    input_buffer = initiate_buffer(
+        node, 
+        projection, 
+        network, 
+        self.selectivities, 
+        selectivity_rate, 
+        global_placement_tracker=global_placement_tracker,
+        has_placed_subqueries=has_placed_subqueries,
+        mycombi=getattr(self, 'h_mycombi', {}),
+        rates=getattr(self, 'h_rates_data', {}),
+        projrates=getattr(self, 'h_projrates', {}),
+        index_event_nodes=getattr(self, 'h_IndexEventNodes', {})
+    )
 
     content = input_buffer.getvalue()
 
@@ -333,7 +352,19 @@ def calculate_prepp_with_placement(self, node: int, projection: Any, network):
     return push_pull_costs, computing_time, latency, transmission_ratio, all_push_costs
 
 
-def initiate_buffer(node, projection, network, selectivities, selection_rate) -> Any:
+def initiate_buffer(
+    node, 
+    projection, 
+    network, 
+    selectivities, 
+    selection_rate, 
+    global_placement_tracker=None,
+    has_placed_subqueries: bool = False,
+    mycombi=None,
+    rates=None,
+    projrates=None,
+    index_event_nodes=None
+) -> Any:
     """
     Generate a configuration buffer similar to generate_eval_plan but for a single projection.
     Creates evaluation dictionaries, combination mappings, and configuration data.
@@ -350,13 +381,12 @@ def initiate_buffer(node, projection, network, selectivities, selection_rate) ->
     """
     import io
 
-    print("Debug hook for initiate_buffer")
-
     # Safety checks
     if not _validate_buffer_inputs(node, projection, network, selectivities, selection_rate):
         return None
 
     try:
+
         # Initialize dictionaries similar to generate_eval_plan
         evaluation_dict = _initialize_evaluation_dict(network)
         combination_dict = {}
@@ -404,7 +434,12 @@ def initiate_buffer(node, projection, network, selectivities, selection_rate) ->
             workload=workload,
             combination_dict=combination_dict,
             sink_dict=sink_dict,
-            selection_rate_dict=selection_rate_dict
+            selection_rate_dict=selection_rate_dict,
+            projection=projection,
+            has_placed_subqueries=has_placed_subqueries,
+            global_placement_tracker=global_placement_tracker,
+            mycombi=mycombi,
+            projrates=projrates
         )
 
         config_buffer.write(plan_content)
@@ -480,7 +515,9 @@ def _process_forwarding_dict(projection, forwarding_dict):
     return forwarding_dict
 
 
-def _generate_plan_content(network, selectivities, workload, combination_dict, sink_dict, selection_rate_dict):
+def _generate_plan_content(network, selectivities, workload, combination_dict, sink_dict, selection_rate_dict, 
+                          projection=None, has_placed_subqueries=False, global_placement_tracker=None, 
+                          mycombi=None, projrates=None):
     """Generate the actual plan content string."""
     lines = []
 
@@ -588,22 +625,84 @@ def _generate_plan_content(network, selectivities, workload, combination_dict, s
 
     # Add muse graph
     if workload and selection_rate_dict:
-        query = workload[0]
-        rate = selection_rate_dict.get(query, 0)
-        sink_info = sink_dict.get(query, [[], ""])
-        sink_nodes = sink_info[0] if sink_info[0] else [0]
-
         lines.append("muse graph")
-        combination_str = "; ".join(combination_dict.get(query, [query]))
-        lines.append(
-            f"SELECT {query} FROM {combination_str} ON {{{', '.join(map(str, sink_nodes))}}} WITH selectionRate= {rate}")
+        
+        # Check if we have placed subqueries and need to handle them differently
+        if has_placed_subqueries and projection and mycombi and global_placement_tracker and projrates:
+            # Get subqueries for this projection
+            if projection in mycombi:
+                subqueries = mycombi[projection]
+                
+                # Add placed subqueries first
+                for subquery in subqueries:
+                    if hasattr(subquery, 'leafs') and global_placement_tracker.has_placement_for(subquery):
+                        placement_decision = global_placement_tracker.get_best_placement(subquery)
+                        subquery_rate = projrates.get(subquery, 0.001)
+                        if len(subquery_rate) > 1:
+                            subquery_rate = subquery_rate[0]
+                        
+                        # Get primitive events for subquery
+                        if hasattr(subquery, 'leafs'):
+                            primitive_events = subquery.leafs()
+                        else:
+                            primitive_events = [str(subquery)]
+                        
+                        combination_str = "; ".join(primitive_events)
+                        lines.append(
+                            f"SELECT {subquery} FROM {combination_str} ON {{{placement_decision.node}}} WITH selectionRate= {subquery_rate}")
+                
+                # Add main query with virtual events (replace placed subqueries with their virtual names)
+                main_query = workload[0]
+                main_rate = selection_rate_dict.get(main_query, 0)
+                
+                # Create combination for main query
+                main_combination = []
+                for elem in subqueries:
+                    if hasattr(elem, 'leafs') and global_placement_tracker.has_placement_for(elem):
+                        # This subquery is placed, so we reference it as virtual event
+                        main_combination.append(str(elem))
+                    else:
+                        # This is a primitive event
+                        main_combination.append(str(elem))
+                
+                combination_str = "; ".join(main_combination)
+                lines.append(
+                    f"SELECT {main_query} FROM {combination_str} ON {{0}} WITH selectionRate= {main_rate}")
+            else:
+                # Fallback to normal handling
+                _add_normal_muse_graph_entry(lines, workload, selection_rate_dict, sink_dict, combination_dict)
+        else:
+            # Normal case without subqueries
+            _add_normal_muse_graph_entry(lines, workload, selection_rate_dict, sink_dict, combination_dict)
 
     return "\n".join(lines)
 
 
-def getSelectionRate(projection: Any, combination_dict, selectivities):
+def _add_normal_muse_graph_entry(lines, workload, selection_rate_dict, sink_dict, combination_dict):
+    """Add normal muse graph entry without subqueries."""
+    query = workload[0]
+    rate = selection_rate_dict.get(query, 0)
+    sink_info = sink_dict.get(query, [[], ""])
+    sink_nodes = sink_info[0] if sink_info[0] else [0]
+    
+    # Get combination for query - extract primitive events
+    if hasattr(query, 'leafs'):
+        primitive_events = query.leafs()
+    else:
+        primitive_events = combination_dict.get(query, [query])
+    
+    combination_str = "; ".join(str(e) for e in primitive_events)
+    
+    lines.append(
+        f"SELECT {query} FROM {combination_str} ON {{{', '.join(map(str, sink_nodes))}}} WITH selectionRate= {rate}")
+
+
+def get_selection_rate(projection: Any, combination_dict, selectivities):
     """
     Calculate selection rate for a projection based on combination dictionary and selectivities.
+    
+    For queries with subqueries like AND(D, AND(A,B)), this function expands the subqueries
+    and creates all possible combinations across the primitive events (e.g., AD, AB, BD).
     
     Args:
         projection: The projection to calculate selection rate for
@@ -613,7 +712,6 @@ def getSelectionRate(projection: Any, combination_dict, selectivities):
     Returns:
         float: The calculated selection rate (product of relevant selectivities)
     """
-    print("Debug hook for getSelectionRate")
 
     # Safety check: ensure projection exists in combination_dict
     if projection not in combination_dict:
@@ -627,47 +725,87 @@ def getSelectionRate(projection: Any, combination_dict, selectivities):
         logger.warning(f"Empty combination for projection {projection}")
         return 1.0
 
-    # Create all possible string combinations from the event types (1-element, 2-element, all-element)
     from itertools import combinations
 
-    event_combinations = []
-
-    has_subquery = False
-    # Check if combination_for_given_projection has a subquery
-    if any(elem in combination_dict.keys() for elem in combination_for_given_projection):
-        has_subquery = True
-
-    # Generate all possible combinations of all lengths (1 to n)
+    # Check if combination has subqueries
+    has_subquery = any(elem in combination_dict.keys() for elem in combination_for_given_projection)
+    
     if has_subquery:
-        for r in range(1, len(combination_for_given_projection) + 1):
-            for combo in combinations(combination_for_given_projection, r):
-                # Convert each element to string and concatenate them
-                # This handles both simple strings like "A" and complex expressions like "AND(A,B)"
-                combo_str = "".join(str(element) for element in combo)
+        # Expand all elements to their primitive events
+        expanded_events = []
+        for elem in combination_for_given_projection:
+            if elem in combination_dict:
+                # This is a subquery, recursively expand it
+                sub_events = _expand_to_primitives(elem, combination_dict)
+                expanded_events.extend(sub_events)
+            else:
+                # This is already a primitive event
+                expanded_events.append(str(elem))
+        
+        # Remove duplicates while preserving order
+        expanded_events = list(dict.fromkeys(expanded_events))
+        logger.info(f"Expanded {projection} to primitive events: {expanded_events}")
+        
+        # Generate all possible combinations of primitive events (2 to n)
+        event_combinations = []
+        for r in range(2, len(expanded_events) + 1):
+            for combo in combinations(expanded_events, r):
+                combo_str = "".join(combo)
                 event_combinations.append(combo_str)
+                
     else:
+        # No subqueries, use original logic
+        event_combinations = []
         for r in range(2, len(combination_for_given_projection) + 1):
             for combo in combinations(combination_for_given_projection, r):
-                # Convert each element to string and concatenate them
-                # This handles both simple strings like "A" and complex expressions like "AND(A,B)"
                 combo_str = "".join(str(element) for element in combo)
                 event_combinations.append(combo_str)
 
     # Calculate selection rate as product of relevant selectivities
     res = 1.0
-
     for combo_str in event_combinations:
         if combo_str in selectivities:
             selectivity_value = selectivities[combo_str]
             # Safety check: ensure selectivity is a valid number
             if isinstance(selectivity_value, (int, float)) and selectivity_value > 0:
                 res *= selectivity_value
+                logger.debug(f"Applied selectivity for {combo_str}: {selectivity_value}")
             else:
                 logger.warning(f"Invalid selectivity value for {combo_str}: {selectivity_value}")
         else:
             logger.warning(f"Selectivity not found for combination: {combo_str}")
 
+    logger.info(f"Final selection rate for {projection}: {res}")
     return res
+
+
+def _expand_to_primitives(element, combination_dict):
+    """
+    Recursively expand a subquery element to its primitive events.
+    
+    Args:
+        element: The element to expand (could be a subquery)
+        combination_dict: Dictionary mapping projections to their combinations
+        
+    Returns:
+        List of primitive event strings
+    """
+    if element not in combination_dict:
+        # This is already a primitive event
+        return [str(element)]
+    
+    primitives = []
+    for sub_elem in combination_dict[element]:
+        if sub_elem in combination_dict:
+            # Recursively expand this sub-element
+            primitives.extend(_expand_to_primitives(sub_elem, combination_dict))
+        else:
+            # This is a primitive event
+            primitives.append(str(sub_elem))
+    
+    return primitives
+
+
 
 
 def update_selectivity(self, projection, selection_rate):

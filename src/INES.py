@@ -201,20 +201,20 @@ def generate_hardcoded_workload():
 
     queries = []
 
-    # Query 1: Simple SEQ - SEQ(A, B, C)
-    q1 = SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C'))
-    q1 = number_children(q1)
-    queries.append(q1)
+    # # Query 1: Simple SEQ - SEQ(A, B, C)
+    # q1 = SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C'))
+    # q1 = number_children(q1)
+    # queries.append(q1)
 
     # # # Query 2:
     # q2 = AND(PrimEvent('D'), PrimEvent('E'))
     # q2 = number_children(q2)
     # queries.append(q2)
 
-    # # Query 3: Simple AND with shared elements - AND(A, B, D)
-    # q3 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
-    # q3 = number_children(q3)
-    # queries.append(q3)
+    # Query 3: Simple AND with shared elements - AND(A, B, D)
+    q3 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
+    q3 = number_children(q3)
+    queries.append(q3)
 
     # # Query 4: Medium complexity - SEQ(A, B, AND(E, F))
     # # Shares A, B with queries 1 and 2
