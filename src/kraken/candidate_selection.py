@@ -186,7 +186,7 @@ def check_resources(node: int, projection: Any, network: List[Any], combination:
             return False
 
         # Check memory for push-pull scenario (needs 2x projection requirements)
-        if target_node.memory < (2 * projection.computing_requirements):
+        if target_node.memory < (projection.computing_requirements):
             logger.debug(f"Node {node} insufficient memory: {target_node.memory} < {2 * projection.computing_requirements}")
             return False
 

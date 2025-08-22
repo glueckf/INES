@@ -32,7 +32,8 @@ def compute_operator_placement_with_prepp(
         graph: networkx.Graph,
         network: list,
         central_eval_plan: list,
-        sinks: list[int] = [0]) -> Any:
+        sinks: list[int] = [0]
+) -> Any:
     """
     Legacy facade — preserves signature. Calls internal engine steps.
     
@@ -114,11 +115,11 @@ def compute_operator_placement_with_prepp(
 
         best_costs = float('inf')
 
+        selection_rate = get_selection_rate(projection, self.h_mycombi, self.selectivities)
+
         # Evaluate each candidate node
         for node in possible_placement_nodes:
             logger.info(f"Evaluating node {node}")
-
-            selection_rate = get_selection_rate(projection, self.h_mycombi, self.selectivities)
 
             results = calculate_prepp_with_placement(
                 self=self,
@@ -271,7 +272,7 @@ def _convert_to_legacy_format(best_decision, placement_decisions):
     logger = get_placement_logger(__name__)
     logger.debug(f"Converting to legacy format: costs={costs}, node={node}, projection={original_projection}")
 
-    return (costs, node, longestPath, myProjection, newInstances, Filters)
+    return costs, node, longestPath, myProjection, newInstances, Filters
 
 
 def check_if_projection_has_placed_subqueries(projection, mycombi, global_tracker, logger=None):

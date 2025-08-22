@@ -337,6 +337,9 @@ def calculate_prepp_with_placement(
         index_event_nodes=getattr(self, 'h_IndexEventNodes', {})
     )
 
+    if str(projection) == 'SEQ(A, B, C)':
+        logger.debug("Debug hook")
+
     content = input_buffer.getvalue()
 
     # Select method and algorithm type for prePP
@@ -344,7 +347,8 @@ def calculate_prepp_with_placement(
     algorithm = "e"
 
     # Check if we should use deterministic behavior
-    is_deterministic = getattr(self, 'config', None) and getattr(self.config, 'mode', None) == SimulationMode.FULLY_DETERMINISTIC
+    config_mode = (getattr(self, 'config', None) and getattr(self.config, 'mode', None)).value
+    is_deterministic = config_mode == SimulationMode.FULLY_DETERMINISTIC
     
     results = run_prepp(
         input_buffer=input_buffer,
