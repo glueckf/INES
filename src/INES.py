@@ -10,6 +10,7 @@ from graph import draw_graph
 from allPairs import populate_allPairs
 from queryworkload import generate_workload
 from selectivity import initialize_selectivities
+from src.kraken.operator_placement_legacy_hook import calculate_integrated_approach, write_results_to_csv, print_kraken
 from write_config_single import generate_config_buffer
 from singleSelectivities import initializeSingleSelectivity
 from helper.parse_network import initialize_globals
@@ -228,10 +229,10 @@ def generate_hardcoded_workload():
     # q5 = number_children(q5)
     # queries.append(q5)
 
-    # Query 6: AND(A, F, E)
-    q6 = AND(PrimEvent('F'), PrimEvent('E'))
-    q6 = number_children(q6)
-    queries.append(q6)
+    # # Query 6: AND(A, F, E)
+    # q6 = AND(PrimEvent('F'), PrimEvent('E'))
+    # q6 = number_children(q6)
+    # queries.append(q6)
 
     return queries
 
@@ -404,7 +405,8 @@ class INES():
         # Generate configuration and single selectivities for detailed analysis
         self.config_single = generate_config_buffer(self.network, self.query_workload, self.selectivities)
         deterministic_flag = self.config.is_selectivities_fixed()
-        print(f"[INES_DEBUG] Calling initializeSingleSelectivity with is_deterministic={deterministic_flag} (mode={self.config.mode})")
+        print(
+            f"[INES_DEBUG] Calling initializeSingleSelectivity with is_deterministic={deterministic_flag} (mode={self.config.mode})")
         self.single_selectivity = initializeSingleSelectivity(self.CURRENT_SECTION, self.config_single,
                                                               self.query_workload, deterministic_flag)
 
@@ -419,18 +421,28 @@ class INES():
         self.h_mycombi, self.h_combiDict, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(
             self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
-        self.eval_plan, self.central_eval_plan, self.experiment_result, self.results = calculate_operatorPlacement(self,
-                                                                                                                   'test',
-                                                                                                                   0)
+
+        integrated_operator_placement_results = calculate_integrated_approach(self, 'test', 0)
+
+        (self.eval_plan, self.central_eval_plan, self.experiment_result, self.results) = calculate_operatorPlacement(self, 'test', 0)
 
         # Add prepp results to complete the schema (4 additional columns)
         from generateEvalPlan import generate_eval_plan
         self.plan = generate_eval_plan(self.network, self.selectivities, self.eval_plan, self.central_eval_plan,
                                        self.query_workload)
         deterministic_flag = self.config.is_selectivities_fixed()
-        print(f"[INES_DEBUG] Calling generate_prePP with is_deterministic={deterministic_flag} (mode={self.config.mode})")
+        print(
+            f"[INES_DEBUG] Calling generate_prePP with is_deterministic={deterministic_flag} (mode={self.config.mode})")
         prepp_results = generate_prePP(self.plan, 'ppmuse', 'e', 1, 0, 1, True, self.allPairs, deterministic_flag)
-        self.results += prepp_results
+        self.results += prepp_results[:-1]
+
+        # Get the ID from the INES simulation as a foreign key, to later map both
+        ines_simulation_id = self.results[0]
+        
+        # Print comprehensive placement results
+        print_kraken(integrated_operator_placement_results)
+        
+        # write_results_to_csv(integrated_operator_placement_results, ines_simulation_id)
 
     def _initialize_network_topology(self):
         """Create network topology based on configuration mode."""
@@ -517,7 +529,8 @@ class INES():
         self.plan = generate_eval_plan(self.network, self.selectivities, self.eval_plan, self.central_eval_plan,
                                        self.query_workload)
         deterministic_flag = self.config.is_selectivities_fixed()
-        print(f"[INES_DEBUG] Calling generate_prePP (second call) with is_deterministic={deterministic_flag} (mode={self.config.mode})")
+        print(
+            f"[INES_DEBUG] Calling generate_prePP (second call) with is_deterministic={deterministic_flag} (mode={self.config.mode})")
         self.results += generate_prePP(self.plan, 'ppmuse', 'e', 0, 0, 1, False, self.allPairs, deterministic_flag)
         # new =False
         # try:
