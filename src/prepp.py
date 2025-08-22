@@ -337,17 +337,33 @@ def determine_query_selectivity(query, eventtype_pair_to_selectivity):
 
     for i in range(0, len(primitive_events) - 1):
         for k in range(i + 1, len(primitive_events)):
-            selectivity *= float(eventtype_pair_to_selectivity[str(primitive_events[i]) + str(primitive_events[k])])
+            str_primitive_event_i = str(primitive_events[i])
+            str_primitive_event_k = str(primitive_events[k])
+            concat = str_primitive_event_i + str_primitive_event_k
+            selectivity_for_pair = float(eventtype_pair_to_selectivity[concat])
+            selectivity *= selectivity_for_pair
 
     return selectivity
 
 
-def determine_total_query_rate(query, all_eventtype_output_rates, eventtype_to_sources_map,
+def determine_total_query_rate(query,
+                               all_eventtype_output_rates,
+                               eventtype_to_sources_map,
                                eventtype_pair_to_selectivity):
-    return determine_query_output_rate(query.query, query.forbidden_event_types, is_single_sink_placement(query),
-                                       all_eventtype_output_rates,
-                                       eventtype_to_sources_map) * determine_query_selectivity(query.query,
-                                                                                               eventtype_pair_to_selectivity)
+    output_rate = determine_query_output_rate(
+        query.query,
+        query.forbidden_event_types,
+        is_single_sink_placement(query),
+        all_eventtype_output_rates,
+        eventtype_to_sources_map
+    )
+    
+    selectivity = determine_query_selectivity(
+        query.query,
+        eventtype_pair_to_selectivity
+    )
+    
+    return output_rate * selectivity
 
 
 def extract_queries(line, queries_to_process):
@@ -379,28 +395,6 @@ def extract_muse_graph_forbidden(line):
             return line[line.find('/n(') + 3:line.find('WITH') - 2]
         else:
             return line[line.find('/n(') + 3:len(line) - 2]
-
-
-#############################
-# Helper Function
-##############################
-
-def calculate_costs_for_sending_evaluated_query_to_cloud(all_eventtype_output_rates: dict, query: str,
-                                                         current_node: int, cloud_evaluation_node: int, allPairs: list):
-    """
-    Calculate the costs for sending the evaluated query to the cloud evaluation node.
-    """
-
-    if query in all_eventtype_output_rates:
-        query_rate = all_eventtype_output_rates[query]
-        costs_for_sending_evaluated_query_to_cloud = query_rate * allPairs[current_node][cloud_evaluation_node]
-
-    else:
-        # We need to calculate the output rate of the query
-        query_rate = determine_query_output_rate(query, cloud_evaluation_node, True, all_eventtype_output_rates, {})
-        costs_for_sending_evaluated_query_to_cloud = query_rate * allPairs[current_node][cloud_evaluation_node]
-    return costs_for_sending_evaluated_query_to_cloud
-
 
 def extract_muse_graph_selectivities(line, all_event_combinations, eventtype_pair_to_selectivity):
     all_positions_of_eventcombinations = [m.start() for m in re.finditer("'", line)]
@@ -499,7 +493,7 @@ def determine_randomized_distribution_push_pull_costs(
 
                 # Costs seem fishy, skip this function for now and use the determine exact push pull plan function
                 # exact_costs, used_eventtypes_to_pull,latency = push_pull_plan_generator_exact.determine_costs_for_projection_on_node(exact_push_pull_plan_for_a_projection, query, current_node, already_received_eventtypes,allPairs)
-                _, used_eventtypes_to_pull, latency = push_pull_plan_generator_exact.determine_costs_for_projection_on_node(
+                costs, used_eventtypes_to_pull, latency = push_pull_plan_generator_exact.determine_costs_for_projection_on_node(
                     exact_push_pull_plan_for_a_projection, query, current_node, already_received_eventtypes, allPairs)
 
                 # ===========================================
@@ -973,6 +967,9 @@ def generate_prePP(
         node_prim_events_dict[node] = sorted(list(node_prim_events_dict[node]))
     total_cost = 0
 
+    # TODO: Fix costs! Currently it calculates all-push-costs for every singly node making the costs way to high,
+    #  since pushing all events to node 0 already includes pushing events through an intermediate node in the network,
+    #  so we do not need to count the separate costs of pushing events to the intermediate node into the all push costs
     for node in node_prim_events_dict:
         "Here we are in our Sinks"
         for prim_event in node_prim_events_dict[node]:
@@ -1038,7 +1035,6 @@ def generate_prePP(
 
     for idx in range(1, number_of_samples + 1):
         eventtype_pair_to_selectivity = old_eventtype_pair_to_selectivity.copy()
-        eventtypes_single_selectivities = generate_hardcoded_single_selectivities()
         single_selectivity_of_eventtype_within_projection = generate_hardcoded_projection_selectivities()
         determine_all_single_selectivities_for_every_possible_projection(eventtype_pair_to_selectivity,
                                                                          all_eventtype_output_rates,
@@ -1046,6 +1042,9 @@ def generate_prePP(
                                                                          single_selectivity_of_eventtype_within_projection,
                                                                          queries_to_process,
                                                                          is_deterministic)
+
+        eventtypes_single_selectivities = generate_hardcoded_single_selectivities()
+        single_selectivity_of_eventtype_within_projection = generate_hardcoded_projection_selectivities()
 
         q_network = query_network_copy if method == "ppmuse" else single_sink_query_network_copy
         # print(f"[DEBUG] About to process q_network with {len(q_network)} queries, method={method}")
