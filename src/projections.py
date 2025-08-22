@@ -485,5 +485,5 @@ def generate_all_projections(self):
         if len(sharedProjectionsDict[projection]) > 1:
             sharedProjectionsList.append(projection) 
 
-    return projlist,projrates,projsPerQuery,sharedProjectionsDict,sharedProjectionsList
+    return projlist, projrates, projsPerQuery, sharedProjectionsDict, sharedProjectionsList
 
