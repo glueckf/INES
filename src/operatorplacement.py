@@ -7,8 +7,7 @@ import argparse
 from EvaluationPlan import EvaluationPlan
 import numpy as np
 from projections import returnPartitioning, totalRate
-from placement_engine.core import compute_operator_placement_with_prepp
-from placement_engine.global_placement_tracker import get_global_placement_tracker, reset_global_placement_tracker
+from kraken.core import compute_operator_placement_with_prepp
 
 
 #maxDist = max([max(x) for x in allPairs])
@@ -61,7 +60,6 @@ def getLowerBound(query,
                    :len(list(set(MS))) - 1]
     if not len(nonMS) == len(query.leafs()):
         minimalRate += sum(minimalProjs) * longestPath
-
     # print("→ totalRate call for:", self.h_projection)
     # print("→ result:", self.h_projrates.get(self.h_projection, 0))
 
@@ -110,10 +108,6 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
     curcosts = 1
     start_time = time.time()
 
-    # Initialize global placement tracker for this placement session
-    reset_global_placement_tracker()  # Start fresh for each placement calculation
-    global_tracker = get_global_placement_tracker()
-    print(f"[PLACEMENT] Initialized global placement tracker")
 
     hopLatency = {}
 
@@ -194,55 +188,29 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
             # if str(projection) == 'AND(SEQ(B, C), F)':
             #     print("Hook")
 
-            # result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter, projFilterDict, EventNodes,
-            #                                     IndexEventNodes, self.h_network_data, allPairs, mycombi, rates,
-            #                                     singleSelectivities, projrates, self.graph, self.network)
+            result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter, projFilterDict, EventNodes,
+                                                IndexEventNodes, self.h_network_data, allPairs, mycombi, rates,
+                                                singleSelectivities, projrates, self.graph, self.network)
 
-            result = compute_operator_placement_with_prepp(
-                self,
-                projection,
-                unfolded[projection],
-                noFilter,
-                projFilterDict,
-                EventNodes,
-                IndexEventNodes,
-                self.h_network_data,
-                allPairs, mycombi,
-                rates,
-                singleSelectivities,
-                projrates,
-                G,
-                network,
-                central_eval_plan)
+            placement_costs = result[0]
+            placement_node = result[1]
+            temp_results_dict[projection] = {
+                "placement_node": placement_node,
+                "placement_costs": placement_costs,
+            }
+            additional = result[0]
+            costs += additional
+            hopLatency[projection] += result[2]
+            myPlan.addProjection(result[3])  #!
+            for newin in result[3].spawnedInstances:  # add new spawned instances
 
-            temp_results_dict[projection] = result
-            print(result)
+                myPlan.addInstances(projection, newin)
 
-            # additional = result[0]
-            # costs += additional
-            # hopLatency[projection] += result[2]
-            # myPlan.addProjection(result[3])  #!
-            # for newin in result[3].spawnedInstances:  # add new spawned instances
-            #
-            #     myPlan.addInstances(projection, newin)
-            #
-            # myPlan.updateInstances(result[4])  #! update instances
-            # Filters += result[5]
+            myPlan.updateInstances(result[4])  #! update instances
+            Filters += result[5]
 
 
-            # print(f"[SiS PLACEMENT] {projection} → Node: {partType}, Cost: {additional:.2f}, Hops: {result[2]}")
     print(temp_results_dict)
-
-    total_costs = 0
-    for projection in temp_results_dict:
-        if projection in self.query_workload:
-            total_costs += temp_results_dict[projection].costs
-
-
-    # Print global placement tracker summary
-    print(f"\n[PLACEMENT] Global Placement Tracker Summary:")
-    print(global_tracker.get_summary())
-    
     mycosts = costs / ccosts[0]
     print(f"[TRANSMISSION] INES with MS - Total Cost: {costs:.2f}")
     if len(wl) > 1 or wl[0].hasKleene() or wl[0].hasNegation():
@@ -278,19 +246,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
                 totaltime, centralHopLatency, max_dependency, ccosts[0], lowerBound / ccosts[0], networkParams[1],
                 number_parents]
 
-    # new = False
-    # try:
-    #      f = open("./res/"+str(filename)+".csv")   
-    # except FileNotFoundError:
-    #      new = True           
 
-    # with open("./res/"+str(filename)+".csv", "a") as result:
-    #    writer = csv.writer(result)  
-    #    if new:
-    #        writer.writerow(schema)              
-    #    writer.writerow(myResult)
-    #with open('EvaluationPlan',  'wb') as EvaluationPlan_file:
-    # pickle.dump([myPlan, ID, MSPlacements], EvaluationPlan_file)
     eval_Plan = [myPlan, ID, MSPlacements]
     experiment_result = [ID, costs]
     return eval_Plan, central_eval_plan, experiment_result, myResult
