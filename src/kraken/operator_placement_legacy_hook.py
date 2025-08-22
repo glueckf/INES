@@ -1,0 +1,413 @@
+from helper.placement_aug import NEWcomputeCentralCosts, ComputeSingleSinkPlacement, computeMSplacementCosts
+from helper.processCombination_aug import compute_dependencies, getSharedMSinput
+import time
+import numpy as np
+from .core import compute_operator_placement_with_prepp
+from .global_placement_tracker import get_global_placement_tracker, reset_global_placement_tracker
+import json
+import csv
+import os
+from typing import Dict, Any, List
+
+
+def format_results_for_comparison(results_dict: Dict, execution_info: Dict) -> Dict[str, Any]:
+    """
+    Format placement results in a clean, machine-readable format for comparison.
+    
+    Args:
+        results_dict: Dictionary containing placement results for each projection
+        execution_info: Dictionary containing execution metadata
+        
+    Returns:
+        Dictionary with structured results for easy comparison
+    """
+    formatted_results = {
+        'metadata': execution_info,
+        'placements': {},
+        'summary': {
+            'total_projections': len(results_dict),
+            'total_cost': 0,
+            'successful_placements': 0,
+            'failed_placements': 0
+        }
+    }
+    
+    for projection, result in results_dict.items():
+        projection_str = str(projection)
+        
+        if hasattr(result, 'costs') and hasattr(result, 'node'):
+            # New placement engine result format
+            formatted_results['placements'][projection_str] = {
+                'placement_node': result.node,
+                'total_cost': result.costs,
+                'strategy': getattr(result, 'strategy', 'unknown'),
+                'all_push_cost': getattr(result, 'all_push_costs', None),
+                'push_pull_cost': getattr(result, 'push_pull_costs', None),
+                'has_sufficient_resources': getattr(result, 'has_sufficient_resources', None),
+                'plan_details': getattr(result, 'plan_details', {}),
+                'success': True
+            }
+            formatted_results['summary']['total_cost'] += result.costs
+            formatted_results['summary']['successful_placements'] += 1
+        else:
+            # Handle other result formats or errors
+            formatted_results['placements'][projection_str] = {
+                'success': False,
+                'result_type': str(type(result)),
+                'result_data': str(result) if result else None
+            }
+            formatted_results['summary']['failed_placements'] += 1
+    
+    return formatted_results
+
+
+def save_results_to_json(results: Dict[str, Any], filename: str) -> None:
+    """
+    Save formatted results to a JSON file.
+    
+    Args:
+        results: Formatted results dictionary
+        filename: Output filename
+    """
+    with open(filename, 'w') as f:
+        json.dump(results, f, indent=2, default=str)
+    print(f"[RESULTS] Saved machine-readable results to {filename}")
+
+
+def calculate_integrated_approach(self, file_path: str, max_parents: int):
+    workload = self.query_workload
+    projFilterDict = self.h_projFilterDict
+    IndexEventNodes = self.h_IndexEventNodes
+    allPairs = self.allPairs
+    rates = self.h_rates_data
+    network = self.network
+    mycombi = self.h_mycombi
+    singleSelectivities = self.single_selectivity
+    projrates = self.h_projrates
+    EventNodes = self.h_eventNodes
+    G = self.graph
+
+    Filters = []
+
+    noFilter = 0  # NO FILTER
+
+    # Access the arguments
+    filename = file_path
+    number_parents = max_parents
+
+    # print(f"[PLACEMENT] Processing file: {filename}")
+    # print(f"[PLACEMENT] Index Event Nodes: {IndexEventNodes}")
+    central_computation_result = NEWcomputeCentralCosts(workload, IndexEventNodes, allPairs, rates, EventNodes, self.graph)
+    (central_computation_cost,
+     central_computation_node,
+     central_computation_longest_path,
+     central_computation_routing_dict) = central_computation_result
+    centralHopLatency = max(allPairs[central_computation_node])
+    numberHops = sum(allPairs[central_computation_node])
+    # print(f"[CENTRAL COSTS] Cost: {central_computation_cost:.2f}")
+    # print(f"[CENTRAL COSTS] Total Hops: {numberHops}")
+    # print(f"[CENTRAL COSTS] Hop Latency: {centralHopLatency:.2f}")
+    MSPlacements = {}
+    start_time = time.time()
+
+    # Initialize global placement tracker for this placement session
+    reset_global_placement_tracker()  # Start fresh for each placement calculation
+    global_tracker = get_global_placement_tracker()
+    # print(f"[PLACEMENT] Initialized global placement tracker")
+
+    hopLatency = {}
+
+    EventNodes = self.h_eventNodes
+    IndexEventNodes = self.h_IndexEventNodes
+
+    unfolded = self.h_mycombi
+    criticalMSTypes = self.h_criticalMSTypes
+    sharedDict = getSharedMSinput(self, unfolded, projFilterDict)
+    dependencies = compute_dependencies(self, unfolded, criticalMSTypes)
+    processingOrder = sorted(dependencies.keys(), key=lambda x: dependencies[x])
+    costs = 0
+
+    central_evaluation_plan = [central_computation_node, central_computation_routing_dict, workload]
+
+    integrated_placement_decision_by_projection = {}
+
+    for projection in processingOrder:  #parallelize computation for all projections at the same level
+        if set(unfolded[projection]) == set(projection.leafs()):  #initialize hop latency with maximum of children
+            hopLatency[projection] = 0
+        else:
+            hopLatency[projection] = max([hopLatency[x] for x in unfolded[projection] if x in hopLatency.keys()])
+
+        # TODO: Currntly leave out MS placement for integrated approach, as it is not yet implemented
+        # partType,_,_ = returnPartitioning(self, projection, unfolded[projection], projrates ,criticalMSTypes)
+        partType = False
+
+        if partType:
+
+            # TODO: Should be rewritten to fit the integrated approach
+            MSPlacements[projection] = partType
+
+            result = computeMSplacementCosts(self, projection, unfolded[projection], partType, sharedDict, noFilter, G)
+
+            additional = result[0]
+
+            costs += additional
+
+            hopLatency[projection] += result[1]
+
+            Filters += result[4]
+
+            if (
+                    projection.get_original(workload) in workload and
+                    partType[0] in list(map(lambda x: str(x), projection.get_original(workload).kleene_components()))
+            ):
+                result = ComputeSingleSinkPlacement(projection.get_original(workload), [projection], noFilter)
+                additional = result[0]
+                costs += additional
+
+        else:
+
+            integrated_optimization_result_for_given_projection = compute_operator_placement_with_prepp(
+                self,
+                projection,
+                unfolded[projection],
+                noFilter,
+                projFilterDict,
+                EventNodes,
+                IndexEventNodes,
+                self.h_network_data,
+                allPairs, mycombi,
+                rates,
+                singleSelectivities,
+                projrates,
+                G,
+                network,
+                central_evaluation_plan)
+
+            integrated_placement_decision_by_projection[projection] = (
+                integrated_optimization_result_for_given_projection)
+
+    costs_for_evaluation_total_workload = 0
+
+    # Go through each placement decision
+    for projection in integrated_placement_decision_by_projection:
+        # Check if projection was in original query workload
+        if projection in self.query_workload:
+            # If so, add costs to the total costs
+            costs_for_evaluation_total_workload += integrated_placement_decision_by_projection[projection].costs
+
+    # Print global placement tracker summary
+    print(f"\n[PLACEMENT] Global Placement Tracker Summary:")
+    print(global_tracker.get_summary())
+
+    #
+    kraken_simulation_id = int(np.random.uniform(0, 10000000))
+
+    totaltime = str(round(time.time() - start_time, 2))
+
+    print(f"[TIMING] Execution Summary:")
+    print(f"[TIMING] Start: {start_time:.2f}")
+    print(f"[TIMING] End: {time.time():.2f}")
+    print(f"[TIMING] Duration: {totaltime} seconds")
+    
+    # Prepare execution metadata
+    execution_info = {
+        'experiment_id': kraken_simulation_id,
+        'file_path': filename,
+        'max_parents': number_parents,
+        'execution_time_seconds': float(totaltime),
+        'start_time': start_time,
+        'end_time': time.time(),
+        'total_cost_sum': costs_for_evaluation_total_workload,
+        'central_cost': central_computation_cost,
+        'central_hop_latency': centralHopLatency,
+        'number_hops': numberHops,
+        'workload_size': len(workload),
+        'global_tracker_entries': len(global_tracker._placement_history) if global_tracker else 0
+    }
+    
+    # Format results for comparison
+    formatted_results = format_results_for_comparison(integrated_placement_decision_by_projection, execution_info)
+    
+    # Print summary for immediate feedback
+    print(f"\n[RESULTS SUMMARY]")
+    print(f"Total Projections: {formatted_results['summary']['total_projections']}")
+    print(f"Successful Placements: {formatted_results['summary']['successful_placements']}")
+    print(f"Failed Placements: {formatted_results['summary']['failed_placements']}")
+    print(f"Total Placement Cost: {formatted_results['summary']['total_cost']:.2f}")
+
+    result = {
+        'kraken_simulation_id': kraken_simulation_id,
+        'integrated_placement_decision_by_projection': integrated_placement_decision_by_projection,
+        'formatted_results': formatted_results
+    }
+    
+    return result
+
+
+def write_results_to_csv(integrated_placement_decision_by_projection, ines_simulation_id):
+    """
+    Write aggregated placement results to CSV file for comparison analysis.
+    
+    Args:
+        integrated_placement_decision_by_projection: Dict containing placement decisions by projection
+        ines_simulation_id: Foreign key ID to link with INES simulation data
+    """
+    
+    # Ensure res directory exists
+    res_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'res')
+    os.makedirs(res_dir, exist_ok=True)
+    
+    csv_file_path = os.path.join(res_dir, 'kraken_simulation.csv')
+
+    # Define CSV headers
+    headers = [
+        'kraken_simulation_id',
+        'ines_simulation_id', 
+        'timestamp',
+        'execution_time_seconds',
+        'total_projections_placed',
+        'central_placement_cost',
+        'integrated_placement-cost',
+        'central_latency',
+        'integrated_placement_latency',
+        'cost_reduction_ratio',
+        'latency_increase',
+        'workload_size',
+        'nodes_with_placements'
+    ]
+
+    kraken_simulation_id = integrated_placement_decision_by_projection['kraken_simulation_id']
+    timestamp = integrated_placement_decision_by_projection['formatted_results']['metadata']['start_time']
+    execution_time_seconds = integrated_placement_decision_by_projection['formatted_results']['metadata']['execution_time_seconds']
+    total_projections_placed = integrated_placement_decision_by_projection['formatted_results']['summary']['total_projections']
+    central_placement_cost = integrated_placement_decision_by_projection['formatted_results']['metadata']['central_cost']
+    integrated_placement_cost = integrated_placement_decision_by_projection['formatted_results']['metadata']['total_cost_sum']
+    central_latency = integrated_placement_decision_by_projection['formatted_results']['metadata']['central_hop_latency']
+
+    # TODO: Not returned as of right now, needs to be calculated
+    integrated_placement_latency = central_latency
+
+    cost_reduction_ratio = integrated_placement_cost / central_placement_cost
+    latency_increase = (integrated_placement_latency / central_latency) - 1
+    workload_size = integrated_placement_decision_by_projection['formatted_results']['metadata']['workload_size']
+    nodes_with_placements = integrated_placement_decision_by_projection['formatted_results']['metadata']['global_tracker_entries']
+
+    row_data = [
+        kraken_simulation_id,
+        ines_simulation_id,
+        timestamp,
+        execution_time_seconds,
+        total_projections_placed,
+        central_placement_cost,
+        integrated_placement_cost,
+        central_latency,
+        integrated_placement_latency,
+        cost_reduction_ratio,
+        latency_increase,
+        workload_size,
+        nodes_with_placements
+    ]
+
+    # Check if file exists to determine if we need to write headers
+    file_exists = os.path.exists(csv_file_path)
+
+    # Write to CSV file (append mode)
+    with open(csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+
+        # Write headers only if file is new
+        if not file_exists:
+            writer.writerow(headers)
+
+        # Write data row
+        writer.writerow(row_data)
+
+    print(f"[CSV] Appended Kraken simulation results to {csv_file_path}")
+    print(f"[CSV] Kraken Simulation ID: {kraken_simulation_id}, INES Simulation ID: {ines_simulation_id}")
+
+
+def print_kraken(integrated_operator_placement_results):
+    """
+    Print comprehensive placement results information for Kraken simulation.
+    
+    Args:
+        integrated_operator_placement_results: Complete results dict containing all placement data
+    """
+    print("\n" + "="*80)
+    print("KRAKEN SIMULATION RESULTS SUMMARY")
+    print("="*80)
+    
+    # Extract main components
+    kraken_id = integrated_operator_placement_results.get('kraken_simulation_id', 'N/A')
+    placement_decisions = integrated_operator_placement_results.get('integrated_placement_decision_by_projection', {})
+    formatted_results = integrated_operator_placement_results.get('formatted_results', {})
+    
+    # Print simulation metadata
+    metadata = formatted_results.get('metadata', {})
+    print(f"\nSIMULATION METADATA:")
+    print(f"   Kraken Simulation ID: {kraken_id}")
+    print(f"   Experiment ID: {metadata.get('experiment_id', 'N/A')}")
+    print(f"   File Path: {metadata.get('file_path', 'N/A')}")
+    print(f"   Execution Time: {metadata.get('execution_time_seconds', 0):.2f} seconds")
+    print(f"   Workload Size: {metadata.get('workload_size', 0)} queries")
+    print(f"   Max Parents: {metadata.get('max_parents', 0)}")
+    
+    # Print cost comparison
+    central_cost = metadata.get('central_cost', 0)
+    total_integrated_cost = metadata.get('total_cost_sum', 0)
+    savings = central_cost - total_integrated_cost if central_cost > 0 else 0
+    savings_pct = (savings / central_cost * 100) if central_cost > 0 else 0
+    
+    print(f"\nCOST ANALYSIS:")
+    print(f"   Central Placement Cost: {central_cost:,.2f}")
+    print(f"   Integrated Placement Cost: {total_integrated_cost:,.2f}")
+    print(f"   Total Savings: {savings:,.2f} ({savings_pct:.1f}%)")
+    
+    # Print latency information
+    print(f"\nLATENCY METRICS:")
+    print(f"   Central Hop Latency: {metadata.get('central_hop_latency', 0)} hops")
+    print(f"   Total Network Hops: {metadata.get('number_hops', 0)}")
+    
+    # Print placement summary
+    summary = formatted_results.get('summary', {})
+    print(f"\nPLACEMENT SUMMARY:")
+    print(f"   Total Projections: {summary.get('total_projections', 0)}")
+    print(f"   Successful Placements: {summary.get('successful_placements', 0)}")
+    print(f"   Failed Placements: {summary.get('failed_placements', 0)}")
+    print(f"   Success Rate: {(summary.get('successful_placements', 0) / max(summary.get('total_projections', 1), 1) * 100):.1f}%")
+    
+    # Print detailed placement decisions
+    print(f"\nDETAILED PLACEMENT DECISIONS:")
+    for projection, decision in placement_decisions.items():
+        if hasattr(decision, 'node') and hasattr(decision, 'costs'):
+            print(f"   {projection}:")
+            print(f"      Node: {decision.node}")
+            print(f"      Strategy: {decision.strategy}")
+            print(f"      Final Cost: {decision.costs:,.2f}")
+            print(f"      All-Push Cost: {decision.all_push_costs:,.2f}")
+            print(f"      Savings: {decision.savings:,.2f}")
+            print(f"      Resources Sufficient: {decision.has_sufficient_resources}")
+            
+            # Print plan details if available
+            if hasattr(decision, 'plan_details') and decision.plan_details:
+                details = decision.plan_details
+                print(f"      Computing Time: {details.get('computing_time', 0):.4f}s")
+                print(f"      Latency: {details.get('latency', 0)} hops")
+                print(f"      Transmission Ratio: {details.get('transmission_ratio', 0):.6f}")
+            print()
+    
+    # Print formatted placements summary
+    placements = formatted_results.get('placements', {})
+    if placements:
+        print(f"PLACEMENT NODES DISTRIBUTION:")
+        node_counts = {}
+        for proj_name, placement_info in placements.items():
+            node = placement_info.get('placement_node', 'unknown')
+            node_counts[node] = node_counts.get(node, 0) + 1
+        
+        for node, count in sorted(node_counts.items()):
+            print(f"   Node {node}: {count} projection(s)")
+    
+    print("="*80)
+    print(f"Kraken simulation {kraken_id} completed successfully!")
+    print("="*80)
