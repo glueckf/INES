@@ -271,7 +271,7 @@ def calculate_final_costs_for_sending_to_sinks(
     """
     print("Hook")
     (push_pull_costs, original_result_at_idx_1, latency,
-     transmission_ratio, all_push_costs) = cost_results
+     transmission_ratio, all_push_costs, original_result_at_idx_5, original_result_at_idx_6) = cost_results
 
     # Extract the output rate for the given projection
     projection_output_rate = (projection_rates[query_projection][1]
@@ -307,7 +307,9 @@ def calculate_final_costs_for_sending_to_sinks(
             original_result_at_idx_1,
             final_latency,
             final_transmission_ratio,
-            final_all_push_costs
+            final_all_push_costs,
+            original_result_at_idx_5,
+            original_result_at_idx_6
         )
     else:
         return cost_results
@@ -379,7 +381,19 @@ def calculate_prepp_with_placement(
     all_push_costs = results[4]
     logger.info(f"All-push costs for projection {projection}: {all_push_costs:.2f}")
 
-    return push_pull_costs, computing_time, latency, transmission_ratio, all_push_costs
+    node_received_events = results[5]
+    logger.info(f"Node {node} received events: {node_received_events}")
+
+    aquisition_steps = results[6]
+    logger.info(f"Aquisition steps for projection {projection}: {aquisition_steps}")
+
+    return (push_pull_costs,
+            computing_time,
+            latency,
+            transmission_ratio,
+            all_push_costs,
+            node_received_events,
+            aquisition_steps)
 
 
 def initiate_buffer(
