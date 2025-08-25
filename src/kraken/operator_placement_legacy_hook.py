@@ -112,7 +112,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
 
     # Initialize global placement tracker for this placement session
     reset_global_placement_tracker()  # Start fresh for each placement calculation
-    global_tracker = get_global_placement_tracker()
+    global_placement_tracker = get_global_placement_tracker()
     # print(f"[PLACEMENT] Initialized global placement tracker")
 
     hopLatency = {}
@@ -197,7 +197,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
 
     # Print global placement tracker summary
     print(f"\n[PLACEMENT] Global Placement Tracker Summary:")
-    print(global_tracker.get_summary())
+    print(global_placement_tracker.get_summary())
 
     #
     kraken_simulation_id = int(np.random.uniform(0, 10000000))
@@ -222,7 +222,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         'central_hop_latency': centralHopLatency,
         'number_hops': numberHops,
         'workload_size': len(workload),
-        'global_tracker_entries': len(global_tracker._placement_history) if global_tracker else 0
+        'global_tracker_entries': len(global_placement_tracker._placement_history) if global_placement_tracker else 0
     }
     
     # Format results for comparison
