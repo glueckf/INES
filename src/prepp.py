@@ -1,18 +1,10 @@
 import re
 import argparse
 import math
-
 from timeit import default_timer as timer
-
 import random
-
 import copy
-
 import helper.push_pull_plan_generator as push_pull_plan_generator
-import pickle
-import sys
-
-import os
 import time
 from itertools import permutations, chain, combinations
 
@@ -357,12 +349,12 @@ def determine_total_query_rate(query,
         all_eventtype_output_rates,
         eventtype_to_sources_map
     )
-    
+
     selectivity = determine_query_selectivity(
         query.query,
         eventtype_pair_to_selectivity
     )
-    
+
     return output_rate * selectivity
 
 
@@ -395,6 +387,7 @@ def extract_muse_graph_forbidden(line):
             return line[line.find('/n(') + 3:line.find('WITH') - 2]
         else:
             return line[line.find('/n(') + 3:len(line) - 2]
+
 
 def extract_muse_graph_selectivities(line, all_event_combinations, eventtype_pair_to_selectivity):
     all_positions_of_eventcombinations = [m.start() for m in re.finditer("'", line)]
@@ -493,8 +486,18 @@ def determine_randomized_distribution_push_pull_costs(
 
                 # Costs seem fishy, skip this function for now and use the determine exact push pull plan function
                 # exact_costs, used_eventtypes_to_pull,latency = push_pull_plan_generator_exact.determine_costs_for_projection_on_node(exact_push_pull_plan_for_a_projection, query, current_node, already_received_eventtypes,allPairs)
-                costs, used_eventtypes_to_pull, latency = push_pull_plan_generator_exact.determine_costs_for_projection_on_node(
-                    exact_push_pull_plan_for_a_projection, query, current_node, already_received_eventtypes, allPairs)
+                (costs,
+                 used_eventtypes_to_pull,
+                 latency,
+                 node_received_eventtypes) = (
+                    push_pull_plan_generator_exact.determine_costs_for_projection_on_node(
+                        exact_push_pull_plan_for_a_projection,
+                        query,
+                        current_node,
+                        already_received_eventtypes,
+                        allPairs
+                    )
+                )
 
                 # ===========================================
                 # FINAL PREPP RESULT LOGGING
@@ -503,41 +506,27 @@ def determine_randomized_distribution_push_pull_costs(
                 print(f"  Push-Pull Plan: {exact_push_pull_plan_for_a_projection}")
                 print(f"  Events to Pull: {used_eventtypes_to_pull}")
                 print(f"  Latency: {latency:.2f}")
-                
-                # Determine events being pushed vs pulled
-                all_events = set()
-                for step in exact_push_pull_plan_for_a_projection:
-                    all_events.update(step)
-                
-                pulled_events = set()
-                for step_events in used_eventtypes_to_pull:
-                    pulled_events.update(step_events)
-                
-                pushed_events = all_events - pulled_events
-                
-                print(f"  Events PUSHED: {sorted(list(pushed_events))}")
-                print(f"  Events PULLED: {sorted(list(pulled_events))}")
-                print("")  # Empty line for readability
 
-                # # Check if we need to send the evaluated query to the cloud evaluation node or if we are already there
-                # if current_node != cloud_evaluation_node:
-                #     # We need to send the evaluated query to the cloud evaluation node
-                #     exact_costs += calculate_costs_for_sending_evaluated_query_to_cloud(
-                #         all_eventtype_output_rates=all_eventtype_output_rates,
-                #         query=query.query,
-                #         current_node=current_node,
-                #         cloud_evaluation_node=cloud_evaluation_node,
-                #         allPairs=allPairs
-                #     )
+                aquisition_steps = {}
 
-                max_latency = max(max_latency, latency)
-                # print(f"[DEBUG] Query: {query.query}, Node: {current_node}, Exact costs: {exact_costs}")
-                # print(f"[DEBUG] Used eventtypes to pull: {used_eventtypes_to_pull}")
-                # print(f"[DEBUG] Exact push-pull plan: {exact_push_pull_plan_for_a_projection}")
-                if plan_print == "t":
-                    print("exact_push_pull_plan_for_a_projection:", exact_push_pull_plan_for_a_projection)
-                    print("used_eventtypes_to_pull:", used_eventtypes_to_pull)
+                if len(exact_push_pull_plan_for_a_projection) == len(used_eventtypes_to_pull):
+
+                    for i, aquired_eventtype in enumerate(exact_push_pull_plan_for_a_projection):
+                        aquisition_steps[i] = {
+                            'pull_set': used_eventtypes_to_pull[i],
+                            'events_to_pull': aquired_eventtype
+                        }
+                else:
+                    # TODO: We need to find something here, should not happen
                     pass
+
+                received_eventtypes = node_received_eventtypes[current_node]
+
+                if plan_print == "t":
+                    # print aquisition steps
+                    print("Aquisition Steps:")
+                    for step, details in aquisition_steps.items():
+                        print(f"  Step {step + 1}: Pull {details['pull_set']} to acquire {details['events_to_pull']}")
                 total_exact_costs += exact_costs
 
     return (
@@ -549,7 +538,9 @@ def determine_randomized_distribution_push_pull_costs(
         sum(exact_exec_times),
         sum(factorial_exec_times),
         sum(sampling_exec_times),
-        max_latency
+        max_latency,
+        received_eventtypes,
+        aquisition_steps
     )
 
 
@@ -583,14 +574,14 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
                                                                      single_selectivity_of_eventtype_within_projection,
                                                                      is_deterministic=False):
     # print(f"[PREPP_DEBUG] determine_randomized_single_selectivities (prepp.py) called for query={''.join(query)}, is_deterministic={is_deterministic}")
-    
+
     # Ensure deterministic behavior with consistent seed for each query
     if is_deterministic:
         # Use a hash of the query to get consistent but query-specific deterministic values
         query_hash = hash(''.join(sorted(query)))
         # print(f"[PREPP_DEBUG] Setting deterministic seed: 42 + {query_hash} = {42 + query_hash}")
         random.seed(42 + query_hash)
-        
+
     projection_selectivity = determine_total_query_selectivity(query, eventtype_pair_to_selectivity)
     projection_outputrate = determine_total_query_outputrate(query, all_eventtype_output_rates,
                                                              eventtype_to_sources_map)
@@ -617,7 +608,7 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
         chosen_indices = [ele for ele in range(0, limit)]
         if not is_deterministic:
             random.shuffle(chosen_indices)
-        
+
         # print(f"[PREPP_DEBUG] Delta {delta}: chosen_indices={chosen_indices}")
 
         for n in range(0, len(chosen_indices) - 1):
@@ -713,7 +704,7 @@ def determine_all_single_selectivities_for_every_possible_projection(eventtype_p
         # Only set single eventtype selectivities to 1.0, preserve existing projection selectivities
         all_needed_eventtypes, max_needed_query_length = get_all_distinct_eventtypes_of_used_queries_and_largest_query(
             queries_to_process)
-        
+
         for eventtype in all_needed_eventtypes:
             # Only set single eventtype selectivities if they don't already exist
             if eventtype not in single_selectivity_of_eventtype_within_projection:
@@ -768,7 +759,6 @@ def generate_prePP(
         plan_print,
         allPairs,
         is_deterministic=False):
-    
     # print(f"[PREPP_DEBUG] generate_prePP called with is_deterministic={is_deterministic}")
     # Accessing the arguments
     #print(input_buffer.getvalue())
@@ -1079,7 +1069,10 @@ def generate_prePP(
              exact_algo_time,
              factorial_algo_time,
              sampling_algo_time,
-             max_latency) = result
+             max_latency,
+             node_received_eventtypes,
+             aquisition_steps
+             ) = result
 
             greedy_costs_avg.append(greedy_costs)
             sampling_costs_avg.append(sampling_costs)
@@ -1112,23 +1105,6 @@ def generate_prePP(
 
             query_network_copy = copy.deepcopy(query_network)
             single_sink_query_network_copy = copy.deepcopy(single_sink_query_network)
-    # print(greedy_costs_avg)
-    # print(sampling_costs_avg)
-    # print(factorial_costs_avg)
-    # print(exact_costs_avg)
-    #
-    #     # We need to calculate the costs of sending the evaluated queries to the cloud evaluation node
-    #     for processed_query in queries_to_process:
-    #         for sink in query_node_dict[processed_query]:
-    #             if sink != CLOUD_EVALUATION_NODE:
-    #                 # Calculate the costs for sending the evaluated query to the cloud evaluation node
-    #                 total_cost += calculate_costs_for_sending_evaluated_query_to_cloud(
-    #                     all_eventtype_output_rates=all_eventtype_output_rates,
-    #                     query=processed_query,
-    #                     current_node=sink,
-    #                     cloud_evaluation_node=CLOUD_EVALUATION_NODE,
-    #                     allPairs=allPairs
-    #                 )
 
     end_time = time.time()
     total_time = end_time - start_time
@@ -1136,37 +1112,4 @@ def generate_prePP(
     pushPullTime = total_time
     maxPushPullLatency = max_latency
 
-    # ===========================================
-    # FINAL PREPP SUMMARY
-    # ===========================================
-    # print(f"\n{'#'*80}")
-    # print(f"FINAL PREPP EXECUTION SUMMARY")
-    # print(f"{'#'*80}")
-    # print(f"Total Queries Processed: {len(queries_to_process)}")
-    # print(f"Method: {method}")
-    # print(f"Algorithm: {algorithm}")
-    # print(f"Runs/Samples: {number_of_samples}")
-    # print(f"")
-    # print(f"COST BREAKDOWN:")
-    # print(f"  Push-Pull Strategy Cost (Average): {exact_cost:.4f}")
-    # print(f"  All-Push Strategy Cost (Central): {central_push_costs:.4f}")
-    # print(f"  Transmission Ratio (PP/AP): {endTransmissionRatio:.4f}")
-    # print(f"  Cost Savings: {central_push_costs - exact_cost:.4f}")
-    # print(f"  Savings Percentage: {((central_push_costs - exact_cost) / central_push_costs * 100):.2f}%" if central_push_costs > 0 else "  Savings Percentage: N/A")
-    # print(f"")
-    # print(f"PERFORMANCE METRICS:")
-    # print(f"  Execution Time: {pushPullTime:.4f} seconds")
-    # print(f"  Maximum Latency: {maxPushPullLatency}")
-    # print(f"")
-    # print(f"RESULT SUMMARY:")
-    # print(f"  Best Strategy: {'Push-Pull' if exact_cost < central_push_costs else 'All-Push'}")
-    # print(f"  Efficiency Gain: {(1 - endTransmissionRatio) * 100:.2f}%" if endTransmissionRatio < 1 else f"  Efficiency Loss: {(endTransmissionRatio - 1) * 100:.2f}%")
-    # print(f"{'#'*80}\n")
-
-    # TODO: Find a way to include the plan information in readable format:
-    # [DEBUG] Used eventtypes to pull: [[], ['B'], ['A']]
-    # [DEBUG] Exact push-pull plan: [['B'], ['A'], ['C']]
-
-    # TODO: Discuss and update costs
-
-    return [exact_cost, pushPullTime, maxPushPullLatency, endTransmissionRatio, total_cost]
+    return [exact_cost, pushPullTime, maxPushPullLatency, endTransmissionRatio, total_cost, node_received_eventtypes, aquisition_steps]
