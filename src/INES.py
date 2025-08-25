@@ -208,20 +208,20 @@ def generate_hardcoded_workload():
     queries.append(q1)
 
     # # Query 2:
-    q2 = AND(PrimEvent('D'), PrimEvent('E'))
-    q2 = number_children(q2)
-    queries.append(q2)
+    # q2 = AND(PrimEvent('D'), PrimEvent('E'))
+    # q2 = number_children(q2)
+    # queries.append(q2)
 
-    # Query 3: Simple AND with shared elements - AND(A, B, D)
-    q3 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
-    q3 = number_children(q3)
-    queries.append(q3)
-
-    # Query 4: Medium complexity - SEQ(A, B, AND(E, F))
-    # Shares A, B with queries 1 and 2
-    q4 = SEQ(PrimEvent('A'), PrimEvent('B'), AND(PrimEvent('E'), PrimEvent('F')))
-    q4 = number_children(q4)
-    queries.append(q4)
+    # # Query 3: Simple AND with shared elements - AND(A, B, D)
+    # q3 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
+    # q3 = number_children(q3)
+    # queries.append(q3)
+    #
+    # # Query 4: Medium complexity - SEQ(A, B, AND(E, F))
+    # # Shares A, B with queries 1 and 2
+    # q4 = SEQ(PrimEvent('A'), PrimEvent('B'), AND(PrimEvent('E'), PrimEvent('F')))
+    # q4 = number_children(q4)
+    # queries.append(q4)
 
     # # Query 4: Complex nested - AND(SEQ(A, B, C), D, SEQ(E, F))
     # # Shares SEQ(A, B, C) with query 1, and has synergy with query 3
@@ -434,7 +434,9 @@ class INES():
         print(
             f"[INES_DEBUG] Calling generate_prePP with is_deterministic={deterministic_flag} (mode={self.config.mode})")
         prepp_results = generate_prePP(self.plan, 'ppmuse', 'e', 1, 0, 1, True, self.allPairs, deterministic_flag)
-        self.results += prepp_results[:-1]
+
+        # Only take the first 4 results to match the schema
+        self.results += (prepp_results[:4])
 
         # Get the ID from the INES simulation as a foreign key, to later map both
         ines_simulation_id = self.results[0]
