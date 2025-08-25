@@ -71,7 +71,7 @@ def compute_operator_placement_with_prepp(
     log_determinism_info(services, logger)
     logger.info(f"Starting placement computation for projection: {projection}")
 
-    # Get global placement tracker
+    # Setup the tracker structures
     global_tracker = get_global_placement_tracker()
 
     if str(projection) == 'AND(SEQ(B, C), F)':
@@ -150,7 +150,14 @@ def compute_operator_placement_with_prepp(
 
             # TODO: Discuss with Ariane since this makes placement @ the cloud more attractive
             #  because push-pull can be used on the whole graph and cuts costs by a lot compared to subgraph placement
-            push_pull_costs, computing_time, latency, transmission_ratio, all_push_costs = results
+            (push_pull_costs,
+             computing_time,
+             latency,
+             transmission_ratio,
+             all_push_costs,
+             node_received_eventtypes,
+             aquisition_steps
+             ) = results
 
             # Log final calculated costs
             logger.info(f"Final push-pull costs for projection {projection} "
@@ -182,7 +189,9 @@ def compute_operator_placement_with_prepp(
                 plan_details={
                     'computing_time': computing_time,
                     'latency': latency,
-                    'transmission_ratio': transmission_ratio
+                    'transmission_ratio': transmission_ratio,
+                    'node_received_eventtypes': node_received_eventtypes,
+                    'aquisition_steps': aquisition_steps
                 }
             )
 
