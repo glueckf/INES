@@ -207,15 +207,15 @@ def generate_hardcoded_workload():
     q1 = number_children(q1)
     queries.append(q1)
 
-    # # Query 2:
-    # q2 = AND(PrimEvent('D'), PrimEvent('E'))
-    # q2 = number_children(q2)
-    # queries.append(q2)
+    # Query 2:
+    q2 = AND(PrimEvent('A'), PrimEvent('B'))
+    q2 = number_children(q2)
+    queries.append(q2)
 
-    # # Query 3: Simple AND with shared elements - AND(A, B, D)
-    # q3 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
-    # q3 = number_children(q3)
-    # queries.append(q3)
+    # Query 3: Simple AND with shared elements - AND(A, B, D)
+    q3 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
+    q3 = number_children(q3)
+    queries.append(q3)
     #
     # # Query 4: Medium complexity - SEQ(A, B, AND(E, F))
     # # Shares A, B with queries 1 and 2
@@ -300,6 +300,58 @@ def generate_fixed_global_eventrates(self):
             global_event_rates = np.add(global_event_rates, node.eventrates)
     result = list(global_event_rates)
     return result
+
+
+def update_prepp_results(self, prepp_results):
+    print("Debug hook")
+
+    CLOUD_NODE_ID = 0
+
+    query_workload = self.query_workload
+
+    prepp_eval_plan = self.eval_plan[0].projections
+
+    total_costs = prepp_results[0]
+    calculation_time = prepp_results[1]
+    max_push_pull_latency = prepp_results[2]
+    transmission_ratio = prepp_results[3]
+    total_push_costs = prepp_results[4]
+
+    # We need to add the costs of sending the events to the cloud to the prepp results
+
+    all_sinks_from_workload = []
+
+    for i in prepp_eval_plan:
+        projection = i.name.name
+        if projection in query_workload:
+            # Here we need to calculate the costs for sending query from placement to sink:
+            placement_nodes = i.name.sinks
+            for placed_node in placement_nodes:
+                all_sinks_from_workload.append(placed_node)
+                hops_from_node_to_cloud = self.allPairs[placed_node][CLOUD_NODE_ID]
+                query_output_rate = self.h_projrates.get(projection, 1.0)[1]
+                total_costs += hops_from_node_to_cloud * query_output_rate
+
+    final_transmission_ratio = total_costs / total_push_costs if total_push_costs > 0 else 0
+
+    # For the latency it is a little tricky.
+    # If a query from the workload is placed on the cloud, we do not need to add any latency.
+    # If all queries are placed below the cloud, we need to add the latency from the highest placed node to the cloud.
+    max_additional_latency = 0
+    min_distance_to_cloud = float('inf')
+
+    if not any(node == CLOUD_NODE_ID for node in all_sinks_from_workload):
+        # Find closest node to the cloud
+        for node in all_sinks_from_workload:
+            distance_to_cloud = self.allPairs[node][CLOUD_NODE_ID]
+            if distance_to_cloud < min_distance_to_cloud:
+                min_distance_to_cloud = distance_to_cloud
+
+        max_additional_latency = min_distance_to_cloud
+
+    max_push_pull_latency += max_additional_latency
+
+    return total_costs, calculation_time, max_push_pull_latency, final_transmission_ratio
 
 
 class INES():
@@ -424,7 +476,8 @@ class INES():
 
         integrated_operator_placement_results = calculate_integrated_approach(self, 'test', 0)
 
-        (self.eval_plan, self.central_eval_plan, self.experiment_result, self.results) = calculate_operatorPlacement(self, 'test', 0)
+        (self.eval_plan, self.central_eval_plan, self.experiment_result, self.results) = calculate_operatorPlacement(
+            self, 'test', 0)
 
         # Add prepp results to complete the schema (4 additional columns)
         from generateEvalPlan import generate_eval_plan
@@ -435,15 +488,17 @@ class INES():
             f"[INES_DEBUG] Calling generate_prePP with is_deterministic={deterministic_flag} (mode={self.config.mode})")
         prepp_results = generate_prePP(self.plan, 'ppmuse', 'e', 1, 0, 1, True, self.allPairs, deterministic_flag)
 
+        final_prepp_results = update_prepp_results(self, prepp_results)
+
         # Only take the first 4 results to match the schema
-        self.results += (prepp_results[:4])
+        self.results += final_prepp_results
 
         # Get the ID from the INES simulation as a foreign key, to later map both
         ines_simulation_id = self.results[0]
-        
+
         # Print comprehensive placement results
         print_kraken(integrated_operator_placement_results)
-        
+
         # write_results_to_csv(integrated_operator_placement_results, ines_simulation_id)
 
     def _initialize_network_topology(self):
