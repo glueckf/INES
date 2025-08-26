@@ -439,6 +439,7 @@ def determine_randomized_distribution_push_pull_costs(
     total_exact_costs = 0
     total_factorial_costs = 0
     total_sampling_costs = 0
+    aquisition_steps = {}
 
     push_pull_plan_generator_exact = push_pull_plan_generator.Initiate(eventtype_pair_to_selectivity,
                                                                        eventtype_to_sources_map,
@@ -452,12 +453,15 @@ def determine_randomized_distribution_push_pull_costs(
     exact_exec_times = []
     factorial_exec_times = []
     sampling_exec_times = []
+
     already_received_eventtypes = {}
     for query in queries:
         for current_node in query.node_placement:
             already_received_eventtypes[current_node] = []
     max_latency = 0
     # print(f"[DEBUG] Processing {len(queries)} queries")
+    # sort queries by size:
+    queries = sorted(queries, key=lambda q: len(determine_all_primitive_events_of_projection(q.query)))
     for i, query in enumerate(queries):
         # print(f"[DEBUG] Query {i}: '{query.query}', node_placement: {getattr(query, 'node_placement', 'None')}")
         if query.query == '':
@@ -478,11 +482,6 @@ def determine_randomized_distribution_push_pull_costs(
                 end_exact = timer()
                 exact_exec_times.append(end_exact - start_exact)
                 query.primitive_operators = copy.deepcopy(old_copy)
-
-                if exact_push_pull_plan_for_a_projection == [['B', 'C'],
-                                                             ['A']] or exact_push_pull_plan_for_a_projection == [
-                    ['C', 'B'], ['A']]:
-                    print("Debug")
 
                 # Costs seem fishy, skip this function for now and use the determine exact push pull plan function
                 # exact_costs, used_eventtypes_to_pull,latency = push_pull_plan_generator_exact.determine_costs_for_projection_on_node(exact_push_pull_plan_for_a_projection, query, current_node, already_received_eventtypes,allPairs)
@@ -507,20 +506,52 @@ def determine_randomized_distribution_push_pull_costs(
                 print(f"  Events to Pull: {used_eventtypes_to_pull}")
                 print(f"  Latency: {latency:.2f}")
 
-                aquisition_steps = {}
+                # already_aquired_eventtypes = already_received_eventtypes[current_node]
 
                 if len(exact_push_pull_plan_for_a_projection) == len(used_eventtypes_to_pull):
-
+                    aquisition_steps[query.query] = {}
+                    if str(query.query) == "SEQ(A, B, C)":
+                        print("Debug Hook")
+                    received_eventtypes = []
                     for i, aquired_eventtype in enumerate(exact_push_pull_plan_for_a_projection):
-                        aquisition_steps[i] = {
-                            'pull_set': used_eventtypes_to_pull[i],
-                            'events_to_pull': aquired_eventtype
-                        }
-                else:
-                    # TODO: We need to find something here, should not happen
-                    pass
 
-                received_eventtypes = node_received_eventtypes[current_node]
+                        pull_request_costs = push_pull_plan_generator_exact.determine_costs_for_pull_request(
+                            eventtypes_in_pull_request=used_eventtypes_to_pull[i],
+                            eventtypes_to_acquire=aquired_eventtype,
+                            eventtype_to_sources_map=eventtype_to_sources_map,
+                            received_eventtypes=received_eventtypes,
+                            eventtypes_single_selectivities=eventtypes_single_selectivities,
+                            all_eventtype_output_rates=all_eventtype_output_rates,
+                            allPairs=allPairs,
+                            current_node=current_node,
+                            aquisition_steps=aquisition_steps
+                        )
+
+                        pull_response_costs = push_pull_plan_generator_exact.determine_costs_for_pull_response(
+                            eventtypes_in_pull_request=used_eventtypes_to_pull[i],
+                            eventtypes_to_acquire=aquired_eventtype,
+                            eventtype_to_sources_map=eventtype_to_sources_map,
+                            eventtypes_single_selectivities=eventtypes_single_selectivities,
+                            all_eventtype_output_rates=all_eventtype_output_rates,
+                            allPairs=allPairs,
+                            current_node=current_node
+                        )
+
+                        aquisition_steps[query.query][i] = {
+                            'pull_set': used_eventtypes_to_pull[i],
+                            'events_to_pull': aquired_eventtype,
+                            'pull_request_costs': pull_request_costs,
+                            'pull_response_costs': pull_response_costs,
+                            'total_step_costs': pull_request_costs + pull_response_costs
+                        }
+
+                        for eventtype in aquired_eventtype:
+                            eventtypes = push_pull_plan_generator_exact.determine_all_primitive_events_of_projection(eventtype)
+                            for event in eventtypes:
+                                if event not in received_eventtypes:
+                                    received_eventtypes.append(event)
+                else:
+                    raise ValueError("Length of push pull plan and events to pull do not match!")
 
                 if plan_print == "t":
                     # print aquisition steps

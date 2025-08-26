@@ -484,53 +484,8 @@ class Initiate():
 
             self.source_sent_this_type_to_node = copy.deepcopy(old_source_sent_this_type_to_node_map)
 
-
-        # Show detailed breakdown of optimal strategy only
-        # print(f"\n🏆 [OPTIMAL STRATEGY] Acquiring '{eventtype_to_acquire}' at node {node}")
-        # print(f"   └─ Previously acquired: {acquired_eventtypes}")
-        # print(f"   └─ Best pull strategy: {best_step}")
-        # print(f"   └─ Step cost: {lowest_costs_for_step:.2f}, latency: {step_latency}")
-        
-        # Show detailed cost breakdown with selectivity information
         optimal_pull_request_size = self.determine_optimized_pull_request_size_for_step(acquired_eventtypes, best_step, node)
         optimal_pull_answer_size = self.determine_optimized_pull_answer_size_for_step(best_step, eventtype_to_acquire, node)
-        
-        # print(f"   ├─ PULL REQUEST: {optimal_pull_request_size:.2f} data units")
-        # if best_step and best_step != '':  # If pulling with specific events
-        #     try:
-        #         pull_with_events = self.get_sorted_primitive_eventtypes_from_projection_string(best_step)
-        #         for event in pull_with_events:
-        #             event_rate = self.outputrate_map[event]
-        #             if len(acquired_eventtypes) > 1:
-        #                 selectivity_key = str(event) + '|' + self.remove_duplicates_and_sort_key(acquired_eventtypes)
-        #                 selectivity = self.single_selectivity_of_eventtype_within_projection[selectivity_key]
-        #                 # print(f"   │  └─ Event {event}: {event_rate} rate × {selectivity:.6f} selectivity")
-        #             # else:
-        #             #     print(f"   │  └─ Event {event}: {event_rate} rate (no selectivity filter)")
-        #     except:
-        #         # print(f"   │  └─ Pull strategy: {best_step} (debug info unavailable)")
-        #         pass
-        #
-        # # print(f"   ├─ PULL ANSWER: {optimal_pull_answer_size:.2f} data units")
-        # target_rate = self.outputrate_map[eventtype_to_acquire]
-        # if best_step and best_step != '':
-        #     try:
-        #         pull_with_events = self.get_sorted_primitive_eventtypes_from_projection_string(best_step)
-        #         combined_key = pull_with_events + [eventtype_to_acquire]
-        #         combined_key_str = self.remove_duplicates_and_sort_key(combined_key)
-        #         selectivity_key = str(eventtype_to_acquire) + '|' + combined_key_str
-        #         selectivity = self.single_selectivity_of_eventtype_within_projection[selectivity_key]
-        #         # print(f"   │  └─ Event {eventtype_to_acquire}: {target_rate} rate × {selectivity:.6f} selectivity")
-        #     except:
-        #         # print(f"   │  └─ Event {eventtype_to_acquire}: {target_rate} rate (selectivity calculation failed)")
-        #         pass
-        # # else:
-        # #     print(f"   │  └─ Event {eventtype_to_acquire}: {target_rate} rate (no selectivity filter)")
-        #
-        # # print(f"   └─ SOURCE COSTS:")
-        # # for source in self.eventtype_to_sources_map[eventtype_to_acquire]:
-        # #     source_cost = ((optimal_pull_request_size / self.number_of_nodes_producing_this_projection) + optimal_pull_answer_size) * allPairs[node][source]
-        # #     print(f"      └─ Node {source}: {((optimal_pull_request_size / self.number_of_nodes_producing_this_projection) + optimal_pull_answer_size):.2f} units × {allPairs[node][source]} hops = {source_cost:.2f} cost")
 
         optimal_push_pull_decision = CachedOptimalStep(lowest_costs_for_step, best_step,step_latency)
         self.optimal_pull_strategy_cache[key] = optimal_push_pull_decision
@@ -636,7 +591,7 @@ class Initiate():
             push = False
         if costs < push_plan_costs:
 
-            return costs, used_eventtype_to_pull,max_latency, node_received_eventtypes
+            return costs, used_eventtype_to_pull, max_latency, node_received_eventtypes
         else:
             return push_plan_costs, [[]], max_latency, node_received_eventtypes
 
@@ -900,4 +855,94 @@ class Initiate():
         
         return best_push_pull_plan, lowest_normal_costs
 
+    def determine_costs_for_pull_request(
+            self,
+            eventtypes_in_pull_request,
+            eventtypes_to_acquire,
+            eventtype_to_sources_map,
+            received_eventtypes,
+            eventtypes_single_selectivities,
+            all_eventtype_output_rates,
+            allPairs,
+            current_node,
+            aquisition_steps,
+    ):
+        print("DEBUG")
+
+        if len(eventtypes_in_pull_request) == 0:
+            # We have a push acquisition step, we need to return 0 costs here
+            return 0.0
+        else:
+            # We have a pull acquisition step, we need to calculate the costs here
+            # First we need the size of the pull request.
+            # Second we need need to add the pull request size up for every source node producing the event we want
+            # Third we need to multiply this by the respective distance in hops
+            # Calculate selectivity based on received_eventtypes and eventtypes_in_pull_request
+            # For each event type in pull request, calculate selectivity with all received event types
+            selectivity = 1.0
+            received_eventtypes_strip = ''
+            for event_type in received_eventtypes:
+                received_eventtypes_strip += event_type
+
+            for eventtypes in eventtypes_in_pull_request:
+                eventtypes = self.determine_all_primitive_events_of_projection(eventtypes)
+                for single_eventtype in eventtypes:
+                    if single_eventtype not in received_eventtypes_strip:
+                        continue
+                    combined_selectivity_key = str(single_eventtype + '|' + self.remove_duplicates_and_sort_key(received_eventtypes_strip + ''.join(eventtypes_in_pull_request)))
+                    if combined_selectivity_key in self.single_selectivity_of_eventtype_within_projection:
+                        selectivity *= self.single_selectivity_of_eventtype_within_projection[combined_selectivity_key]
+
+            size_of_pull_request = 0.0
+            for eventtype in eventtypes_in_pull_request:
+                if eventtype in eventtype_to_sources_map:
+                    number_of_sources = len(eventtype_to_sources_map[eventtype])
+                    single_source_rate = all_eventtype_output_rates[eventtype]
+                    global_rate = single_source_rate * number_of_sources
+                    size_of_pull_request += global_rate * selectivity
+
+            total_hops = 0.0
+            for source in eventtypes_to_acquire:
+                if source in eventtype_to_sources_map:
+                    for source_node in eventtype_to_sources_map[source]:
+                        distance_from_source_to_current_node = allPairs[source_node][current_node]
+                        total_hops += distance_from_source_to_current_node
+            return total_hops * size_of_pull_request
+
+
+    def determine_costs_for_pull_response(
+                self,
+                eventtypes_in_pull_request,
+                eventtypes_to_acquire,
+                eventtype_to_sources_map,
+                eventtypes_single_selectivities,
+                all_eventtype_output_rates,
+                allPairs,
+                current_node
+        ):
+        print("DEBUG")
+
+        # Calculate selectivity for combined event types (e.g., if eventtypes_in_pull_request = ['B'] and eventtypes_to_acquire = ['A'], 
+        # then the relevant selectivity would be for 'A|AB')
+        combined_eventtypes = list(set(eventtypes_in_pull_request + eventtypes_to_acquire))
+        combined_eventtypes.sort()  # Sort to ensure consistent ordering
+        
+        selectivity = 1.0
+        # Calculate selectivity for all pairs in the combined event types
+        for eventtype in eventtypes_to_acquire:
+            for i in range(len(combined_eventtypes)):
+                for j in range(i + 1, len(combined_eventtypes)):
+                    pair_key = eventtype + '|' + combined_eventtypes[i] + combined_eventtypes[j]
+                    if pair_key in self.single_selectivity_of_eventtype_within_projection:
+                        selectivity *= self.single_selectivity_of_eventtype_within_projection[pair_key]
+
+        # Then let's get the global rate:
+        global_output_rate = 0
+        for eventtype in eventtypes_to_acquire:
+            for source in eventtype_to_sources_map[eventtype]:
+                distance_from_source_to_current_node = allPairs[source][current_node]
+                single_source_rate = all_eventtype_output_rates[eventtype]
+                global_output_rate += single_source_rate * distance_from_source_to_current_node
+
+        return global_output_rate * selectivity
 
