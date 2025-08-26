@@ -242,13 +242,16 @@ def _create_basic_central_plan(self, subgraph: Dict[str, Any], central_eval_plan
 
 
 def calculate_final_costs_for_sending_to_sinks(
-        cost_results: tuple,
+        current_push_pull_costs: float,
+        current_all_push_costs: float,
+        current_latency: float,
+        current_transmission_ratio: float,
         placement_node: int,
         query_projection: Any,
         sink_nodes: List[int],
         projection_rates: Dict[Any, tuple],
         shortest_path_distances: Dict[int, Dict[int, int]]
-) -> tuple:
+) -> Dict[str, Any]:
     """
     Calculate the final transmission costs for sending query results to sink nodes.
     
@@ -257,8 +260,8 @@ def calculate_final_costs_for_sending_to_sinks(
     projection and the shortest path distances.
     
     Args:
-        cost_results: Tuple containing (push_pull_costs, original_result_at_idx_1, 
-                     latency, transmission_ratio, all_push_costs)
+        cost_results: Dictionary containing placement results with keys like:
+                     'all_push_costs', 'push_pull_costs', 'latency', etc.
         placement_node: Node ID where the projection is placed
         query_projection: The projection/query being processed
         sink_nodes: List of destination node IDs to send results to
@@ -266,53 +269,50 @@ def calculate_final_costs_for_sending_to_sinks(
         shortest_path_distances: All-pairs shortest path distance matrix
         
     Returns:
-        tuple: Updated costs tuple with transmission costs to sinks included,
-               or original results if costs cannot be calculated
+        Dict: Updated results dictionary with transmission costs included
     """
-    print("Hook")
-    (push_pull_costs, original_result_at_idx_1, latency,
-     transmission_ratio, all_push_costs, original_result_at_idx_5, original_result_at_idx_6) = cost_results
 
-    # Extract the output rate for the given projection
-    projection_output_rate = (projection_rates[query_projection][1]
-                              if isinstance(projection_rates, dict) else 1)
-
-    # Calculate hop distances from placement node to all sink nodes
-    hop_distances_to_sinks = [shortest_path_distances[placement_node][sink]
-                              for sink in sink_nodes]
-
-    # Log transmission planning information
-    logger.info(f"Output rate for projection {query_projection}: {projection_output_rate}")
-    for sink in sink_nodes:
-        logger.info(f"Distance from node {placement_node} to sink {sink}: "
-                    f"{shortest_path_distances[placement_node][sink]}")
-
-    # Calculate final costs including transmission to sinks
-    if push_pull_costs is not None and hop_distances_to_sinks:
-        # Sum all hop distances and multiply by projection output rate
-        total_transmission_cost = sum(hop_distances_to_sinks) * projection_output_rate
-
-        # Add transmission costs to existing strategy costs
-        final_push_pull_costs = push_pull_costs + total_transmission_cost
-        final_all_push_costs = all_push_costs + total_transmission_cost
-
-        # Latency is dominated by the longest path to any sink
-        final_latency = latency + max(hop_distances_to_sinks)
-
+    
+    # Get the output rate for this projection
+    if isinstance(projection_rates, dict) and query_projection in projection_rates:
+        projection_output_rate = projection_rates[query_projection][1]
+    else:
+        projection_output_rate = 1  # Default fallback rate
+    
+    # Calculate distances from placement node to each sink
+    distances_to_each_sink = []
+    for sink_node in sink_nodes:
+        distance = shortest_path_distances[placement_node][sink_node]
+        distances_to_each_sink.append(distance)
+        
+    # Log transmission planning details
+    logger.info(f"Projection {query_projection} output rate: {projection_output_rate}")
+    for i, sink in enumerate(sink_nodes):
+        logger.info(f"Distance from placement node {placement_node} to sink {sink}: {distances_to_each_sink[i]}")
+    
+    # Calculate transmission costs if we have valid data
+    if current_push_pull_costs is not None and distances_to_each_sink:
+        
+        # Calculate total transmission cost = sum of all distances * output rate
+        total_distance_to_all_sinks = sum(distances_to_each_sink)
+        total_transmission_cost = total_distance_to_all_sinks * projection_output_rate
+        
+        # Add transmission costs to both strategy costs
+        final_push_pull_costs = current_push_pull_costs + total_transmission_cost
+        final_all_push_costs = current_all_push_costs + total_transmission_cost
+        
+        # Calculate final latency = current latency + maximum distance to any sink
+        maximum_distance_to_any_sink = max(distances_to_each_sink)
+        final_latency = current_latency + maximum_distance_to_any_sink
+        
         # Recalculate transmission efficiency ratio
         final_transmission_ratio = final_push_pull_costs / final_all_push_costs
-
-        return (
-            final_push_pull_costs,
-            original_result_at_idx_1,
-            final_latency,
-            final_transmission_ratio,
-            final_all_push_costs,
-            original_result_at_idx_5,
-            original_result_at_idx_6
-        )
+        
+        return final_all_push_costs, final_push_pull_costs, final_latency, final_transmission_ratio
+        
     else:
-        return cost_results
+        # No valid costs or distances, return original results unchanged
+        return current_all_push_costs, current_push_pull_costs, current_latency, current_transmission_ratio
 
 
 def calculate_prepp_with_placement(
@@ -339,9 +339,6 @@ def calculate_prepp_with_placement(
         index_event_nodes=getattr(self, 'h_IndexEventNodes', {})
     )
 
-    if str(projection) == 'SEQ(A, B, C)':
-        logger.debug("Debug hook")
-
     content = input_buffer.getvalue()
 
     # Select method and algorithm type for prePP
@@ -363,37 +360,12 @@ def calculate_prepp_with_placement(
         all_pairs=self.allPairs,
         is_deterministic=is_deterministic)
 
-    push_pull_costs = results[0]
-    logger.info(f"Calculated push-pull costs for projection {projection}: {push_pull_costs:.2f}")
-
-    computing_time = results[1]
-    logger.info(f"Computing time for prePP: {computing_time:.2f}")
-
-    # TODO: Discuss latency output because it seems fishy
-    latency = results[2] - 1
-    logger.info(f"Latency for prePP: {latency:.2f}")
-
-    transmission_ratio = results[3]
-    logger.info(f"Transmission ratio for prePP: {transmission_ratio:.2f}")
-
-    # TODO: Discuss all_push_costs.
-    #  PrePP adds 1 to all_push_costs because it assumes, that the costs are 1 after evaluating query
-    all_push_costs = results[4]
-    logger.info(f"All-push costs for projection {projection}: {all_push_costs:.2f}")
-
-    node_received_events = results[5]
-    logger.info(f"Node {node} received events: {node_received_events}")
-
-    aquisition_steps = results[6]
-    logger.info(f"Aquisition steps for projection {projection}: {aquisition_steps}")
-
-    return (push_pull_costs,
-            computing_time,
-            latency,
-            transmission_ratio,
-            all_push_costs,
-            node_received_events,
-            aquisition_steps)
+    # process results
+    if results and len(results) >= 5:
+        return process_results_from_prepp(results, query=projection, node=node, workload=self.query_workload)
+    else:
+        logger.warning("No valid prePP results returned, using fallback")
+        raise ValueError("Invalid prePP results")
 
 
 def initiate_buffer(
@@ -849,8 +821,45 @@ def _expand_to_primitives(element, combination_dict):
     
     return primitives
 
-
-
-
 def update_selectivity(self, projection, selection_rate):
     self.selectivities[str(projection)] = selection_rate
+
+
+def process_results_from_prepp(results, query, node, workload):
+    # print("DEBUG")
+    projection_as_string = str(query)
+    all_push_costs = results[4] if len(results) > 4 else 0
+
+    computing_time = results[1] if len(results) > 1 else 0
+
+    total_plan_costs = 0
+
+    total_plan_latency = 0
+
+    if projection_as_string in results[6] if len(results) > 6 else []:
+        aquisition_steps = results[6][projection_as_string]
+
+        for step in aquisition_steps:
+            aquisition_step = aquisition_steps[step]
+            aquisition_step_costs = aquisition_step.get('total_step_costs', 0)
+            aquisition_step_latency = aquisition_step.get('total_latency', 0)
+            total_plan_costs += aquisition_step_costs
+            total_plan_latency += aquisition_step_latency
+
+            # print(f"\n{'='*50}")
+
+        transmission_ratio = (total_plan_costs / all_push_costs) if all_push_costs > 0 else 0
+    else:
+        raise ValueError("No acquisition steps found in prePP results")
+
+
+    return {
+        'node_for_placement': node,
+        'projection': query,
+        'all_push_costs': all_push_costs,
+        'push_pull_costs': total_plan_costs,
+        'latency': total_plan_latency,
+        'computing_time': computing_time,
+        'transmission_ratio': transmission_ratio,
+        'aquisition_steps': aquisition_steps
+    }
