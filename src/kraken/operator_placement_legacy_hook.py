@@ -4,13 +4,14 @@ import time
 import numpy as np
 from .core import compute_operator_placement_with_prepp
 from .global_placement_tracker import get_global_placement_tracker, reset_global_placement_tracker
+from .node_tracker import initialize_global_event_tracker
 import json
 import csv
 import os
 from typing import Dict, Any, List
 
 
-def format_results_for_comparison(results_dict: Dict, execution_info: Dict) -> Dict[str, Any]:
+def format_results_for_comparison(results_dict: Dict, execution_info: Dict, workload: list) -> Dict[str, Any]:
     """
     Format placement results in a clean, machine-readable format for comparison.
     
@@ -47,7 +48,8 @@ def format_results_for_comparison(results_dict: Dict, execution_info: Dict) -> D
                 'plan_details': getattr(result, 'plan_details', {}),
                 'success': True
             }
-            formatted_results['summary']['total_cost'] += result.costs
+            if projection in workload:
+                formatted_results['summary']['total_cost'] += result.costs
             formatted_results['summary']['successful_placements'] += 1
         else:
             # Handle other result formats or errors
@@ -113,6 +115,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     # Initialize global placement tracker for this placement session
     reset_global_placement_tracker()  # Start fresh for each placement calculation
     global_placement_tracker = get_global_placement_tracker()
+    global_event_tracker = initialize_global_event_tracker(h_network_data=self.h_network_data)
     # print(f"[PLACEMENT] Initialized global placement tracker")
 
     hopLatency = {}
@@ -195,6 +198,26 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
             # If so, add costs to the total costs
             costs_for_evaluation_total_workload += integrated_placement_decision_by_projection[projection].costs
 
+
+    max_latency = 0
+
+    for projection in integrated_placement_decision_by_projection:
+        # Check if projection was in original query workload
+        if projection in self.query_workload:
+            relevant_projection_set = [projection]
+            unfolded_projection = unfolded[projection]
+            set_unfolded = set(unfolded_projection)
+
+            for x in set_unfolded:
+                if x in processingOrder:
+                    relevant_projection_set.append(x)
+            latency = 0
+            for projection in relevant_projection_set:
+                latency += integrated_placement_decision_by_projection[projection].plan_details.get('latency', 0)
+
+            if latency > max_latency:
+                max_latency = latency
+
     # Print global placement tracker summary
     print(f"\n[PLACEMENT] Global Placement Tracker Summary:")
     print(global_placement_tracker.get_summary())
@@ -202,7 +225,8 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     #
     kraken_simulation_id = int(np.random.uniform(0, 10000000))
 
-    totaltime = str(round(time.time() - start_time, 2))
+    end_time = time.time()
+    totaltime = str(end_time - start_time)[:6]
 
     print(f"[TIMING] Execution Summary:")
     print(f"[TIMING] Start: {start_time:.2f}")
@@ -216,8 +240,10 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         'max_parents': number_parents,
         'execution_time_seconds': float(totaltime),
         'start_time': start_time,
-        'end_time': time.time(),
-        'total_cost_sum': costs_for_evaluation_total_workload,
+        'end_time': end_time,
+        'total_execution_time_seconds': end_time - start_time,
+        'push_pull_plan_cost_sum': costs_for_evaluation_total_workload,
+        'push_pull_plan_latency': max_latency,
         'central_cost': central_computation_cost,
         'central_hop_latency': centralHopLatency,
         'number_hops': numberHops,
@@ -226,7 +252,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     }
     
     # Format results for comparison
-    formatted_results = format_results_for_comparison(integrated_placement_decision_by_projection, execution_info)
+    formatted_results = format_results_for_comparison(integrated_placement_decision_by_projection, execution_info, workload)
     
     # Print summary for immediate feedback
     print(f"\n[RESULTS SUMMARY]")
