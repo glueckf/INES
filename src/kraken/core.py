@@ -6,13 +6,21 @@ maintaining compatibility with the legacy API while providing a clean
 internal implementation.
 """
 
-from typing import Any, Dict, List
+from typing import Any
+import re
 import networkx
 from .state import RuntimeServices
 from .determinism import setup_deterministic_environment, log_determinism_info, validate_deterministic_inputs
 from .logging import get_placement_logger
 from .global_placement_tracker import get_global_placement_tracker
 from .cost_calculation import get_selection_rate
+from .node_tracker import get_global_event_placement_tracker
+
+
+# Global event tracker instance - will be initialized when first accessed
+def get_global_event_tracker():
+    """Get the global event tracker instance."""
+    return get_global_event_placement_tracker()
 
 
 def compute_operator_placement_with_prepp(
@@ -73,16 +81,13 @@ def compute_operator_placement_with_prepp(
 
     # Setup the tracker structures
     global_tracker = get_global_placement_tracker()
-
-    if str(projection) == 'AND(SEQ(B, C), F)':
-        logger.warning("Detected special case projection 'AND(SEQ(B, C), F)'. "
-                       "This may require special handling in the future.")
-    if str(projection) == 'AND(SEQ(A, B), SEQ(E, F))':
-        logger.warning("Detected special case projection 'AND(SEQ(A, B), SEQ(E, F))'. "
-                       "This may require special handling in the future.")
+    global_event_tracker = get_global_event_placement_tracker()
 
     # Check if this projection has subqueries that we've already placed
     has_placed_subqueries = check_if_projection_has_placed_subqueries(projection, mycombi, global_tracker)
+
+    if str(projection) == 'AND(A, B, D)':
+        print("Debug")
 
     # New placement engine implementation
     try:
@@ -135,39 +140,45 @@ def compute_operator_placement_with_prepp(
                 logger.warning(f"Node {node} - No results from prepp_with_placement")
                 return None
 
-            # If projection is not a subquery, we need to calculate the costs of sending the projection to the cloud
-            if projection in self.query_workload and node not in sinks:
-                logger.info(f"Node {node} is not a sink, calculating costs for sending projection to cloud")
-                # Calculate costs of sending the projection to the cloud
-                results = calculate_final_costs_for_sending_to_sinks(
-                    cost_results=results,
-                    placement_node=node,
-                    query_projection=projection,
-                    sink_nodes=sinks,
-                    projection_rates=self.h_projrates,
-                    shortest_path_distances=self.allPairs
+            # Extract results with cleaner unpacking
+            all_push_costs = results['all_push_costs']
+            push_pull_costs = results['push_pull_costs']
+            latency = results['latency']
+            computing_time = results['computing_time']
+            transmission_ratio = results['transmission_ratio']
+            aquisition_steps = results['aquisition_steps']
+
+            # Adjust costs for events already available at the node
+            available_events = set(global_event_tracker.get_events_at_node(node))
+            needed_events = set(child.evtype for child in projection.children)
+
+            if available_events & needed_events:  # If there's intersection
+                logger.info(f"Node {node} already has events: {available_events & needed_events}")
+
+                all_push_costs, push_pull_costs, latency, transmission_ratio = handle_intersection(
+                    results, available_events, needed_events, logger
                 )
 
-            # TODO: Discuss with Ariane since this makes placement @ the cloud more attractive
-            #  because push-pull can be used on the whole graph and cuts costs by a lot compared to subgraph placement
-            (push_pull_costs,
-             computing_time,
-             latency,
-             transmission_ratio,
-             all_push_costs,
-             node_received_eventtypes,
-             aquisition_steps
-             ) = results
+            # Add transmission costs to sinks if needed
+            if projection in self.query_workload and node not in sinks:
+                logger.info(f"Adding transmission costs from node {node} to sinks")
+                results = calculate_final_costs_for_sending_to_sinks(
+                    all_push_costs,
+                    push_pull_costs,
+                    latency,
+                    transmission_ratio,
+                    node,
+                    projection,
+                    sinks,
+                    self.h_projrates,
+                    self.allPairs
+                )
 
-            # Log final calculated costs
-            logger.info(f"Final push-pull costs for projection {projection} "
-                        f"at node {node}: {push_pull_costs:.2f}")
-            logger.info(f"Final all-push costs for projection {projection} "
-                        f"at node {node}: {all_push_costs:.2f}")
-            logger.info(f"Final latency for projection {projection} "
-                        f"at node {node}: {latency:.2f}")
-            logger.info(f"Final transmission ratio for projection {projection} "
-                        f"at node {node}: {transmission_ratio:.2f}")
+                all_push_costs, push_pull_costs, latency, transmission_ratio = results
+
+            # Log final costs
+            logger.info(f"Node {node} costs - Push-Pull: {push_pull_costs:.2f}, "
+                        f"All-Push: {all_push_costs:.2f}, Latency: {latency:.2f}")
 
             # Check resource availability
             has_enough_resources = check_resources(node, projection, network, combination)
@@ -190,7 +201,6 @@ def compute_operator_placement_with_prepp(
                     'computing_time': computing_time,
                     'latency': latency,
                     'transmission_ratio': transmission_ratio,
-                    'node_received_eventtypes': node_received_eventtypes,
                     'aquisition_steps': aquisition_steps
                 }
             )
@@ -209,6 +219,17 @@ def compute_operator_placement_with_prepp(
         # Store placement decisions in global tracker for future use
         global_tracker.store_placement_decisions(projection, placement_decisions)
         logger.info(f"Stored placement decisions for {projection} in global tracker")
+
+        events = []
+        for children in projection.children:
+            events.append(children.evtype)
+        global_event_tracker.add_events_at_node(
+            node_id=best_decision.node,
+            events=events,
+            query_id=str(projection),
+            acquisition_type=best_decision.strategy,
+            acquisition_steps=best_decision.plan_details.get('aquisition_steps', [])
+        )
 
         if best_decision:
             logger.info(f"Final placement decision: {best_decision}")
@@ -298,7 +319,8 @@ def check_if_projection_has_placed_subqueries(projection, mycombi, global_tracke
     return False
 
 
-def get_all_possible_placement_nodes(projection, placement_state, network_data, index_event_nodes, event_nodes, logger=None):
+def get_all_possible_placement_nodes(projection, placement_state, network_data, index_event_nodes, event_nodes,
+                                     logger=None):
     from .candidate_selection import check_possible_placement_nodes_for_input
 
     possible_placement_nodes = []
@@ -317,6 +339,109 @@ def get_all_possible_placement_nodes(projection, placement_state, network_data, 
     possible_placement_nodes = validate_deterministic_inputs(possible_placement_nodes, logger)
 
     # Reverse the order to prioritize nodes closer to the source (legacy behavior)
-    possible_placement_nodes.reverse()
+    # possible_placement_nodes.reverse()
 
     return possible_placement_nodes
+
+
+def determine_all_primitive_events_of_projection(projection):
+    """Extract primitive events from a projection string like 'SEQ(A, B)' -> ['A', 'B']"""
+    given_predicates = str(projection).replace('AND', '')
+    given_predicates = given_predicates.replace('SEQ', '')
+    given_predicates = given_predicates.replace('(', '')
+    given_predicates = given_predicates.replace(')', '')
+    given_predicates = re.sub(r'[0-9]+', '', given_predicates)
+    given_predicates = given_predicates.replace(' ', '')
+    if ',' in given_predicates:
+        return given_predicates.split(',')
+    else:
+        # Handle single events without comma
+        return list(given_predicates)
+
+
+def handle_intersection(results, available_events, needed_events, logger):
+    """
+    Handle cost adjustments when some events are already available at the placement node.
+    
+    This function removes acquisition costs for events that don't need to be acquired
+    because they're already present at the node. It handles both primitive events (A, B, C)
+    and complex events (SEQ(A, B), AND(C, D)) by extracting the primitive components.
+    """
+    print("Debug")
+
+    # Extract current costs from results
+    current_all_push_costs = results['all_push_costs']
+    current_push_pull_costs = results['push_pull_costs']
+    current_latency = results['latency']
+    current_transmission_ratio = results['transmission_ratio']
+    current_acquisition_steps = results['aquisition_steps']
+
+    # Find events that are both available and needed (intersection)
+    events_already_available = available_events & needed_events
+
+    # Track total cost adjustments
+    total_cost_adjustment = 0.0
+
+    logger.info(f"Available events at node: {available_events}")
+    logger.info(f"Needed events for projection: {needed_events}")
+    logger.info(f"Events already available that are needed: {events_already_available}")
+
+    # Go through each acquisition step and check if we can skip it
+    for step_index, step_details in current_acquisition_steps.items():
+        events_to_pull_in_this_step = step_details.get('events_to_pull', [])
+        step_total_cost = step_details.get('total_step_costs', 0.0)
+
+        logger.info(f"Checking acquisition step {step_index}: {events_to_pull_in_this_step}")
+
+        # Extract primitive events from each event in this step
+        all_primitive_events_in_step = set()
+        for event_or_subquery in events_to_pull_in_this_step:
+            if isinstance(event_or_subquery, str):
+                # Handle string representations like 'SEQ(A, B)' or simple events like 'A'
+                primitive_events = determine_all_primitive_events_of_projection(event_or_subquery)
+                all_primitive_events_in_step.update(primitive_events)
+            else:
+                # Handle object representations - try to get string representation
+                primitive_events = determine_all_primitive_events_of_projection(str(event_or_subquery))
+                all_primitive_events_in_step.update(primitive_events)
+
+        logger.info(f"Primitive events in step {step_index}: {all_primitive_events_in_step}")
+
+        # Check if any of the primitive events in this step are already available
+        events_we_can_skip = all_primitive_events_in_step & events_already_available
+
+        if events_we_can_skip:
+            # If all primitive events in this step are already available, skip entire step cost
+            if all_primitive_events_in_step <= events_already_available:  # All events in step are available
+                total_cost_adjustment += step_total_cost
+                logger.info(f"Skipping entire acquisition step {step_index} (cost: {step_total_cost}) "
+                            f"because all primitive events {all_primitive_events_in_step} are already available")
+            else:
+                # Partial adjustment - some primitive events in step are available
+                fraction_available = len(events_we_can_skip) / len(all_primitive_events_in_step)
+                partial_adjustment = step_total_cost * fraction_available
+                total_cost_adjustment += partial_adjustment
+                logger.info(f"Partial adjustment for acquisition step {step_index}: "
+                            f"reducing cost by {partial_adjustment} ({fraction_available:.2%}) "
+                            f"for available events {events_we_can_skip} out of {all_primitive_events_in_step}")
+
+    # Apply cost adjustments
+    adjusted_push_pull_costs = current_push_pull_costs - total_cost_adjustment
+
+    # TODO: Fix all-push cost adjustment logic because it should not be reduced only by push pull change
+    adjusted_all_push_costs = current_all_push_costs - total_cost_adjustment
+
+    # Ensure costs don't go negative
+    adjusted_push_pull_costs = max(0.0, adjusted_push_pull_costs)
+    adjusted_all_push_costs = max(0.0, adjusted_all_push_costs)
+
+    # Recalculate transmission ratio if needed
+    if adjusted_all_push_costs > 0:
+        adjusted_transmission_ratio = adjusted_push_pull_costs / adjusted_all_push_costs
+    else:
+        adjusted_transmission_ratio = current_transmission_ratio
+
+    logger.info(f"Total cost adjustment: {total_cost_adjustment}")
+    logger.info(f"Adjusted costs - Push-Pull: {adjusted_push_pull_costs}, All-Push: {adjusted_all_push_costs}")
+
+    return adjusted_all_push_costs, adjusted_push_pull_costs, current_latency, adjusted_transmission_ratio
