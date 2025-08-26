@@ -510,12 +510,11 @@ def determine_randomized_distribution_push_pull_costs(
 
                 if len(exact_push_pull_plan_for_a_projection) == len(used_eventtypes_to_pull):
                     aquisition_steps[query.query] = {}
-                    if str(query.query) == "SEQ(A, B, C)":
-                        print("Debug Hook")
                     received_eventtypes = []
                     for i, aquired_eventtype in enumerate(exact_push_pull_plan_for_a_projection):
 
-                        pull_request_costs = push_pull_plan_generator_exact.determine_costs_for_pull_request(
+                        pull_request_costs, pull_request_latency = (
+                        push_pull_plan_generator_exact.determine_costs_for_pull_request(
                             eventtypes_in_pull_request=used_eventtypes_to_pull[i],
                             eventtypes_to_acquire=aquired_eventtype,
                             eventtype_to_sources_map=eventtype_to_sources_map,
@@ -525,9 +524,10 @@ def determine_randomized_distribution_push_pull_costs(
                             allPairs=allPairs,
                             current_node=current_node,
                             aquisition_steps=aquisition_steps
-                        )
+                        ))
 
-                        pull_response_costs = push_pull_plan_generator_exact.determine_costs_for_pull_response(
+                        pull_response_costs, pull_response_latency = (
+                        push_pull_plan_generator_exact.determine_costs_for_pull_response(
                             eventtypes_in_pull_request=used_eventtypes_to_pull[i],
                             eventtypes_to_acquire=aquired_eventtype,
                             eventtype_to_sources_map=eventtype_to_sources_map,
@@ -535,14 +535,17 @@ def determine_randomized_distribution_push_pull_costs(
                             all_eventtype_output_rates=all_eventtype_output_rates,
                             allPairs=allPairs,
                             current_node=current_node
-                        )
+                        ))
 
                         aquisition_steps[query.query][i] = {
                             'pull_set': used_eventtypes_to_pull[i],
                             'events_to_pull': aquired_eventtype,
                             'pull_request_costs': pull_request_costs,
+                            'pull_request_latency': pull_request_latency,
                             'pull_response_costs': pull_response_costs,
-                            'total_step_costs': pull_request_costs + pull_response_costs
+                            'pull_response_latency': pull_response_latency,
+                            'total_step_costs': pull_request_costs + pull_response_costs,
+                            'total_latency': pull_request_latency + pull_response_latency
                         }
 
                         for eventtype in aquired_eventtype:

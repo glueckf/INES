@@ -871,7 +871,7 @@ class Initiate():
 
         if len(eventtypes_in_pull_request) == 0:
             # We have a push acquisition step, we need to return 0 costs here
-            return 0.0
+            return 0.0, 0.0
         else:
             # We have a pull acquisition step, we need to calculate the costs here
             # First we need the size of the pull request.
@@ -902,12 +902,18 @@ class Initiate():
                     size_of_pull_request += global_rate * selectivity
 
             total_hops = 0.0
+
+            # We take the maximum latency measured in hops from any source to the current node
+            latency = 0
             for source in eventtypes_to_acquire:
                 if source in eventtype_to_sources_map:
                     for source_node in eventtype_to_sources_map[source]:
                         distance_from_source_to_current_node = allPairs[source_node][current_node]
+                        if distance_from_source_to_current_node > latency:
+                            latency = distance_from_source_to_current_node
+
                         total_hops += distance_from_source_to_current_node
-            return total_hops * size_of_pull_request
+            return total_hops * size_of_pull_request, latency
 
 
     def determine_costs_for_pull_response(
@@ -938,11 +944,15 @@ class Initiate():
 
         # Then let's get the global rate:
         global_output_rate = 0
+
+        latency = 0
         for eventtype in eventtypes_to_acquire:
             for source in eventtype_to_sources_map[eventtype]:
                 distance_from_source_to_current_node = allPairs[source][current_node]
+                if distance_from_source_to_current_node > latency:
+                    latency = distance_from_source_to_current_node
                 single_source_rate = all_eventtype_output_rates[eventtype]
                 global_output_rate += single_source_rate * distance_from_source_to_current_node
 
-        return global_output_rate * selectivity
+        return global_output_rate * selectivity, latency
 
