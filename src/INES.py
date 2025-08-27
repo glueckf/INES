@@ -202,32 +202,32 @@ def generate_hardcoded_workload():
 
     queries = []
 
-    # Query 1: Simple SEQ - SEQ(A, B, C)
-    q1 = SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C'))
-    q1 = number_children(q1)
-    queries.append(q1)
+    # # Query 1: Simple SEQ - SEQ(A, B, C)
+    # q1 = SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C'))
+    # q1 = number_children(q1)
+    # queries.append(q1)
 
-    # Query 2:
-    q2 = AND(PrimEvent('A'), PrimEvent('B'))
-    q2 = number_children(q2)
-    queries.append(q2)
-
-    # Query 3: Simple AND with shared elements - AND(A, B, D)
-    q3 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
-    q3 = number_children(q3)
-    queries.append(q3)
+    # # Query 2:
+    # q2 = AND(PrimEvent('A'), PrimEvent('B'))
+    # q2 = number_children(q2)
+    # queries.append(q2)
+    #
+    # # Query 3: Simple AND with shared elements - AND(A, B, D)
+    # q3 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
+    # q3 = number_children(q3)
+    # queries.append(q3)
     #
     # # Query 4: Medium complexity - SEQ(A, B, AND(E, F))
     # # Shares A, B with queries 1 and 2
     # q4 = SEQ(PrimEvent('A'), PrimEvent('B'), AND(PrimEvent('E'), PrimEvent('F')))
     # q4 = number_children(q4)
     # queries.append(q4)
-
-    # # Query 4: Complex nested - AND(SEQ(A, B, C), D, SEQ(E, F))
-    # # Shares SEQ(A, B, C) with query 1, and has synergy with query 3
-    # q5 = AND(SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C')), PrimEvent('D'), SEQ(PrimEvent('E'), PrimEvent('F')))
-    # q5 = number_children(q5)
-    # queries.append(q5)
+    #
+    # Query 4: Complex nested - AND(SEQ(A, B, C), D, SEQ(E, F))
+    # Shares SEQ(A, B, C) with query 1, and has synergy with query 3
+    q5 = AND(SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C')), PrimEvent('D'), SEQ(PrimEvent('E'), PrimEvent('F')))
+    q5 = number_children(q5)
+    queries.append(q5)
 
     # # Query 6: AND(A, F, E)
     # q6 = AND(PrimEvent('F'), PrimEvent('E'))
@@ -491,13 +491,13 @@ class INES():
         final_prepp_results = update_prepp_results(self, prepp_results)
 
         # Only take the first 4 results to match the schema
-        self.results += final_prepp_results
+        self.results += final_prepp_results[0:4]
 
         # Get the ID from the INES simulation as a foreign key, to later map both
         ines_simulation_id = self.results[0]
 
         # Print comprehensive placement results
-        print_kraken(integrated_operator_placement_results)
+        # print_kraken(integrated_operator_placement_results)
 
         # write_results_to_csv(integrated_operator_placement_results, ines_simulation_id)
 
