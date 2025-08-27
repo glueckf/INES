@@ -1,0 +1,56 @@
+
+==== Simulation Run 1 Started ====
+
+
+==== Initaiting Run 1 Started ====
+
+4
+[1000 1000 1000 1000 1000 1000]
+[TESTING eList: ]{6: [0, 1, 2, 3, 4, 5], 7: [0, 1, 2, 3, 4, 5], 8: [0, 1, 2, 3, 5], 9: [0, 1, 2, 3, 4, 5], 10: [0, 1, 2, 3, 4, 5], 11: [0, 1, 2, 3, 4, 5]}
+AND(F, C, E, B)
+
+SEQ(A, D, F)
+
+AND(A, D, E)
+
+None
+-----
+-----
+[NETWORK] {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: ['A', 'B', 'C', 'E'], 7: ['A', 'B', 'C', 'E', 'F'], 8: ['B', 'C', 'D', 'E'], 9: ['A', 'B', 'C', 'D', 'E', 'F'], 10: ['B', 'D'], 11: ['B', 'D', 'E', 'F']}
+Current projrates: {<helper.Tree.AND object at 0x12fcfed30>: (3.780546408655349e-08, 151221.85634621396), <helper.Tree.SEQ object at 0x12fcfee50>: (0.00458223308879202, 4582233.08879202), <helper.Tree.AND object at 0x12fc433d0>: (0.03883463306093556, 116503899.18280669)}
+Type of projection: <class 'str'> Value: F
+Current projrates: {<helper.Tree.AND object at 0x12fcfed30>: (3.780546408655349e-08, 151221.85634621396), <helper.Tree.SEQ object at 0x12fcfee50>: (0.00458223308879202, 4582233.08879202), <helper.Tree.AND object at 0x12fc433d0>: (0.03883463306093556, 116503899.18280669)}
+Type of projection: <class 'str'> Value: F
+Current projrates: {<helper.Tree.AND object at 0x12fcfed30>: (3.780546408655349e-08, 151221.85634621396), <helper.Tree.SEQ object at 0x12fcfee50>: (0.00458223308879202, 4582233.08879202), <helper.Tree.AND object at 0x12fc433d0>: (0.03883463306093556, 116503899.18280669)}
+Type of projection: <class 'str'> Value: C
+Current projrates: {<helper.Tree.AND object at 0x12fcfed30>: (3.780546408655349e-08, 151221.85634621396), <helper.Tree.SEQ object at 0x12fcfee50>: (0.00458223308879202, 4582233.08879202), <helper.Tree.AND object at 0x12fc433d0>: (0.03883463306093556, 116503899.18280669)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.AND object at 0x12fcfed30>: (3.780546408655349e-08, 151221.85634621396), <helper.Tree.SEQ object at 0x12fcfee50>: (0.00458223308879202, 4582233.08879202), <helper.Tree.AND object at 0x12fc433d0>: (0.03883463306093556, 116503899.18280669)}
+Type of projection: <class 'str'> Value: B
+Current projrates: {<helper.Tree.AND object at 0x12fcfed30>: (3.780546408655349e-08, 151221.85634621396), <helper.Tree.SEQ object at 0x12fcfee50>: (0.00458223308879202, 4582233.08879202), <helper.Tree.AND object at 0x12fc433d0>: (0.03883463306093556, 116503899.18280669)}
+Type of projection: <class 'str'> Value: A
+Current projrates: {<helper.Tree.AND object at 0x12fcfed30>: (3.780546408655349e-08, 151221.85634621396), <helper.Tree.SEQ object at 0x12fcfee50>: (0.00458223308879202, 4582233.08879202), <helper.Tree.AND object at 0x12fc433d0>: (0.03883463306093556, 116503899.18280669)}
+Type of projection: <class 'str'> Value: A
+Current projrates: {<helper.Tree.AND object at 0x12fcfed30>: (3.780546408655349e-08, 151221.85634621396), <helper.Tree.SEQ object at 0x12fcfee50>: (0.00458223308879202, 4582233.08879202), <helper.Tree.AND object at 0x12fc433d0>: (0.03883463306093556, 116503899.18280669)}
+Type of projection: <class 'str'> Value: D
+Current projrates: {<helper.Tree.AND object at 0x12fcfed30>: (3.780546408655349e-08, 151221.85634621396), <helper.Tree.SEQ object at 0x12fcfee50>: (0.00458223308879202, 4582233.08879202), <helper.Tree.AND object at 0x12fc433d0>: (0.03883463306093556, 116503899.18280669)}
+Type of projection: <class 'str'> Value: F
+Current projrates: {<helper.Tree.AND object at 0x12fcfed30>: (3.780546408655349e-08, 151221.85634621396), <helper.Tree.SEQ object at 0x12fcfee50>: (0.00458223308879202, 4582233.08879202), <helper.Tree.AND object at 0x12fc433d0>: (0.03883463306093556, 116503899.18280669)}
+Type of projection: <class 'str'> Value: A
+Current projrates: {<helper.Tree.AND object at 0x12fcfed30>: (3.780546408655349e-08, 151221.85634621396), <helper.Tree.SEQ object at 0x12fcfee50>: (0.00458223308879202, 4582233.08879202), <helper.Tree.AND object at 0x12fc433d0>: (0.03883463306093556, 116503899.18280669)}
+Type of projection: <class 'str'> Value: A
+Current projrates: {<helper.Tree.AND object at 0x12fcfed30>: (3.780546408655349e-08, 151221.85634621396), <helper.Tree.SEQ object at 0x12fcfee50>: (0.00458223308879202, 4582233.08879202), <helper.Tree.AND object at 0x12fc433d0>: (0.03883463306093556, 116503899.18280669)}
+Type of projection: <class 'str'> Value: D
+Current projrates: {<helper.Tree.AND object at 0x12fcfed30>: (3.780546408655349e-08, 151221.85634621396), <helper.Tree.SEQ object at 0x12fcfee50>: (0.00458223308879202, 4582233.08879202), <helper.Tree.AND object at 0x12fc433d0>: (0.03883463306093556, 116503899.18280669)}
+Type of projection: <class 'str'> Value: E
+AND(F, C, E, B) ['F', 'C', 'E', 'B']
+SEQ(A, D, F) ['A', 'D', 'F']
+AND(A, D, E) ['A', 'D', 'E']
+time: 9.298564672470093
+0
+test
+Here
+{'A6': 0, 'A7': 1, 'A9': 2, 'A': ['A6', 'A7', 'A9'], 'B6': 3, 'B7': 4, 'B8': 5, 'B9': 6, 'B10': 7, 'B11': 8, 'B': ['B6', 'B7', 'B8', 'B9', 'B10', 'B11'], 'C6': 9, 'C7': 10, 'C8': 11, 'C9': 12, 'C': ['C6', 'C7', 'C8', 'C9'], 'E6': 13, 'E7': 14, 'E8': 15, 'E9': 16, 'E11': 17, 'E': ['E6', 'E7', 'E8', 'E9', 'E11'], 'F7': 18, 'F9': 19, 'F11': 20, 'F': ['F7', 'F9', 'F11'], 'D8': 21, 'D9': 22, 'D10': 23, 'D11': 24, 'D': ['D8', 'D9', 'D10', 'D11']}
+centralCosts: 75000.0
+Central Hops: 26
+central Hop Latency: 3

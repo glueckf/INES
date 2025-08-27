@@ -1,0 +1,80 @@
+
+==== Simulation Run 2 Started ====
+
+
+==== Initaiting Run 2 Started ====
+
+4
+[1000 1000 1000 1000 1000 1000]
+[TESTING eList: ]{6: [0, 1, 2, 3, 4, 5], 7: [0, 1, 2, 3, 4, 5], 8: [0, 1, 2, 3, 4, 5], 9: [0, 1, 2, 3, 4, 5], 10: [0, 1, 2, 3, 4, 5], 11: [0, 1, 2, 3, 4, 5]}
+SEQ(E, C, A)
+
+SEQ(F, AND(D, C, E))
+
+SEQ(B, A, F, D)
+
+None
+-----
+-----
+[NETWORK] {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: ['D', 'F'], 7: ['A', 'B', 'C', 'D', 'E'], 8: ['A', 'B'], 9: ['A', 'C'], 10: ['A', 'B', 'C'], 11: ['A']}
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: E
+getSavings called with partType: E
+✅ Found partType 'E' in MSTrees
+✅ Found MSTrees[E] in DistMatrices
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: F
+getSavings called with partType: F
+✅ Found partType 'F' in MSTrees
+✅ Found MSTrees[F] in DistMatrices
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: F
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: F
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: F
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: F
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: F
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: B
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: B
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: A
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: F
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: D
+SEQ(E, C, A) ['E', 'C', 'A']
+SEQ(F, AND(D, C, E)) ['F', 'D', 'C', 'E']
+SEQ(B, A, F, D) ['B', 'A', 'F', 'D']
+time: 4.060320854187012
+0
+test
+Here
+{'D6': 0, 'D7': 1, 'D': ['D6', 'D7'], 'F6': 2, 'F': ['F6'], 'A7': 3, 'A8': 4, 'A9': 5, 'A10': 6, 'A11': 7, 'A': ['A7', 'A8', 'A9', 'A10', 'A11'], 'B7': 8, 'B8': 9, 'B10': 10, 'B': ['B7', 'B8', 'B10'], 'C7': 11, 'C9': 12, 'C10': 13, 'C': ['C7', 'C9', 'C10'], 'E7': 14, 'E': ['E7']}
+centralCosts: 45000.0
+Central Hops: 26
+central Hop Latency: 3
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: F
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: B
+{<helper.Tree.SEQ object at 0x11cbffaf0>: ['E', 'C', 'A'], <helper.Tree.SEQ object at 0x11cbefdf0>: ['F', 'D', 'C', 'E'], <helper.Tree.SEQ object at 0x11cbffc70>: ['B', 'A', 'F', 'D']}
+['F', 'E']
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: E
+Current projrates: {<helper.Tree.SEQ object at 0x11cbc6c40>: (4.850210341287527e-05, 48502.10341287527), <helper.Tree.SEQ object at 0x11cbc6f70>: (2.480997706930195e-07, 744299.3120790585), <helper.Tree.SEQ object at 0x11cb0cd00>: (3.217821917527636e-05, 32178219.17527636)}
+Type of projection: <class 'str'> Value: F

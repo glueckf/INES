@@ -1,5 +1,8 @@
 from enum import Enum
 from dataclasses import dataclass
+
+import numpy as np
+
 from Node import Node
 from network import generate_eventrates, create_random_tree, generate_events
 from graph import create_fog_graph
@@ -19,10 +22,10 @@ from generateEvalPlan import generate_eval_plan
 
 class SimulationMode(Enum):
     """Defines different simulation configuration modes for reproducible experiments."""
-    RANDOM = "random"                    # All components randomly generated
-    FIXED_TOPOLOGY = "fixed_topology"   # Fixed network topology, rest random
-    FIXED_WORKLOAD = "fixed_workload"   # Fixed topology + workload, rest random  
-    FULLY_DETERMINISTIC = "deterministic" # All components fixed for reproducibility
+    RANDOM = "random"  # All components randomly generated
+    FIXED_TOPOLOGY = "fixed_topology"  # Fixed network topology, rest random
+    FIXED_WORKLOAD = "fixed_workload"  # Fixed topology + workload, rest random
+    FULLY_DETERMINISTIC = "deterministic"  # All components fixed for reproducibility
 
 
 @dataclass
@@ -34,45 +37,48 @@ class SimulationConfig:
     node_event_ratio: float = 0.5
     max_parents: int = 10
     num_event_types: int = 6
-    
+
     # Query parameters
     query_size: int = 3
     query_length: int = 5
-    
+
     # Simulation mode
     mode: SimulationMode = SimulationMode.RANDOM
-    
+
     def is_topology_fixed(self) -> bool:
         """Check if network topology should be hardcoded."""
-        return self.mode in [SimulationMode.FIXED_TOPOLOGY, SimulationMode.FIXED_WORKLOAD, SimulationMode.FULLY_DETERMINISTIC]
-    
+        return self.mode in [SimulationMode.FIXED_TOPOLOGY, SimulationMode.FIXED_WORKLOAD,
+                             SimulationMode.FULLY_DETERMINISTIC]
+
     def is_workload_fixed(self) -> bool:
         """Check if query workload should be hardcoded."""
         return self.mode in [SimulationMode.FIXED_WORKLOAD, SimulationMode.FULLY_DETERMINISTIC]
-    
+
     def is_selectivities_fixed(self) -> bool:
         """Check if selectivities should be hardcoded."""
         return self.mode == SimulationMode.FULLY_DETERMINISTIC
-    
+
     @classmethod
     def create_random(cls, **kwargs) -> 'SimulationConfig':
         """Create a fully random simulation configuration."""
         return cls(mode=SimulationMode.RANDOM, **kwargs)
-    
-    @classmethod 
+
+    @classmethod
     def create_fixed_topology(cls, **kwargs) -> 'SimulationConfig':
         """Create configuration with fixed topology, rest random."""
         return cls(mode=SimulationMode.FIXED_TOPOLOGY, **kwargs)
-    
+
     @classmethod
     def create_fixed_workload(cls, **kwargs) -> 'SimulationConfig':
         """Create configuration with fixed topology and workload, rest random."""
         return cls(mode=SimulationMode.FIXED_WORKLOAD, **kwargs)
-    
+
     @classmethod
     def create_deterministic(cls, **kwargs) -> 'SimulationConfig':
         """Create fully deterministic configuration for reproducible results."""
         return cls(mode=SimulationMode.FULLY_DETERMINISTIC, **kwargs)
+
+
 from prepp import generate_prePP
 import csv
 
@@ -95,7 +101,7 @@ def create_hardcoded_tree():
     eList = {}
 
     # Define event rates with strong variation
-    base_eventrates = [1000, 2, 45, 203, 800, 5]
+    base_eventrates = generate_hardcoded_primitive_events()
 
     # Create nodes with decreasing compute power by layer
     nodes = {}
@@ -135,31 +141,33 @@ def create_hardcoded_tree():
 
     # Each node in layer 2 has selected parents
     nodes[3].Parent = [nodes[1], nodes[2]]  # Node 3 has both parents
-    nodes[4].Parent = [nodes[2]]            # Node 4 has only node 2 as parent
-    nodes[5].Parent = [nodes[1]]            # Node 5 has only node 1 as parent
+    nodes[4].Parent = [nodes[2]]  # Node 4 has only node 2 as parent
+    nodes[5].Parent = [nodes[1]]  # Node 5 has only node 1 as parent
 
     # Layer 2 -> Layer 3 connections (realistic overlap with varied parent counts)
-    nodes[3].Child = [nodes[6], nodes[7], nodes[8], nodes[9]]      # Node 3 connects to 6,7,8,9
-    nodes[4].Child = [nodes[6], nodes[7], nodes[8], nodes[9], nodes[10]]     # Node 4 connects to 6,7,8,9,10
-    nodes[5].Child = [nodes[6], nodes[10], nodes[11]]             # Node 5 connects to 6,10,11
+    nodes[3].Child = [nodes[6], nodes[7], nodes[8], nodes[9]]  # Node 3 connects to 6,7,8,9
+    nodes[4].Child = [nodes[6], nodes[7], nodes[8], nodes[9], nodes[10]]  # Node 4 connects to 6,7,8,9,10
+    nodes[5].Child = [nodes[6], nodes[10], nodes[11]]  # Node 5 connects to 6,10,11
 
     # Realistic parent distribution: mix of 1, 2, and 3 parents per leaf node
-    nodes[6].Parent = [nodes[3], nodes[4], nodes[5]]    # Node 6: 3 parents (3,4,5)
-    nodes[7].Parent = [nodes[3], nodes[4]]              # Node 7: 1 parent (3, 4)
-    nodes[8].Parent = [nodes[3], nodes[4]]              # Node 8: 2 parents (3,4)
-    nodes[9].Parent = [nodes[3], nodes[4]]              # Node 9: 2 parents (3,4)
-    nodes[10].Parent = [nodes[4], nodes[5]]             # Node 10: 2 parents (4,5)
-    nodes[11].Parent = [nodes[5]]                       # Node 11: 1 parent (5)
+    nodes[6].Parent = [nodes[3], nodes[4], nodes[5]]  # Node 6: 3 parents (3,4,5)
+    nodes[7].Parent = [nodes[3], nodes[4]]  # Node 7: 1 parent (3, 4)
+    nodes[8].Parent = [nodes[3], nodes[4]]  # Node 8: 2 parents (3,4)
+    nodes[9].Parent = [nodes[3], nodes[4]]  # Node 9: 2 parents (3,4)
+    nodes[10].Parent = [nodes[4], nodes[5]]  # Node 10: 2 parents (4,5)
+    nodes[11].Parent = [nodes[5]]  # Node 11: 1 parent (5)
 
     # Assign events to leaf nodes with varied distributions
     # Event assignments with diverse event rate combinations
     event_assignments = {
-        6: [0, 4],               # Node 6: Events A (1000), E (800)
-        7: [1, 2, 3],            # Node 7: Events B (2), C (45), D (203)
-        8: [0, 2, 4],            # Node 8: Events A (1000), C (45), E (800)
-        9: [3, 5],               # Node 9: Events D (203), F (5)
-        10: [0, 1, 5],           # Node 10: Events A (1000), B (2), F (5)
-        11: [2, 3, 4, 5]         # Node 11: Events C (45), D (203), E (800), F (5)
+        6: [0, 4],  # Node 6: Events A (1000), E (800)
+        7: [1, 2, 3],  # Node 7: Events B (2), C (45), D (203)
+        # 8: [0, 2, 4],          # Node 8: Events A (1000), C (45), E (800)
+        8: [0, 2],  # Node 8: Events A (1000), C (45)
+        # 9: [3,5]
+        9: [3],  # Node 9: Events D (203), F (5)
+        10: [0, 1, 5],  # Node 10: Events A (1000), B (2), F (5)
+        11: [2, 3, 4, 5]  # Node 11: Events C (45), D (203), E (800), F (5)
     }
 
     # Apply event assignments
@@ -168,12 +176,12 @@ def create_hardcoded_tree():
             nodes[leaf_id].eventrates[event_idx] = base_eventrates[event_idx]
 
     # Build eList - each leaf node gets its actual ancestor IDs based on the new topology
-    eList[6] = [0, 1, 2, 3, 4, 5]    # Node 6: ancestors through nodes 3, 4, and 5 (all paths)
-    eList[7] = [0, 1, 2, 3, 4]          # Node 7: ancestors through node 3 and 4
-    eList[8] = [0, 1, 2, 3, 4]       # Node 8: ancestors through nodes 3 and 4
-    eList[9] = [0, 1, 2, 3, 4]       # Node 9: ancestors through nodes 3 and 4
-    eList[10] = [0, 1, 2, 4, 5]      # Node 10: ancestors through nodes 4 and 5
-    eList[11] = [0, 1, 5]            # Node 11: ancestors through node 5 only
+    eList[6] = [0, 1, 2, 3, 4, 5]  # Node 6: ancestors through nodes 3, 4, and 5 (all paths)
+    eList[7] = [0, 1, 2, 3, 4]  # Node 7: ancestors through node 3 and 4
+    eList[8] = [0, 1, 2, 3, 4]  # Node 8: ancestors through nodes 3 and 4
+    eList[9] = [0, 1, 2, 3, 4]  # Node 9: ancestors through nodes 3 and 4
+    eList[10] = [0, 1, 2, 4, 5]  # Node 10: ancestors through nodes 4 and 5
+    eList[11] = [0, 1, 5]  # Node 11: ancestors through node 5 only
 
     root = nodes[0]
     return root, nw, eList
@@ -198,24 +206,32 @@ def generate_hardcoded_workload():
     q1 = number_children(q1)
     queries.append(q1)
 
-    # Query 2: Simple AND with shared elements - AND(A, B, D)
-    q2 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
-    q2 = number_children(q2)
+    # # # Query 2:
+    # q2 = AND(PrimEvent('D'), PrimEvent('E'))
+    # q2 = number_children(q2)
     # queries.append(q2)
 
-    # Query 3: Medium complexity - SEQ(A, B, AND(E, F))
-    # Shares A, B with queries 1 and 2
-    q3 = SEQ(PrimEvent('A'), PrimEvent('B'), AND(PrimEvent('E'), PrimEvent('F')))
-    q3 = number_children(q3)
+    # # Query 3: Simple AND with shared elements - AND(A, B, D)
+    # q3 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
+    # q3 = number_children(q3)
     # queries.append(q3)
 
-    # Query 4: Complex nested - AND(SEQ(A, B, C), D, SEQ(E, F))
-    # Shares SEQ(A, B, C) with query 1, and has synergy with query 3
-    q4 = AND(SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C')),
-             PrimEvent('D'),
-             SEQ(PrimEvent('E'), PrimEvent('F')))
-    q4 = number_children(q4)
+    # # Query 4: Medium complexity - SEQ(A, B, AND(E, F))
+    # # Shares A, B with queries 1 and 2
+    # q4 = SEQ(PrimEvent('A'), PrimEvent('B'), AND(PrimEvent('E'), PrimEvent('F')))
+    # q4 = number_children(q4)
     # queries.append(q4)
+
+    # # Query 4: Complex nested - AND(SEQ(A, B, C), D, SEQ(E, F))
+    # # Shares SEQ(A, B, C) with query 1, and has synergy with query 3
+    # q5 = AND(SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C')), PrimEvent('D'), SEQ(PrimEvent('E'), PrimEvent('F')))
+    # q5 = number_children(q5)
+    # queries.append(q5)
+
+    # # Query 6: AND(A, F, E)
+    # q6 = AND(PrimEvent('F'), PrimEvent('E'))
+    # q6 = number_children(q6)
+    # queries.append(q6)
 
     return queries
 
@@ -231,28 +247,33 @@ def generate_hardcoded_selectivities():
     # From the original run output - these are the selectivities that were used
     # in the first simulation run to ensure consistency
     selectivities = {
-        'CB': 1, 'BC': 1,                    # C-B and B-C: 100% selectivity
+        'CB': 1, 'BC': 1,  # C-B and B-C: 100% selectivity
         'AD': 0.0394089916562073, 'DA': 0.0394089916562073,  # A-D and D-A: ~3.9%
         'CA': 0.050898519659186986, 'AC': 0.050898519659186986,  # C-A and A-C: ~5.1%
-        'DF': 1, 'FD': 1,                    # D-F and F-D: 100% selectivity
-        'ED': 1, 'DE': 1,                    # E-D and D-E: 100% selectivity
+        'DF': 1, 'FD': 1,  # D-F and F-D: 100% selectivity
+        'ED': 1, 'DE': 1,  # E-D and D-E: 100% selectivity
         'EA': 0.06653100823467012, 'AE': 0.06653100823467012,  # E-A and A-E: ~6.7%
         'DB': 0.08737603662227181, 'BD': 0.08737603662227181,  # D-B and B-D: ~8.7%
         'EB': 0.08525918368867062, 'BE': 0.08525918368867062,  # E-B and B-E: ~8.5%
         'CF': 0.032539286285100014, 'FC': 0.032539286285100014,  # C-F and F-C: ~3.3%
         'EC': 0.09001062335728674, 'CE': 0.09001062335728674,  # E-C and C-E: ~9.0%
-        'CD': 1, 'DC': 1,                    # C-D and D-C: 100% selectivity
+        'CD': 1, 'DC': 1,  # C-D and D-C: 100% selectivity
         'AB': 0.011815949185579405, 'BA': 0.011815949185579405,  # A-B and B-A: ~1.2%
         'EF': 0.04513571523602232, 'FE': 0.04513571523602232,  # E-F and F-E: ~4.5%
         'BF': 0.09888225719599508, 'FB': 0.09888225719599508,  # B-F and F-B: ~9.9%
         'AF': 0.024810748715466777, 'FA': 0.024810748715466777  # A-F and F-A: ~2.5%
     }
-    
+
+    # Devide selectivities by 10 to make them more realistic
+    # TODO: Discuss correctness of this approach with Ariane
+    for key in selectivities:
+        selectivities[key] /= 1
+
     # Generate experiment data (used for analysis)
     selectivity_values = list(selectivities.values())
     import numpy as np
     selectivitiesExperimentData = [0.01, np.median(selectivity_values)]  # [min_bound, median]
-    
+
     return selectivities, selectivitiesExperimentData
 
 
@@ -265,7 +286,19 @@ def generate_hardcoded_primitive_events():
     """
     # Fixed primitive events distribution: A=1000, B=0, C=1000, D=0, E=0, F=0
     # This distribution is consistent with the hardcoded selectivities above
-    return [1000, 2, 45, 203, 800, 5]
+    # return [10000, 20, 450, 203, 800, 5]
+    return [1000, 2, 45, 203, 800, 5]  # A=1000, B=2, C=45, D=203, E=800, F=5
+
+
+def generate_fixed_global_eventrates(self):
+    print("Hook")
+    global_event_rates = np.zeros_like(self.network[0].eventrates)
+    for node in self.network:
+        if len(node.eventrates) > 0:
+            # Take every eventrate from the node
+            global_event_rates = np.add(global_event_rates, node.eventrates)
+    result = list(global_event_rates)
+    return result
 
 
 class INES():
@@ -337,7 +370,7 @@ class INES():
         self.max_parents = config.max_parents
         self.query_size = config.query_size
         self.query_length = config.query_length
-        
+
         # Initialize result schema for experiments
         self.schema = ["ID", "TransmissionRatio", "Transmission", "INEvTransmission", "FilterUsed", "Nodes",
                        "EventSkew", "EventNodeRatio", "WorkloadSize", "NumberProjections", "MinimalSelectivity",
@@ -350,7 +383,7 @@ class INES():
         self.eventrates = generate_eventrates(config.event_skew, config.num_event_types)
         self.networkParams = [self.eventskew, self.number_eventtypes, self.node_event_ratio, self.nwSize,
                               min(self.eventrates) / max(self.eventrates)]
-        
+
         # Generate primitive events - use hardcoded values for consistent selectivity calculations
         if config.is_selectivities_fixed():
             self.primitiveEvents = generate_hardcoded_primitive_events()
@@ -362,26 +395,39 @@ class INES():
         self._initialize_network_graph()
         self._initialize_query_workload()
         self._initialize_selectivities()
+
+        if config.is_topology_fixed():
+            global_event_rates = generate_fixed_global_eventrates(self)
+            self.primitiveEvents = global_event_rates
+            self.eventrates = global_event_rates
+
         # Generate configuration and single selectivities for detailed analysis
         self.config_single = generate_config_buffer(self.network, self.query_workload, self.selectivities)
-        self.single_selectivity = initializeSingleSelectivity(self.CURRENT_SECTION, self.config_single, self.query_workload, self.config.is_selectivities_fixed())
-        
+        self.single_selectivity = initializeSingleSelectivity(self.CURRENT_SECTION, self.config_single,
+                                                              self.query_workload, self.config.is_selectivities_fixed())
+
         # Initialize remaining simulation components (legacy processing pipeline)
-        self.h_network_data, self.h_rates_data, self.h_primEvents, self.h_instances, self.h_nodes = initialize_globals(self.network)
+        self.h_network_data, self.h_rates_data, self.h_primEvents, self.h_instances, self.h_nodes = initialize_globals(
+            self.network)
         self.h_eventNodes, self.h_IndexEventNodes = initEventNodes(self.h_nodes, self.h_network_data)
-        self.h_projlist, self.h_projrates, self.h_projsPerQuery, self.h_sharedProjectionsDict, self.h_sharedProjectionsList = generate_all_projections(self)
+        self.h_projlist, self.h_projrates, self.h_projsPerQuery, self.h_sharedProjectionsDict, self.h_sharedProjectionsList = generate_all_projections(
+            self)
         self.h_projFilterDict = populate_projFilterDict(self)
         self.h_projFilterDict = removeFilters(self)
-        self.h_mycombi, self.h_combiDict, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(self)
+        self.h_mycombi, self.h_combiDict, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(
+            self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
-        self.eval_plan, self.central_eval_plan, self.experiment_result, self.results = calculate_operatorPlacement(self, 'test', 0)
-        
+        self.eval_plan, self.central_eval_plan, self.experiment_result, self.results = calculate_operatorPlacement(self,
+                                                                                                                   'test',
+                                                                                                                   0)
+
         # Add prepp results to complete the schema (4 additional columns)
         from generateEvalPlan import generate_eval_plan
-        self.plan = generate_eval_plan(self.network, self.selectivities, self.eval_plan, self.central_eval_plan, self.query_workload)
+        self.plan = generate_eval_plan(self.network, self.selectivities, self.eval_plan, self.central_eval_plan,
+                                       self.query_workload)
         prepp_results = generate_prePP(self.plan, 'ppmuse', 'e', 1, 0, 1, True, self.allPairs)
         self.results += prepp_results
-    
+
     def _initialize_network_topology(self):
         """Create network topology based on configuration mode."""
         if self.config.is_topology_fixed():
@@ -389,32 +435,32 @@ class INES():
         else:
             self.root, self.network, self.eList = create_random_tree(
                 self.nwSize, self.eventrates, self.node_event_ratio, self.max_parents)
-    
+
     def _initialize_network_graph(self):
         """Initialize network graph and distance calculations."""
         self.graph = create_fog_graph(self.network)
         self.allPairs = populate_allPairs(self.graph)
         self.h_longestPath = getLongest(self.allPairs)
-    
+
     def _initialize_query_workload(self):
         """Generate query workload based on configuration mode."""
         if self.config.is_workload_fixed():
             self.query_workload = generate_hardcoded_workload()
         else:
             self.query_workload = generate_workload(self.query_size, self.query_length, self.primitiveEvents)
-    
+
     def _initialize_selectivities(self):
         """Initialize selectivities based on configuration mode."""
         if self.config.is_selectivities_fixed():
             self.selectivities, self.selectivitiesExperimentData = generate_hardcoded_selectivities()
         else:
             self.selectivities, self.selectivitiesExperimentData = initialize_selectivities(self.primitiveEvents)
-    
+
     @classmethod
-    def create_legacy(cls, nwSize: int, node_event_ratio: float, num_eventtypes: int, 
-                     eventskew: float, max_partens: int, query_size: int, query_length: int,
-                     hardcoded_topology: bool = False, hardcoded_workload: bool = False, 
-                     hardcoded_selectivities: bool = False) -> 'INES':
+    def create_legacy(cls, nwSize: int, node_event_ratio: float, num_eventtypes: int,
+                      eventskew: float, max_partens: int, query_size: int, query_length: int,
+                      hardcoded_topology: bool = False, hardcoded_workload: bool = False,
+                      hardcoded_selectivities: bool = False) -> 'INES':
         """
         Create INES instance using legacy boolean parameters (for backward compatibility).
         
@@ -433,7 +479,7 @@ class INES():
             mode = SimulationMode.FIXED_TOPOLOGY
         else:
             mode = SimulationMode.RANDOM
-            
+
         config = SimulationConfig(
             network_size=nwSize,
             node_event_ratio=node_event_ratio,
@@ -480,7 +526,6 @@ class INES():
         #    if new:
         #        writer.writerow(self.schema)              
         #    writer.writerow(self.results)
-
 
 # import traceback
 # import logging
