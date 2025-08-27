@@ -424,7 +424,7 @@ def initiate_buffer(
             evaluation_dict[node].append(projection_str)
 
             # Create combination dictionary mapping
-            combination_keys = _extract_combination_keys(projection)
+            combination_keys = _extract_combination_keys(projection, mycombi)
             combination_dict[projection_str] = combination_keys
 
             # Store selection rate
@@ -504,14 +504,18 @@ def _extract_projection_filters(projection):
     return filters
 
 
-def _extract_combination_keys(projection):
+def _extract_combination_keys(projection, mycombi):
     """Extract combination keys from projection."""
-    if hasattr(projection, 'combination') and hasattr(projection.combination, 'keys'):
-        return list(map(str, projection.combination.keys()))
-    elif hasattr(projection, 'children'):
-        return list(map(str, projection.children))
+    if projection in mycombi:
+        list_of_subprojection = list(mycombi.get(projection))
+        return list_of_subprojection
     else:
-        return [str(projection)]
+        if hasattr(projection, 'combination') and hasattr(projection.combination, 'keys'):
+            return list(map(str, projection.combination.keys()))
+        elif hasattr(projection, 'children'):
+            return list(map(str, projection.children))
+        else:
+            return [str(projection)]
 
 
 def _extract_projection_sinks(projection, default_node):
