@@ -1,1 +1,0 @@
-# Placement engine tests package

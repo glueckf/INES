@@ -9,15 +9,6 @@ import string
 
 # Function to initialize global variables
 def initialize_globals(network_data):
-    "TODO no global variables"
-    #global _network, _rates, _primEvents, _instances, _nodes
-    
-    # Initialize global variables
-    #network = self.h_network_data
-    #rates = self.h_rates_data
-    #primEvents = self.h_primEvents
-    #instances = self.h_instances
-    #nodes = self.h_nodes
     network = {}
     rates = {}
     primEvents = []
@@ -33,8 +24,9 @@ def initialize_globals(network_data):
                 network[ind].append(event)
                 if event not in primEvents:
                     primEvents.append(event)
-                if event not in rates:
-                    rates[event] = float(node.eventrates[eventtype])
+                if event not in rates.keys():
+                    rates[event] = 0
+                rates[event] += float(node.eventrates[eventtype])
         ind += 1
 
     # Populate nodes dictionary
@@ -48,8 +40,7 @@ def initialize_globals(network_data):
     # Populate instances dictionary
     for i in primEvents:
         instances[i] = len(nodes[i])
-    
-    print(f"[NETWORK] {network}")
+
 
     return network,rates,primEvents,instances,nodes
 

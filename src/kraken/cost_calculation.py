@@ -14,6 +14,14 @@ from .adapters import build_eval_plan, run_prepp
 from .logging import get_placement_logger
 from .fallback import calculate_fallback_costs
 
+# Import SimulationMode for deterministic mode checking
+try:
+    from INES import SimulationMode
+except ImportError:
+    # Fallback if import fails
+    class SimulationMode:
+        FULLY_DETERMINISTIC = "deterministic"
+
 logger = get_placement_logger(__name__)
 
 
@@ -79,6 +87,9 @@ def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any],
 
         content = eval_plan_buffer.getvalue()
 
+        # Check if we should use deterministic behavior
+        is_deterministic = getattr(self, 'config', None) and getattr(self.config, 'mode', None) == SimulationMode.FULLY_DETERMINISTIC
+        
         # Call generate_prePP using adapter
         prepp_results = run_prepp(
             input_buffer=eval_plan_buffer,
@@ -88,12 +99,39 @@ def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any],
             top_k=0,
             runs=1,
             plan_print=True,
-            all_pairs=subgraph['all_pairs_sub']
+            all_pairs=subgraph['all_pairs_sub'],
+            is_deterministic=is_deterministic
         )
 
         # Extract costs from prePP results
         if prepp_results and len(prepp_results) > 0:
             costs = prepp_results[0]  # exact_cost
+            exec_time = prepp_results[1] if len(prepp_results) > 1 else 0
+            latency = prepp_results[2] if len(prepp_results) > 2 else 0
+            transmission_ratio = prepp_results[3] if len(prepp_results) > 3 else 0
+            central_costs = prepp_results[4] if len(prepp_results) > 4 else 0
+            
+            # ===========================================
+            # PREPP RESULT LOGGING FOR NODE
+            # ===========================================
+            print(f"\n{'='*50}")
+            print(f"PREPP RESULT FOR NODE {node}")
+            print(f"{'='*50}")
+            print(f"Projection: {projection}")
+            print(f"Push-Pull Cost: {costs:.4f}")
+            print(f"All-Push Baseline: {all_push_baseline:.4f}" if all_push_baseline else "All-Push Baseline: N/A")
+            print(f"Central Costs: {central_costs:.4f}")
+            print(f"Transmission Ratio: {transmission_ratio:.4f}")
+            print(f"Execution Time: {exec_time:.4f} seconds")
+            print(f"Latency: {latency}")
+            
+            if all_push_baseline:
+                savings = all_push_baseline - costs
+                savings_pct = (savings / all_push_baseline * 100) if all_push_baseline > 0 else 0
+                print(f"Cost Savings: {savings:.4f} ({savings_pct:.1f}%)")
+                print(f"Strategy Recommendation: {'Push-Pull' if costs < all_push_baseline else 'All-Push'}")
+            print(f"{'='*50}\n")
+            
             logger.info(f"PrePP costs calculated: {costs:.2f}")
 
             if all_push_baseline:
@@ -204,13 +242,16 @@ def _create_basic_central_plan(self, subgraph: Dict[str, Any], central_eval_plan
 
 
 def calculate_final_costs_for_sending_to_sinks(
-        cost_results: tuple,
+        current_push_pull_costs: float,
+        current_all_push_costs: float,
+        current_latency: float,
+        current_transmission_ratio: float,
         placement_node: int,
         query_projection: Any,
         sink_nodes: List[int],
         projection_rates: Dict[Any, tuple],
         shortest_path_distances: Dict[int, Dict[int, int]]
-) -> tuple:
+) -> Dict[str, Any]:
     """
     Calculate the final transmission costs for sending query results to sink nodes.
     
@@ -219,8 +260,8 @@ def calculate_final_costs_for_sending_to_sinks(
     projection and the shortest path distances.
     
     Args:
-        cost_results: Tuple containing (push_pull_costs, original_result_at_idx_1, 
-                     latency, transmission_ratio, all_push_costs)
+        cost_results: Dictionary containing placement results with keys like:
+                     'all_push_costs', 'push_pull_costs', 'latency', etc.
         placement_node: Node ID where the projection is placed
         query_projection: The projection/query being processed
         sink_nodes: List of destination node IDs to send results to
@@ -228,57 +269,75 @@ def calculate_final_costs_for_sending_to_sinks(
         shortest_path_distances: All-pairs shortest path distance matrix
         
     Returns:
-        tuple: Updated costs tuple with transmission costs to sinks included,
-               or original results if costs cannot be calculated
+        Dict: Updated results dictionary with transmission costs included
     """
-    print("Hook")
-    (push_pull_costs, original_result_at_idx_1, latency,
-     transmission_ratio, all_push_costs) = cost_results
 
-    # Extract the output rate for the given projection
-    projection_output_rate = (projection_rates[query_projection][1]
-                              if isinstance(projection_rates, dict) else 1)
-
-    # Calculate hop distances from placement node to all sink nodes
-    hop_distances_to_sinks = [shortest_path_distances[placement_node][sink]
-                              for sink in sink_nodes]
-
-    # Log transmission planning information
-    logger.info(f"Output rate for projection {query_projection}: {projection_output_rate}")
-    for sink in sink_nodes:
-        logger.info(f"Distance from node {placement_node} to sink {sink}: "
-                    f"{shortest_path_distances[placement_node][sink]}")
-
-    # Calculate final costs including transmission to sinks
-    if push_pull_costs is not None and hop_distances_to_sinks:
-        # Sum all hop distances and multiply by projection output rate
-        total_transmission_cost = sum(hop_distances_to_sinks) * projection_output_rate
-
-        # Add transmission costs to existing strategy costs
-        final_push_pull_costs = push_pull_costs + total_transmission_cost
-        final_all_push_costs = all_push_costs + total_transmission_cost
-
-        # Latency is dominated by the longest path to any sink
-        final_latency = latency + max(hop_distances_to_sinks)
-
+    
+    # Get the output rate for this projection
+    if isinstance(projection_rates, dict) and query_projection in projection_rates:
+        projection_output_rate = projection_rates[query_projection][1]
+    else:
+        projection_output_rate = 1  # Default fallback rate
+    
+    # Calculate distances from placement node to each sink
+    distances_to_each_sink = []
+    for sink_node in sink_nodes:
+        distance = shortest_path_distances[placement_node][sink_node]
+        distances_to_each_sink.append(distance)
+        
+    # Log transmission planning details
+    logger.info(f"Projection {query_projection} output rate: {projection_output_rate}")
+    for i, sink in enumerate(sink_nodes):
+        logger.info(f"Distance from placement node {placement_node} to sink {sink}: {distances_to_each_sink[i]}")
+    
+    # Calculate transmission costs if we have valid data
+    if current_push_pull_costs is not None and distances_to_each_sink:
+        
+        # Calculate total transmission cost = sum of all distances * output rate
+        total_distance_to_all_sinks = sum(distances_to_each_sink)
+        total_transmission_cost = total_distance_to_all_sinks * projection_output_rate
+        
+        # Add transmission costs to both strategy costs
+        final_push_pull_costs = current_push_pull_costs + total_transmission_cost
+        final_all_push_costs = current_all_push_costs + total_transmission_cost
+        
+        # Calculate final latency = current latency + maximum distance to any sink
+        maximum_distance_to_any_sink = max(distances_to_each_sink)
+        final_latency = current_latency + maximum_distance_to_any_sink
+        
         # Recalculate transmission efficiency ratio
         final_transmission_ratio = final_push_pull_costs / final_all_push_costs
-
-        return (
-            final_push_pull_costs,
-            original_result_at_idx_1,
-            final_latency,
-            final_transmission_ratio,
-            final_all_push_costs
-        )
+        
+        return final_all_push_costs, final_push_pull_costs, final_latency, final_transmission_ratio
+        
     else:
-        return cost_results
+        # No valid costs or distances, return original results unchanged
+        return current_all_push_costs, current_push_pull_costs, current_latency, current_transmission_ratio
 
 
-def calculate_prepp_with_placement(self, node: int, projection: Any, network):
-    selection_rate = getSelectionRate(projection, self.h_mycombi, self.selectivities)
-    # update_selectivity(self, projection, selection_rate)
-    input_buffer = initiate_buffer(node, projection, network, self.selectivities, selection_rate)
+def calculate_prepp_with_placement(
+        self,
+        node: int,
+        projection: Any,
+        network,
+        selectivity_rate: float,
+        global_placement_tracker,
+        has_placed_subqueries: bool = False,
+):
+
+    input_buffer = initiate_buffer(
+        node, 
+        projection, 
+        network, 
+        self.selectivities, 
+        selectivity_rate, 
+        global_placement_tracker=global_placement_tracker,
+        has_placed_subqueries=has_placed_subqueries,
+        mycombi=getattr(self, 'h_mycombi', {}),
+        rates=getattr(self, 'h_rates_data', {}),
+        projrates=getattr(self, 'h_projrates', {}),
+        index_event_nodes=getattr(self, 'h_IndexEventNodes', {})
+    )
 
     content = input_buffer.getvalue()
 
@@ -286,6 +345,10 @@ def calculate_prepp_with_placement(self, node: int, projection: Any, network):
     method = "ppmuse"
     algorithm = "e"
 
+    # Check if we should use deterministic behavior
+    config_mode = (getattr(self, 'config', None) and getattr(self.config, 'mode', None)).value
+    is_deterministic = config_mode == SimulationMode.FULLY_DETERMINISTIC
+    
     results = run_prepp(
         input_buffer=input_buffer,
         method=method,
@@ -294,30 +357,30 @@ def calculate_prepp_with_placement(self, node: int, projection: Any, network):
         top_k=0,
         runs=1,
         plan_print=True,
-        all_pairs=self.allPairs)
+        all_pairs=self.allPairs,
+        is_deterministic=is_deterministic)
 
-    push_pull_costs = results[0]
-    logger.info(f"Calculated push-pull costs for projection {projection}: {push_pull_costs:.2f}")
-
-    computing_time = results[1]
-    logger.info(f"Computing time for prePP: {computing_time:.2f}")
-
-    # TODO: Discuss latency output because it seems fishy
-    latency = results[2] - 1
-    logger.info(f"Latency for prePP: {latency:.2f}")
-
-    transmission_ratio = results[3]
-    logger.info(f"Transmission ratio for prePP: {transmission_ratio:.2f}")
-
-    # TODO: Discuss all_push_costs.
-    #  PrePP adds 1 to all_push_costs because it assumes, that the costs are 1 after evaluating query
-    all_push_costs = results[4]
-    logger.info(f"All-push costs for projection {projection}: {all_push_costs:.2f}")
-
-    return push_pull_costs, computing_time, latency, transmission_ratio, all_push_costs
+    # process results
+    if results and len(results) >= 5:
+        return process_results_from_prepp(results, query=projection, node=node, workload=self.query_workload)
+    else:
+        logger.warning("No valid prePP results returned, using fallback")
+        raise ValueError("Invalid prePP results")
 
 
-def initiate_buffer(node, projection, network, selectivities, selection_rate) -> Any:
+def initiate_buffer(
+    node, 
+    projection, 
+    network, 
+    selectivities, 
+    selection_rate, 
+    global_placement_tracker=None,
+    has_placed_subqueries: bool = False,
+    mycombi=None,
+    rates=None,
+    projrates=None,
+    index_event_nodes=None
+) -> Any:
     """
     Generate a configuration buffer similar to generate_eval_plan but for a single projection.
     Creates evaluation dictionaries, combination mappings, and configuration data.
@@ -334,13 +397,12 @@ def initiate_buffer(node, projection, network, selectivities, selection_rate) ->
     """
     import io
 
-    print("Debug hook for initiate_buffer")
-
     # Safety checks
     if not _validate_buffer_inputs(node, projection, network, selectivities, selection_rate):
         return None
 
     try:
+
         # Initialize dictionaries similar to generate_eval_plan
         evaluation_dict = _initialize_evaluation_dict(network)
         combination_dict = {}
@@ -388,7 +450,12 @@ def initiate_buffer(node, projection, network, selectivities, selection_rate) ->
             workload=workload,
             combination_dict=combination_dict,
             sink_dict=sink_dict,
-            selection_rate_dict=selection_rate_dict
+            selection_rate_dict=selection_rate_dict,
+            projection=projection,
+            has_placed_subqueries=has_placed_subqueries,
+            global_placement_tracker=global_placement_tracker,
+            mycombi=mycombi,
+            projrates=projrates
         )
 
         config_buffer.write(plan_content)
@@ -464,7 +531,9 @@ def _process_forwarding_dict(projection, forwarding_dict):
     return forwarding_dict
 
 
-def _generate_plan_content(network, selectivities, workload, combination_dict, sink_dict, selection_rate_dict):
+def _generate_plan_content(network, selectivities, workload, combination_dict, sink_dict, selection_rate_dict, 
+                          projection=None, has_placed_subqueries=False, global_placement_tracker=None, 
+                          mycombi=None, projrates=None):
     """Generate the actual plan content string."""
     lines = []
 
@@ -572,22 +641,84 @@ def _generate_plan_content(network, selectivities, workload, combination_dict, s
 
     # Add muse graph
     if workload and selection_rate_dict:
-        query = workload[0]
-        rate = selection_rate_dict.get(query, 0)
-        sink_info = sink_dict.get(query, [[], ""])
-        sink_nodes = sink_info[0] if sink_info[0] else [0]
-
         lines.append("muse graph")
-        combination_str = "; ".join(combination_dict.get(query, [query]))
-        lines.append(
-            f"SELECT {query} FROM {combination_str} ON {{{', '.join(map(str, sink_nodes))}}} WITH selectionRate= {rate}")
+        
+        # Check if we have placed subqueries and need to handle them differently
+        if has_placed_subqueries and projection and mycombi and global_placement_tracker and projrates:
+            # Get subqueries for this projection
+            if projection in mycombi:
+                subqueries = mycombi[projection]
+                
+                # Add placed subqueries first
+                for subquery in subqueries:
+                    if hasattr(subquery, 'leafs') and global_placement_tracker.has_placement_for(subquery):
+                        placement_decision = global_placement_tracker.get_best_placement(subquery)
+                        subquery_rate = projrates.get(subquery, 0.001)
+                        if len(subquery_rate) > 1:
+                            subquery_rate = subquery_rate[0]
+                        
+                        # Get primitive events for subquery
+                        if hasattr(subquery, 'leafs'):
+                            primitive_events = subquery.leafs()
+                        else:
+                            primitive_events = [str(subquery)]
+                        
+                        combination_str = "; ".join(primitive_events)
+                        lines.append(
+                            f"SELECT {subquery} FROM {combination_str} ON {{{placement_decision.node}}} WITH selectionRate= {subquery_rate}")
+                
+                # Add main query with virtual events (replace placed subqueries with their virtual names)
+                main_query = workload[0]
+                main_rate = selection_rate_dict.get(main_query, 0)
+                
+                # Create combination for main query
+                main_combination = []
+                for elem in subqueries:
+                    if hasattr(elem, 'leafs') and global_placement_tracker.has_placement_for(elem):
+                        # This subquery is placed, so we reference it as virtual event
+                        main_combination.append(str(elem))
+                    else:
+                        # This is a primitive event
+                        main_combination.append(str(elem))
+                
+                combination_str = "; ".join(main_combination)
+                lines.append(
+                    f"SELECT {main_query} FROM {combination_str} ON {{0}} WITH selectionRate= {main_rate}")
+            else:
+                # Fallback to normal handling
+                _add_normal_muse_graph_entry(lines, workload, selection_rate_dict, sink_dict, combination_dict)
+        else:
+            # Normal case without subqueries
+            _add_normal_muse_graph_entry(lines, workload, selection_rate_dict, sink_dict, combination_dict)
 
     return "\n".join(lines)
 
 
-def getSelectionRate(projection: Any, combination_dict, selectivities):
+def _add_normal_muse_graph_entry(lines, workload, selection_rate_dict, sink_dict, combination_dict):
+    """Add normal muse graph entry without subqueries."""
+    query = workload[0]
+    rate = selection_rate_dict.get(query, 0)
+    sink_info = sink_dict.get(query, [[], ""])
+    sink_nodes = sink_info[0] if sink_info[0] else [0]
+    
+    # Get combination for query - extract primitive events
+    if hasattr(query, 'leafs'):
+        primitive_events = query.leafs()
+    else:
+        primitive_events = combination_dict.get(query, [query])
+    
+    combination_str = "; ".join(str(e) for e in primitive_events)
+    
+    lines.append(
+        f"SELECT {query} FROM {combination_str} ON {{{', '.join(map(str, sink_nodes))}}} WITH selectionRate= {rate}")
+
+
+def get_selection_rate(projection: Any, combination_dict, selectivities):
     """
     Calculate selection rate for a projection based on combination dictionary and selectivities.
+    
+    For queries with subqueries like AND(D, AND(A,B)), this function expands the subqueries
+    and creates all possible combinations across the primitive events (e.g., AD, AB, BD).
     
     Args:
         projection: The projection to calculate selection rate for
@@ -597,7 +728,6 @@ def getSelectionRate(projection: Any, combination_dict, selectivities):
     Returns:
         float: The calculated selection rate (product of relevant selectivities)
     """
-    print("Debug hook for getSelectionRate")
 
     # Safety check: ensure projection exists in combination_dict
     if projection not in combination_dict:
@@ -611,48 +741,125 @@ def getSelectionRate(projection: Any, combination_dict, selectivities):
         logger.warning(f"Empty combination for projection {projection}")
         return 1.0
 
-    # Create all possible string combinations from the event types (1-element, 2-element, all-element)
     from itertools import combinations
 
-    event_combinations = []
-
-    has_subquery = False
-    # Check if combination_for_given_projection has a subquery
-    if any(elem in combination_dict.keys() for elem in combination_for_given_projection):
-        has_subquery = True
-
-    # Generate all possible combinations of all lengths (1 to n)
+    # Check if combination has subqueries
+    has_subquery = any(elem in combination_dict.keys() for elem in combination_for_given_projection)
+    
     if has_subquery:
-        for r in range(1, len(combination_for_given_projection) + 1):
-            for combo in combinations(combination_for_given_projection, r):
-                # Convert each element to string and concatenate them
-                # This handles both simple strings like "A" and complex expressions like "AND(A,B)"
-                combo_str = "".join(str(element) for element in combo)
+        # Expand all elements to their primitive events
+        expanded_events = []
+        for elem in combination_for_given_projection:
+            if elem in combination_dict:
+                # This is a subquery, recursively expand it
+                sub_events = _expand_to_primitives(elem, combination_dict)
+                expanded_events.extend(sub_events)
+            else:
+                # This is already a primitive event
+                expanded_events.append(str(elem))
+        
+        # Remove duplicates while preserving order
+        expanded_events = list(dict.fromkeys(expanded_events))
+        logger.info(f"Expanded {projection} to primitive events: {expanded_events}")
+        
+        # Generate all possible combinations of primitive events (2 to n)
+        event_combinations = []
+        for r in range(2, len(expanded_events) + 1):
+            for combo in combinations(expanded_events, r):
+                combo_str = "".join(combo)
                 event_combinations.append(combo_str)
+                
     else:
+        # No subqueries, use original logic
+        event_combinations = []
         for r in range(2, len(combination_for_given_projection) + 1):
             for combo in combinations(combination_for_given_projection, r):
-                # Convert each element to string and concatenate them
-                # This handles both simple strings like "A" and complex expressions like "AND(A,B)"
                 combo_str = "".join(str(element) for element in combo)
                 event_combinations.append(combo_str)
 
     # Calculate selection rate as product of relevant selectivities
     res = 1.0
-
     for combo_str in event_combinations:
         if combo_str in selectivities:
             selectivity_value = selectivities[combo_str]
             # Safety check: ensure selectivity is a valid number
             if isinstance(selectivity_value, (int, float)) and selectivity_value > 0:
                 res *= selectivity_value
+                logger.debug(f"Applied selectivity for {combo_str}: {selectivity_value}")
             else:
                 logger.warning(f"Invalid selectivity value for {combo_str}: {selectivity_value}")
         else:
             logger.warning(f"Selectivity not found for combination: {combo_str}")
 
+    logger.info(f"Final selection rate for {projection}: {res}")
     return res
 
 
+def _expand_to_primitives(element, combination_dict):
+    """
+    Recursively expand a subquery element to its primitive events.
+    
+    Args:
+        element: The element to expand (could be a subquery)
+        combination_dict: Dictionary mapping projections to their combinations
+        
+    Returns:
+        List of primitive event strings
+    """
+    if element not in combination_dict:
+        # This is already a primitive event
+        return [str(element)]
+    
+    primitives = []
+    for sub_elem in combination_dict[element]:
+        if sub_elem in combination_dict:
+            # Recursively expand this sub-element
+            primitives.extend(_expand_to_primitives(sub_elem, combination_dict))
+        else:
+            # This is a primitive event
+            primitives.append(str(sub_elem))
+    
+    return primitives
+
 def update_selectivity(self, projection, selection_rate):
     self.selectivities[str(projection)] = selection_rate
+
+
+def process_results_from_prepp(results, query, node, workload):
+    # print("DEBUG")
+    projection_as_string = str(query)
+    all_push_costs = results[4] if len(results) > 4 else 0
+
+    computing_time = results[1] if len(results) > 1 else 0
+
+    total_plan_costs = 0
+
+    total_plan_latency = 0
+
+    if projection_as_string in results[6] if len(results) > 6 else []:
+        aquisition_steps = results[6][projection_as_string]
+
+        for step in aquisition_steps:
+            aquisition_step = aquisition_steps[step]
+            aquisition_step_costs = aquisition_step.get('total_step_costs', 0)
+            aquisition_step_latency = aquisition_step.get('total_latency', 0)
+            total_plan_costs += aquisition_step_costs
+            total_plan_latency += aquisition_step_latency
+
+            # print(f"\n{'='*50}")
+
+        transmission_ratio = (total_plan_costs / all_push_costs) if all_push_costs > 0 else 0
+    else:
+        raise ValueError("No acquisition steps found in prePP results")
+
+
+    return {
+        'node_for_placement': node,
+        'projection': query,
+        'all_push_costs': all_push_costs,
+        'push_pull_costs': total_plan_costs,
+        'latency': total_plan_latency,
+        'computing_time': computing_time,
+        'transmission_ratio': transmission_ratio,
+        'aquisition_steps': aquisition_steps
+    }

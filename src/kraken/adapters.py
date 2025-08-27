@@ -72,7 +72,8 @@ def build_eval_plan(nw: List[Any], selectivities: Dict[str, Any], my_plan: List[
 
 
 def run_prepp(input_buffer: io.StringIO, method: str, algorithm: str, samples: int, 
-              top_k: int, runs: int, plan_print: bool, all_pairs: List[List[float]]) -> List[Any]:
+              top_k: int, runs: int, plan_print: bool, all_pairs: List[List[float]], 
+              is_deterministic: bool = False) -> List[Any]:
     """
     Adapter for generate_prePP function.
     
@@ -88,6 +89,7 @@ def run_prepp(input_buffer: io.StringIO, method: str, algorithm: str, samples: i
         runs: Number of runs
         plan_print: Whether to print detailed plan information
         all_pairs: All-pairs distance matrix
+        is_deterministic: Whether to use deterministic behavior for reproducibility
         
     Returns:
         List: PrePP results [exact_cost, pushPullTime, maxPushPullLatency, endTransmissionRatio]
@@ -119,7 +121,7 @@ def run_prepp(input_buffer: io.StringIO, method: str, algorithm: str, samples: i
         # Import and call legacy function
         from prepp import generate_prePP
         
-        result = generate_prePP(input_buffer, method, algorithm, samples, top_k, runs, plan_print, all_pairs)
+        result = generate_prePP(input_buffer, method, algorithm, samples, top_k, runs, plan_print, all_pairs, is_deterministic)
         
         # Validate result
         if not isinstance(result, list):

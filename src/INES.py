@@ -10,6 +10,7 @@ from graph import draw_graph
 from allPairs import populate_allPairs
 from queryworkload import generate_workload
 from selectivity import initialize_selectivities
+from src.kraken.operator_placement_legacy_hook import calculate_integrated_approach, write_results_to_csv, print_kraken
 from write_config_single import generate_config_buffer
 from singleSelectivities import initializeSingleSelectivity
 from helper.parse_network import initialize_globals
@@ -206,16 +207,16 @@ def generate_hardcoded_workload():
     q1 = number_children(q1)
     queries.append(q1)
 
-    # # # Query 2:
-    # q2 = AND(PrimEvent('D'), PrimEvent('E'))
-    # q2 = number_children(q2)
-    # queries.append(q2)
+    # Query 2:
+    q2 = AND(PrimEvent('A'), PrimEvent('B'))
+    q2 = number_children(q2)
+    queries.append(q2)
 
-    # # Query 3: Simple AND with shared elements - AND(A, B, D)
-    # q3 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
-    # q3 = number_children(q3)
-    # queries.append(q3)
-
+    # Query 3: Simple AND with shared elements - AND(A, B, D)
+    q3 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
+    q3 = number_children(q3)
+    queries.append(q3)
+    #
     # # Query 4: Medium complexity - SEQ(A, B, AND(E, F))
     # # Shares A, B with queries 1 and 2
     # q4 = SEQ(PrimEvent('A'), PrimEvent('B'), AND(PrimEvent('E'), PrimEvent('F')))
@@ -258,7 +259,7 @@ def generate_hardcoded_selectivities():
         'CF': 0.032539286285100014, 'FC': 0.032539286285100014,  # C-F and F-C: ~3.3%
         'EC': 0.09001062335728674, 'CE': 0.09001062335728674,  # E-C and C-E: ~9.0%
         'CD': 1, 'DC': 1,  # C-D and D-C: 100% selectivity
-        'AB': 0.011815949185579405, 'BA': 0.011815949185579405,  # A-B and B-A: ~1.2%
+        'AB': 0.0013437, 'BA': 0.0013437,  # A-B and B-A: ~0.13%
         'EF': 0.04513571523602232, 'FE': 0.04513571523602232,  # E-F and F-E: ~4.5%
         'BF': 0.09888225719599508, 'FB': 0.09888225719599508,  # B-F and F-B: ~9.9%
         'AF': 0.024810748715466777, 'FA': 0.024810748715466777  # A-F and F-A: ~2.5%
@@ -291,7 +292,7 @@ def generate_hardcoded_primitive_events():
 
 
 def generate_fixed_global_eventrates(self):
-    print("Hook")
+    # print("Hook")
     global_event_rates = np.zeros_like(self.network[0].eventrates)
     for node in self.network:
         if len(node.eventrates) > 0:
@@ -299,6 +300,58 @@ def generate_fixed_global_eventrates(self):
             global_event_rates = np.add(global_event_rates, node.eventrates)
     result = list(global_event_rates)
     return result
+
+
+def update_prepp_results(self, prepp_results):
+    print("Debug hook")
+
+    CLOUD_NODE_ID = 0
+
+    query_workload = self.query_workload
+
+    prepp_eval_plan = self.eval_plan[0].projections
+
+    total_costs = prepp_results[0]
+    calculation_time = prepp_results[1]
+    max_push_pull_latency = prepp_results[2]
+    transmission_ratio = prepp_results[3]
+    total_push_costs = prepp_results[4]
+
+    # We need to add the costs of sending the events to the cloud to the prepp results
+
+    all_sinks_from_workload = []
+
+    for i in prepp_eval_plan:
+        projection = i.name.name
+        if projection in query_workload:
+            # Here we need to calculate the costs for sending query from placement to sink:
+            placement_nodes = i.name.sinks
+            for placed_node in placement_nodes:
+                all_sinks_from_workload.append(placed_node)
+                hops_from_node_to_cloud = self.allPairs[placed_node][CLOUD_NODE_ID]
+                query_output_rate = self.h_projrates.get(projection, 1.0)[1]
+                total_costs += hops_from_node_to_cloud * query_output_rate
+
+    final_transmission_ratio = total_costs / total_push_costs if total_push_costs > 0 else 0
+
+    # For the latency it is a little tricky.
+    # If a query from the workload is placed on the cloud, we do not need to add any latency.
+    # If all queries are placed below the cloud, we need to add the latency from the highest placed node to the cloud.
+    max_additional_latency = 0
+    min_distance_to_cloud = float('inf')
+
+    if not any(node == CLOUD_NODE_ID for node in all_sinks_from_workload):
+        # Find closest node to the cloud
+        for node in all_sinks_from_workload:
+            distance_to_cloud = self.allPairs[node][CLOUD_NODE_ID]
+            if distance_to_cloud < min_distance_to_cloud:
+                min_distance_to_cloud = distance_to_cloud
+
+        max_additional_latency = min_distance_to_cloud
+
+    max_push_pull_latency += max_additional_latency
+
+    return total_costs, calculation_time, max_push_pull_latency, final_transmission_ratio
 
 
 class INES():
@@ -403,8 +456,11 @@ class INES():
 
         # Generate configuration and single selectivities for detailed analysis
         self.config_single = generate_config_buffer(self.network, self.query_workload, self.selectivities)
+        deterministic_flag = self.config.is_selectivities_fixed()
+        print(
+            f"[INES_DEBUG] Calling initializeSingleSelectivity with is_deterministic={deterministic_flag} (mode={self.config.mode})")
         self.single_selectivity = initializeSingleSelectivity(self.CURRENT_SECTION, self.config_single,
-                                                              self.query_workload, self.config.is_selectivities_fixed())
+                                                              self.query_workload, deterministic_flag)
 
         # Initialize remaining simulation components (legacy processing pipeline)
         self.h_network_data, self.h_rates_data, self.h_primEvents, self.h_instances, self.h_nodes = initialize_globals(
@@ -417,16 +473,33 @@ class INES():
         self.h_mycombi, self.h_combiDict, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(
             self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
-        self.eval_plan, self.central_eval_plan, self.experiment_result, self.results = calculate_operatorPlacement(self,
-                                                                                                                   'test',
-                                                                                                                   0)
+
+        integrated_operator_placement_results = calculate_integrated_approach(self, 'test', 0)
+
+        (self.eval_plan, self.central_eval_plan, self.experiment_result, self.results) = calculate_operatorPlacement(
+            self, 'test', 0)
 
         # Add prepp results to complete the schema (4 additional columns)
         from generateEvalPlan import generate_eval_plan
         self.plan = generate_eval_plan(self.network, self.selectivities, self.eval_plan, self.central_eval_plan,
                                        self.query_workload)
-        prepp_results = generate_prePP(self.plan, 'ppmuse', 'e', 1, 0, 1, True, self.allPairs)
-        self.results += prepp_results
+        deterministic_flag = self.config.is_selectivities_fixed()
+        print(
+            f"[INES_DEBUG] Calling generate_prePP with is_deterministic={deterministic_flag} (mode={self.config.mode})")
+        prepp_results = generate_prePP(self.plan, 'ppmuse', 'e', 1, 0, 1, True, self.allPairs, deterministic_flag)
+
+        final_prepp_results = update_prepp_results(self, prepp_results)
+
+        # Only take the first 4 results to match the schema
+        self.results += final_prepp_results
+
+        # Get the ID from the INES simulation as a foreign key, to later map both
+        ines_simulation_id = self.results[0]
+
+        # Print comprehensive placement results
+        print_kraken(integrated_operator_placement_results)
+
+        # write_results_to_csv(integrated_operator_placement_results, ines_simulation_id)
 
     def _initialize_network_topology(self):
         """Create network topology based on configuration mode."""
@@ -512,7 +585,10 @@ class INES():
                                                                                                                    self.max_parents)
         self.plan = generate_eval_plan(self.network, self.selectivities, self.eval_plan, self.central_eval_plan,
                                        self.query_workload)
-        self.results += generate_prePP(self.plan, 'ppmuse', 'e', 0, 0, 1, False, self.allPairs)
+        deterministic_flag = self.config.is_selectivities_fixed()
+        print(
+            f"[INES_DEBUG] Calling generate_prePP (second call) with is_deterministic={deterministic_flag} (mode={self.config.mode})")
+        self.results += generate_prePP(self.plan, 'ppmuse', 'e', 0, 0, 1, False, self.allPairs, deterministic_flag)
         # new =False
         # try:
         #      f = open("./res/"+str(filename)+".csv")   

@@ -842,7 +842,7 @@ def compute_operator_placement_with_prepp(
     # Initialize decision tracker
     placement_decisions = PlacementDecisionTracker(projection)
 
-    print(f"[PLACEMENT] Starting placement computation for: {projection}")
+    # print(f"[PLACEMENT] Starting placement computation for: {projection}")
 
     possible_placement_nodes = check_possible_placement_nodes_for_input(
         projection,
@@ -856,7 +856,7 @@ def compute_operator_placement_with_prepp(
 
     # Reverse the order of the possible placement nodes to prioritize nodes closer to the source
     possible_placement_nodes.reverse()
-    print(f"[PLACEMENT] Evaluating {len(possible_placement_nodes)} placement candidates")
+    # print(f"[PLACEMENT] Evaluating {len(possible_placement_nodes)} placement candidates")
 
     # Initialize push-pull cost calculator
     push_pull_calculator = _initialize_push_pull_calculator(
@@ -864,7 +864,7 @@ def compute_operator_placement_with_prepp(
     )
 
     for node in possible_placement_nodes:
-        print(f"[PLACEMENT] Evaluating node {node}")
+        # print(f"[PLACEMENT] Evaluating node {node}")
 
         has_enough_resources = check_resources(node, projection, network, combination)
 
@@ -1054,7 +1054,7 @@ def check_possible_placement_nodes_for_input(projection, combination, network_da
 
     # Check each non-leaf node for placement feasibility
     for destination in non_leaf:
-        print(f"[PLACEMENT] Evaluating node {destination}...")
+        # print(f"[PLACEMENT] Evaluating node {destination}...")
 
         skip_destination = False  # Flag to determine if we should skip this destination
 

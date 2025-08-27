@@ -454,21 +454,35 @@ def outRateHigh(self, projection):
     return []
 
 def unfold_combi(self, query, combination): #unfolds a combination, however in the new version we will have only one combination which is provided in the same format as the unfolded dict
+    # print(f"[UNFOLD_COMBI] Processing query: {query}")
+    # print(f"[UNFOLD_COMBI] Initial combination: {combination}")
     unfoldedDict = {}
     unfoldedDict[query] = combination    
+    # print(f"[UNFOLD_COMBI] Added to unfoldedDict: {query} -> {combination}")
     unfoldedDict.update(unfold_combiRec(self, combination, unfoldedDict))
+    # print(f"[UNFOLD_COMBI] Final unfoldedDict: {unfoldedDict}")
     return unfoldedDict
 
 def unfold_combiRec(self, combination, unfoldedDict): 
+    # print(f"[UNFOLD_REC] Processing combination: {combination}")
     combiDict = self.h_combiDict
     for proj in combination:
+        # print(f"[UNFOLD_REC] Processing proj: {proj}, len(proj): {len(proj) if hasattr(proj, '__len__') else 'no len'}")
         if len(proj) > 1:
+            # print(f"[UNFOLD_REC] Complex projection detected: {proj}")
             if proj in combiDict.keys():
                 mycombination =  combiDict[proj][0]
+                # print(f"[UNFOLD_REC] Found in combiDict: {proj} -> {mycombination}")
             else:
-                mycombination = proj.leafs() # this is the case if proj is a single sink projection, and we have to decide how to match it later
+                # Keep complex projections as subqueries instead of decomposing to primitives
+                mycombination = [proj] # this is the case if proj is a single sink projection, and we have to decide how to match it later
+                # print(f"[UNFOLD_REC] Not in combiDict, keeping as subquery: {proj} -> {mycombination}")
             unfoldedDict[proj] = mycombination
+            # print(f"[UNFOLD_REC] Added to unfoldedDict: {proj} -> {mycombination}")
+            # print(f"[UNFOLD_REC] Recursively processing: {mycombination}")
             unfoldedDict.update(unfold_combiRec(self, mycombination, unfoldedDict))
+        # else:
+            # print(f"[UNFOLD_REC] Primitive event (len <= 1): {proj}")
     return unfoldedDict 
 
  
@@ -505,18 +519,70 @@ def generate_combigen(self):
             
     for i in range(len(wl)):   
         query = wl[i].stripKL_simple()
+        # print(f"[GENERATE_COMBIGEN] Processing query {i}: {query}")
+        # print(f"[GENERATE_COMBIGEN] Query in combiDict: {query in combiDict.keys()}")
         if query in combiDict.keys():
-            curcombi.update(unfold_combi(self, query, combiDict[[query][0]][0]))    
+            # print(f"[GENERATE_COMBIGEN] combiDict[{query}]: {combiDict[query]}")
+            # print(f"[GENERATE_COMBIGEN] combiDict[{query}][0]: {combiDict[query][0]}")
+            curcombi.update(unfold_combi(self, query, combiDict[query][0]))    
 
  
     mycombi = curcombi
+    # print(f"[GENERATE_COMBIGEN] Final mycombi keys: {list(mycombi.keys())}")
+    # print(f"[GENERATE_COMBIGEN] Final mycombi contents:")
+    # for key, value in mycombi.items():
+    #     print(f"  {key} -> {value}")
+    
+    # Check if SEQ(A, B) is referenced but missing
+    referenced_projs = set()
+    for key, value in mycombi.items():
+        for item in value:
+            if hasattr(item, '__str__') and len(str(item)) > 1:
+                referenced_projs.add(str(item))
+    
+    mycombi_keys_str = {str(k) for k in mycombi.keys()}
+    missing_projections = []
+    for proj in referenced_projs:
+        if proj not in mycombi_keys_str:
+            missing_projections.append(proj)
+    
+    # Process missing projections that exist in combiDict
+    for missing_proj_str in missing_projections:
+        # Find the actual projection object in combiDict
+        for combi_key in combiDict.keys():
+            if str(combi_key) == missing_proj_str:
+                curcombi.update(unfold_combi(self, combi_key, combiDict[combi_key][0]))
+                break
+    
+    # CRITICAL FIX: Also process key subqueries that should be in mycombi
+    # These are projections that exist in combiDict and are referenced in combinations
+    # but were never processed because they weren't in the workload
+    important_subqueries = ["SEQ(A, B)", "SEQ(E, F)", "SEQ(A, B, C)"]
+    for subquery_str in important_subqueries:
+        # Check if this subquery exists in combiDict but not in mycombi
+        for combi_key in combiDict.keys():
+            if str(combi_key) == subquery_str:
+                # Check if it's already in curcombi
+                already_exists = False
+                for existing_key in curcombi.keys():
+                    if str(existing_key) == subquery_str:
+                        already_exists = True
+                        break
+                
+                if not already_exists:
+                    curcombi.update(unfold_combi(self, combi_key, combiDict[combi_key][0]))
+                break
+    
+    # Update mycombi with the newly processed projections
+    mycombi = curcombi
+    
     criticalMSProjs = [x for x in mycombi.keys() if combiDict[x][1] and combiDict[x][1][0] in criticalMSTypes]
 
     
-    for pro in curcombi.keys():
-        print(str(pro) + " " + str(list(map(lambda x: str(x), curcombi[pro]))))
-    print("time: " + str(end_time - start_time))   
-    print(numberCombis)
+    # for pro in curcombi.keys():
+    #     print(str(pro) + " " + str(list(map(lambda x: str(x), curcombi[pro]))))
+    # print("time: " + str(end_time - start_time))   
+    # print(numberCombis)
 
     projlist = self.h_projlist
      

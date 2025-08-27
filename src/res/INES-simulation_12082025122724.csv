@@ -1,2 +1,0 @@
-ID,TransmissionRatio,Transmission,INEvTransmission,FilterUsed,Nodes,EventSkew,EventNodeRatio,WorkloadSize,NumberProjections,MinimalSelectivity,MedianSelectivity,CombigenComputationTime,Efficiency,PlacementComputationTime,centralHopLatency,Depth,CentralTransmission,LowerBound,EventTypes,MaximumParents,exact_costs,PushPullTime,MaxPushPullLatency,endTransmissionRatio
-8706200,0.6667728575979611,9417.0,6279.0,[],12,0.3,0.5,1,2,0.01,0.08525918368867062,0.0,1.9166666666666665,0.0,3,0.0,9417.0,0.6388888888888888,3,0,258.58801562396945,0.0011219978332519531,7,0.041182993410410804

@@ -7,7 +7,7 @@ import argparse
 from EvaluationPlan import EvaluationPlan
 import numpy as np
 from projections import returnPartitioning, totalRate
-from placement_engine.core import compute_operator_placement_with_prepp
+from kraken.core import compute_operator_placement_with_prepp
 
 
 #maxDist = max([max(x) for x in allPairs])
@@ -60,7 +60,6 @@ def getLowerBound(query,
                    :len(list(set(MS))) - 1]
     if not len(nonMS) == len(query.leafs()):
         minimalRate += sum(minimalProjs) * longestPath
-
     # print("→ totalRate call for:", self.h_projection)
     # print("→ result:", self.h_projrates.get(self.h_projection, 0))
 
@@ -108,6 +107,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
     MSPlacements = {}
     curcosts = 1
     start_time = time.time()
+
 
     hopLatency = {}
 
@@ -185,31 +185,19 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
         else:
             # INFO: ComputeSingleSinkPlacement is called for the sequential approach.
             # Implementing a new function for the integrated approach
-            print(projection)
+            # if str(projection) == 'AND(SEQ(B, C), F)':
+            #     print("Hook")
 
             result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter, projFilterDict, EventNodes,
                                                 IndexEventNodes, self.h_network_data, allPairs, mycombi, rates,
                                                 singleSelectivities, projrates, self.graph, self.network)
 
-            # result = compute_operator_placement_with_prepp(
-            #     self,
-            #     projection,
-            #     unfolded[projection],
-            #     noFilter,
-            #     projFilterDict,
-            #     EventNodes,
-            #     IndexEventNodes,
-            #     self.h_network_data,
-            #     allPairs, mycombi,
-            #     rates,
-            #     singleSelectivities,
-            #     projrates,
-            #     G,
-            #     network,
-            #     central_eval_plan)
-
-            temp_results_dict[projection] = result
-            print(result)
+            placement_costs = result[0]
+            placement_node = result[1]
+            temp_results_dict[projection] = {
+                "placement_node": placement_node,
+                "placement_costs": placement_costs,
+            }
             additional = result[0]
             costs += additional
             hopLatency[projection] += result[2]
@@ -222,8 +210,6 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
             Filters += result[5]
 
 
-
-            # print(f"[SiS PLACEMENT] {projection} → Node: {partType}, Cost: {additional:.2f}, Hops: {result[2]}")
     print(temp_results_dict)
     mycosts = costs / ccosts[0]
     print(f"[TRANSMISSION] INES with MS - Total Cost: {costs:.2f}")
@@ -260,19 +246,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
                 totaltime, centralHopLatency, max_dependency, ccosts[0], lowerBound / ccosts[0], networkParams[1],
                 number_parents]
 
-    # new = False
-    # try:
-    #      f = open("./res/"+str(filename)+".csv")   
-    # except FileNotFoundError:
-    #      new = True           
 
-    # with open("./res/"+str(filename)+".csv", "a") as result:
-    #    writer = csv.writer(result)  
-    #    if new:
-    #        writer.writerow(schema)              
-    #    writer.writerow(myResult)
-    #with open('EvaluationPlan',  'wb') as EvaluationPlan_file:
-    # pickle.dump([myPlan, ID, MSPlacements], EvaluationPlan_file)
     eval_Plan = [myPlan, ID, MSPlacements]
     experiment_result = [ID, costs]
     return eval_Plan, central_eval_plan, experiment_result, myResult
