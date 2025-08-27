@@ -92,11 +92,9 @@ def compute_operator_placement_with_prepp(
     # New placement engine implementation
     try:
         from .initialization import initialize_placement_state
-        from .candidate_selection import check_possible_placement_nodes_for_input, check_resources
-        from .subgraph import extract_subgraph
+        from .candidate_selection import check_resources
         from .cost_calculation import calculate_prepp_with_placement, calculate_final_costs_for_sending_to_sinks
         from .fallback import get_strategy_recommendation
-        from .determinism import validate_deterministic_inputs
         from .state import PlacementDecision, PlacementDecisionTracker
 
         # Initialize placement state
@@ -150,7 +148,7 @@ def compute_operator_placement_with_prepp(
 
             # Adjust costs for events already available at the node
             available_events = set(global_event_tracker.get_events_at_node(node))
-            needed_events = set(child.evtype for child in projection.children)
+            needed_events = get_events_for_projection(projection)
 
             if available_events & needed_events:  # If there's intersection
                 logger.info(f"Node {node} already has events: {available_events & needed_events}")
@@ -163,8 +161,8 @@ def compute_operator_placement_with_prepp(
             if projection in self.query_workload and node not in sinks:
                 logger.info(f"Adding transmission costs from node {node} to sinks")
                 results = calculate_final_costs_for_sending_to_sinks(
-                    all_push_costs,
                     push_pull_costs,
+                    all_push_costs,
                     latency,
                     transmission_ratio,
                     node,
@@ -220,9 +218,7 @@ def compute_operator_placement_with_prepp(
         global_tracker.store_placement_decisions(projection, placement_decisions)
         logger.info(f"Stored placement decisions for {projection} in global tracker")
 
-        events = []
-        for children in projection.children:
-            events.append(children.evtype)
+        events = list(get_events_for_projection(projection))
         global_event_tracker.add_events_at_node(
             node_id=best_decision.node,
             events=events,
@@ -274,7 +270,7 @@ def _convert_to_legacy_format(best_decision, placement_decisions):
     Returns:
         tuple: Legacy format tuple
     """
-    from EvaluationPlan import Projection, Instance
+    from EvaluationPlan import Projection
 
     # Create minimal legacy structures
     costs = best_decision.costs
@@ -313,10 +309,11 @@ def check_if_projection_has_placed_subqueries(projection, mycombi, global_tracke
         # Check if any subqueries have existing placements
         for subquery in subqueries:
             if hasattr(subquery, 'leafs') and global_tracker.has_placement_for(subquery):
-                existing_decision = global_tracker.get_best_placement(subquery)
                 return True
 
-    return False
+        return False
+    else:
+        raise ValueError("Projection not found in mycombi or invalid structure")
 
 
 def get_all_possible_placement_nodes(projection, placement_state, network_data, index_event_nodes, event_nodes,
@@ -445,3 +442,33 @@ def handle_intersection(results, available_events, needed_events, logger):
     logger.info(f"Adjusted costs - Push-Pull: {adjusted_push_pull_costs}, All-Push: {adjusted_all_push_costs}")
 
     return adjusted_all_push_costs, adjusted_push_pull_costs, current_latency, adjusted_transmission_ratio
+
+
+def get_events_for_projection(projection):
+    """
+    Recursively extract all primitive events from a projection.
+    
+    Args:
+        projection: Tree node (SEQ, AND, or PrimEvent)
+        
+    Returns:
+        set: Set of primitive event types (strings) contained in the projection
+    """
+    from helper.Tree import PrimEvent, SEQ, AND
+    events = set()
+    
+    # Handle primitive events directly
+    if isinstance(projection, PrimEvent):
+        return {projection.evtype}
+    
+    # Handle composite projections (SEQ, AND, etc.)
+    if hasattr(projection, 'children') and projection.children:
+        for child in projection.children:
+            if isinstance(child, PrimEvent):
+                events.add(child.evtype)
+            else:
+                # We have a subquery - call recursively and merge the sets
+                child_events = get_events_for_projection(child)
+                events.update(child_events)
+    
+    return events
