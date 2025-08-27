@@ -10,7 +10,6 @@ import networkx as nx
 from helper.structures import getNodes
 from Node import Node
 from .logging import get_placement_logger
-from .state import SubgraphBundle
 
 logger = get_placement_logger(__name__)
 

@@ -6,7 +6,7 @@ and dual ID tracking for original and subgraph node IDs.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Optional
 
 
 def get_placement_logger(name: str) -> logging.Logger:

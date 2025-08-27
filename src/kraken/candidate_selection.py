@@ -5,7 +5,7 @@ This module handles the selection of candidate nodes for placement
 and validation of their resource availability.
 """
 
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any
 from helper.structures import getNodes
 from .logging import get_placement_logger
 from .state import ResourceReport

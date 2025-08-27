@@ -1,6 +1,6 @@
 """Event placement tracking module for distributed query processing."""
 
-from typing import Dict, List, Optional, Set, Any, Union
+from typing import Dict, List, Optional, Set, Any
 from dataclasses import dataclass
 
 

@@ -7,7 +7,7 @@ are zero-logic wrappers that simply forward calls to legacy functions
 while documenting their expected shapes and providing clear error messages.
 """
 
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple
 import io
 from .logging import get_placement_logger
 

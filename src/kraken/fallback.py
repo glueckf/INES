@@ -5,7 +5,7 @@ This module provides fallback cost calculation when push-pull
 strategies fail or encounter errors.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, Optional
 from .logging import get_placement_logger
 from .state import CostingPolicy
 
