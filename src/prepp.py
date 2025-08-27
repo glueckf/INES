@@ -514,28 +514,28 @@ def determine_randomized_distribution_push_pull_costs(
                     for i, aquired_eventtype in enumerate(exact_push_pull_plan_for_a_projection):
 
                         pull_request_costs, pull_request_latency = (
-                        push_pull_plan_generator_exact.determine_costs_for_pull_request(
-                            eventtypes_in_pull_request=used_eventtypes_to_pull[i],
-                            eventtypes_to_acquire=aquired_eventtype,
-                            eventtype_to_sources_map=eventtype_to_sources_map,
-                            received_eventtypes=received_eventtypes,
-                            eventtypes_single_selectivities=eventtypes_single_selectivities,
-                            all_eventtype_output_rates=all_eventtype_output_rates,
-                            allPairs=allPairs,
-                            current_node=current_node,
-                            aquisition_steps=aquisition_steps
-                        ))
+                            push_pull_plan_generator_exact.determine_costs_for_pull_request(
+                                eventtypes_in_pull_request=used_eventtypes_to_pull[i],
+                                eventtypes_to_acquire=aquired_eventtype,
+                                eventtype_to_sources_map=eventtype_to_sources_map,
+                                received_eventtypes=received_eventtypes,
+                                eventtypes_single_selectivities=eventtypes_single_selectivities,
+                                all_eventtype_output_rates=all_eventtype_output_rates,
+                                allPairs=allPairs,
+                                current_node=current_node,
+                                aquisition_steps=aquisition_steps
+                            ))
 
                         pull_response_costs, pull_response_latency = (
-                        push_pull_plan_generator_exact.determine_costs_for_pull_response(
-                            eventtypes_in_pull_request=used_eventtypes_to_pull[i],
-                            eventtypes_to_acquire=aquired_eventtype,
-                            eventtype_to_sources_map=eventtype_to_sources_map,
-                            eventtypes_single_selectivities=eventtypes_single_selectivities,
-                            all_eventtype_output_rates=all_eventtype_output_rates,
-                            allPairs=allPairs,
-                            current_node=current_node
-                        ))
+                            push_pull_plan_generator_exact.determine_costs_for_pull_response(
+                                eventtypes_in_pull_request=used_eventtypes_to_pull[i],
+                                eventtypes_to_acquire=aquired_eventtype,
+                                eventtype_to_sources_map=eventtype_to_sources_map,
+                                eventtypes_single_selectivities=eventtypes_single_selectivities,
+                                all_eventtype_output_rates=all_eventtype_output_rates,
+                                allPairs=allPairs,
+                                current_node=current_node
+                            ))
 
                         aquisition_steps[query.query][i] = {
                             'pull_set': used_eventtypes_to_pull[i],
@@ -549,12 +549,18 @@ def determine_randomized_distribution_push_pull_costs(
                         }
 
                         for eventtype in aquired_eventtype:
-                            eventtypes = push_pull_plan_generator_exact.determine_all_primitive_events_of_projection(eventtype)
+                            eventtypes = push_pull_plan_generator_exact.determine_all_primitive_events_of_projection(
+                                eventtype)
                             for event in eventtypes:
                                 if event not in received_eventtypes:
                                     received_eventtypes.append(event)
                 else:
-                    raise ValueError("Length of push pull plan and events to pull do not match!")
+                    # raise ValueError("Length of push pull plan and events to pull do not match!")
+                    # Fail silently and just add an error message to the acquisition steps
+                    aquisition_steps[query.query] = {
+                        'error': 'Length of push pull plan and events to pull do not match!'
+                    }
+
 
                 if plan_print == "t":
                     # print aquisition steps
@@ -837,313 +843,326 @@ def generate_prePP(
     eventtype_to_sources_map = {}
     content = input_buffer.getvalue()
     input_buffer.seek(0)
-    for line in input_buffer:
-        line = line.strip()
-        OLD_SECTION = CURRENT_SECTION
-        CURRENT_SECTION = get_current_section(line, CURRENT_SECTION)
-        if OLD_SECTION != CURRENT_SECTION:
-            continue
-
-        if CURRENT_SECTION == NETWORK:
-            if not "Eventrates: [" in line:
+    try:
+        for line in input_buffer:
+            line = line.strip()
+            OLD_SECTION = CURRENT_SECTION
+            CURRENT_SECTION = get_current_section(line, CURRENT_SECTION)
+            if OLD_SECTION != CURRENT_SECTION:
                 continue
-            output_rates = extract_network_node(line)
 
-            if sum(output_rates) > current_highest:
-                single_sink_evaluation_node = current_node
-                current_highest = sum(output_rates)
-            result = extract_node_events_produced(output_rates, current_node, all_eventtype_output_rates,
-                                                  eventtype_to_sources_map)
-            current_node += 1
-            if result != 0:
-                network.append(result)
+            if CURRENT_SECTION == NETWORK:
+                if not "Eventrates: [" in line:
+                    continue
+                output_rates = extract_network_node(line)
 
-        if CURRENT_SECTION == QUERIES:
-            extract_queries(line, queries_to_process)
+                if sum(output_rates) > current_highest:
+                    single_sink_evaluation_node = current_node
+                    current_highest = sum(output_rates)
+                result = extract_node_events_produced(output_rates, current_node, all_eventtype_output_rates,
+                                                      eventtype_to_sources_map)
+                current_node += 1
+                if result != 0:
+                    network.append(result)
 
-        if CURRENT_SECTION == MUSE_GRAPH:
-            if "SELECT" in line and "ON" in line:
-                # Split the line at "SELECT" and "ON"
-                # print("SPlitting")
-                select_part = line.split("SELECT")[1]  # Get everything after SELECT
-                if "FROM" in select_part:
-                    # Old format: SELECT query FROM ... ON
-                    query = select_part.split("FROM")[0].strip()
-                else:
-                    # New format: SELECT query ON
-                    query = select_part.split("ON")[0].strip()
+            if CURRENT_SECTION == QUERIES:
+                extract_queries(line, queries_to_process)
 
-                # # Now split the line at "ON" to get the part with the node
-                # on_split = line.split("ON")[1]
-
-                # # Extract the node(s), splitting by commas if there are multiple values
-                # node_part = on_split.split("{")[1].split("}")[0].strip()
-
-                # # Convert the node part into a list of integers (comma-separated values)
-                # nodes = [int(n.strip()) for n in node_part.split(",")]
-
-                # Debugging regarding errors in ms placement
-                try:
-                    on_split = line.split("ON", 1)[1]
-                    if "{" in on_split and "}" in on_split:
-                        node_part = on_split.split("{", 1)[1].split("}", 1)[0].strip()
-                        if node_part:
-                            nodes = [int(n.strip()) for n in node_part.split(",")]
-                        else:
-                            # print(f"[Warning] Empty node block found in line: '{line}'")
-                            nodes = []
+            if CURRENT_SECTION == MUSE_GRAPH:
+                if "SELECT" in line and "ON" in line:
+                    # Split the line at "SELECT" and "ON"
+                    # print("SPlitting")
+                    select_part = line.split("SELECT")[1]  # Get everything after SELECT
+                    if "FROM" in select_part:
+                        # Old format: SELECT query FROM ... ON
+                        query = select_part.split("FROM")[0].strip()
                     else:
-                        # print(f"[Warnung] No valid node block in '{{}}' found: '{on_split.strip()}'")
+                        # New format: SELECT query ON
+                        query = select_part.split("ON")[0].strip()
+
+                    # # Now split the line at "ON" to get the part with the node
+                    # on_split = line.split("ON")[1]
+
+                    # # Extract the node(s), splitting by commas if there are multiple values
+                    # node_part = on_split.split("{")[1].split("}")[0].strip()
+
+                    # # Convert the node part into a list of integers (comma-separated values)
+                    # nodes = [int(n.strip()) for n in node_part.split(",")]
+
+                    # Debugging regarding errors in ms placement
+                    try:
+                        on_split = line.split("ON", 1)[1]
+                        if "{" in on_split and "}" in on_split:
+                            node_part = on_split.split("{", 1)[1].split("}", 1)[0].strip()
+                            if node_part:
+                                nodes = [int(n.strip()) for n in node_part.split(",")]
+                            else:
+                                # print(f"[Warning] Empty node block found in line: '{line}'")
+                                nodes = []
+                        else:
+                            # print(f"[Warnung] No valid node block in '{{}}' found: '{on_split.strip()}'")
+                            nodes = []
+                    except (IndexError, ValueError) as e:
+                        # print(f"[Error] Parsing from line failed: '{line}' → {e}")
                         nodes = []
-                except (IndexError, ValueError) as e:
-                    # print(f"[Error] Parsing from line failed: '{line}' → {e}")
-                    nodes = []
 
-                # Store the query and the node(s) list in the dictionary
-                query_node_dict[query] = nodes
+                    # Store the query and the node(s) list in the dictionary
+                    query_node_dict[query] = nodes
 
-                for node in nodes:
-                    if node not in node_prim_events_dict:
-                        node_prim_events_dict[node] = set()
+                    for node in nodes:
+                        if node not in node_prim_events_dict:
+                            node_prim_events_dict[node] = set()
 
-                    # Get the primitive events for this query
-                    prim_events = determine_all_primitive_events_of_projection(query)
-                    # Store primitive events in the new dictionary with node as the key
-                    node_prim_events_dict[node].update(prim_events)
+                        # Get the primitive events for this query
+                        prim_events = determine_all_primitive_events_of_projection(query)
+                        # Store primitive events in the new dictionary with node as the key
+                        node_prim_events_dict[node].update(prim_events)
 
-            all_event_types = []
+                all_event_types = []
 
-            for query_to_process in queries_to_process:
-                for event_type in determine_all_primitive_events_of_projection(query_to_process):
-                    all_event_types.append(event_type)
+                for query_to_process in queries_to_process:
+                    for event_type in determine_all_primitive_events_of_projection(query_to_process):
+                        all_event_types.append(event_type)
 
-            for nw in network:
-                for event_type in nw:
-                    if event_type not in all_event_types:
-                        nw.remove(event_type)
-            # Was ist hier die Logik um Central Costs = total sum - current_highest zu berechnen?
-            current_highest = 0
-            current_value = 0
-            total_sum = 0
-            # non_leaf_nodes = [x for x in network if len(x) == 0]
-            # print(non_leaf_nodes)
-            "Hier berechne ich immer die Summe der Rates pro Leaf Node"
-            "Der höchste Wert wird als Single Sink gewählt und das soll simulieren, Central Costs!"
-            "TODO hier muss entweder Node 0 immer als Single Sink gewählt werden. Oder wir nehmen den INEv Wert bzw. berechnen den Neu"
-            "Wir brauchen hier nur unser allPairs array aus INEv"
-            for node_idx, nw in enumerate(network):
-                for event_type in nw:
-                    current_value += all_eventtype_output_rates[event_type]
-                    total_sum += all_eventtype_output_rates[event_type]
-                if current_value > current_highest:
-                    current_highest = current_value
-                    single_sink_evaluation_node = node_idx
+                for nw in network:
+                    for event_type in nw:
+                        if event_type not in all_event_types:
+                            nw.remove(event_type)
+                # Was ist hier die Logik um Central Costs = total sum - current_highest zu berechnen?
+                current_highest = 0
                 current_value = 0
+                total_sum = 0
+                # non_leaf_nodes = [x for x in network if len(x) == 0]
+                # print(non_leaf_nodes)
+                "Hier berechne ich immer die Summe der Rates pro Leaf Node"
+                "Der höchste Wert wird als Single Sink gewählt und das soll simulieren, Central Costs!"
+                "TODO hier muss entweder Node 0 immer als Single Sink gewählt werden. Oder wir nehmen den INEv Wert bzw. berechnen den Neu"
+                "Wir brauchen hier nur unser allPairs array aus INEv"
+                for node_idx, nw in enumerate(network):
+                    for event_type in nw:
+                        current_value += all_eventtype_output_rates[event_type]
+                        total_sum += all_eventtype_output_rates[event_type]
+                    if current_value > current_highest:
+                        current_highest = current_value
+                        single_sink_evaluation_node = node_idx
+                    current_value = 0
 
-            query_obj = Query_fragment("", [], [], "")
-            if query:  # Use the correctly parsed query from above
-                query_obj.query = query
+                query_obj = Query_fragment("", [], [], "")
+                if query:  # Use the correctly parsed query from above
+                    query_obj.query = query
 
-            if query_obj.query in queries_to_process:
-                # print("single_sink_evaluation_node",single_sink_evaluation_node)
-                single_sink_query_network.append(
-                    Query_fragment(query_obj.query, determine_all_primitive_events_of_projection(query_obj.query),
-                                   [single_sink_evaluation_node], ""))
+                if query_obj.query in queries_to_process:
+                    # print("single_sink_evaluation_node",single_sink_evaluation_node)
+                    single_sink_query_network.append(
+                        Query_fragment(query_obj.query, determine_all_primitive_events_of_projection(query_obj.query),
+                                       [single_sink_evaluation_node], ""))
 
-            if extract_muse_graph_sources(line) != None:
-                query_obj.primitive_operators = extract_muse_graph_sub_queries(line)
+                if extract_muse_graph_sources(line) != None:
+                    query_obj.primitive_operators = extract_muse_graph_sub_queries(line)
 
-            # If primitive_operators is still None (new format without FROM), derive from query
-            if query_obj.primitive_operators is None and query:
-                # Extract primitive events from the query structure
-                # For SEQ(A, B, C), AND(A, B), etc., extract the letters inside parentheses
-                import re
-                # Look for content within parentheses, then extract single uppercase letters
-                match = re.search(r'\((.*?)\)', query)
-                if match:
-                    content = match.group(1)
-                    # Extract individual event types (single uppercase letters)
-                    primitive_events = re.findall(r'\b[A-Z]\b', content)
-                    query_obj.primitive_operators = primitive_events
-                else:
-                    query_obj.primitive_operators = []
+                # If primitive_operators is still None (new format without FROM), derive from query
+                if query_obj.primitive_operators is None and query:
+                    # Extract primitive events from the query structure
+                    # For SEQ(A, B, C), AND(A, B), etc., extract the letters inside parentheses
+                    import re
+                    # Look for content within parentheses, then extract single uppercase letters
+                    match = re.search(r'\((.*?)\)', query)
+                    if match:
+                        content = match.group(1)
+                        # Extract individual event types (single uppercase letters)
+                        primitive_events = re.findall(r'\b[A-Z]\b', content)
+                        query_obj.primitive_operators = primitive_events
+                    else:
+                        query_obj.primitive_operators = []
 
-            if extract_muse_graph_sources(line) != None:
-                query_obj.node_placement = extract_muse_graph_sources(line)
+                if extract_muse_graph_sources(line) != None:
+                    query_obj.node_placement = extract_muse_graph_sources(line)
 
-            if extract_muse_graph_forbidden(line) != None:
-                query_obj.forbidden_event_types = extract_muse_graph_forbidden(line)
+                if extract_muse_graph_forbidden(line) != None:
+                    query_obj.forbidden_event_types = extract_muse_graph_forbidden(line)
 
-            # print(f"[DEBUG] Adding query to network: query='{query_obj.query}', node_placement={getattr(query_obj, 'node_placement', 'None')}")
-            query_network.append(query_obj)
-        all_event_combinations = []
-        if CURRENT_SECTION == SELECTIVITIES:
-            extract_muse_graph_selectivities(line, all_event_combinations, eventtype_pair_to_selectivity)
+                # print(f"[DEBUG] Adding query to network: query='{query_obj.query}', node_placement={getattr(query_obj, 'node_placement', 'None')}")
+                query_network.append(query_obj)
+            all_event_combinations = []
+            if CURRENT_SECTION == SELECTIVITIES:
+                extract_muse_graph_selectivities(line, all_event_combinations, eventtype_pair_to_selectivity)
 
-    """Calculating Total Costs:
-    1. Iterate over my query_nod_dict dictionary. For each query, get the node(s) from the dictionary.
-    2. Iterate over the nodes and for each query get the PrimEvents using determine_all_primitive_events_of_projection.
-    3. creating a dict with the sink node as key and prim events as values.
-    
-    """
-    # Optional: Convert sets back to lists if you need lists as the final output
-    for node in node_prim_events_dict:
-        node_prim_events_dict[node] = sorted(list(node_prim_events_dict[node]))
-    total_cost = 0
+        """Calculating Total Costs:
+        1. Iterate over my query_nod_dict dictionary. For each query, get the node(s) from the dictionary.
+        2. Iterate over the nodes and for each query get the PrimEvents using determine_all_primitive_events_of_projection.
+        3. creating a dict with the sink node as key and prim events as values.
 
-    # TODO: Fix costs! Currently it calculates all-push-costs for every singly node making the costs way to high,
-    #  since pushing all events to node 0 already includes pushing events through an intermediate node in the network,
-    #  so we do not need to count the separate costs of pushing events to the intermediate node into the all push costs
-    for node in node_prim_events_dict:
-        "Here we are in our Sinks"
-        for prim_event in node_prim_events_dict[node]:
-            "Iterate over all PrimEvents of the Sink"
-            "Calculate the Costs to send the PrimEvent to the Sink"
-            "Rate * Path"
-            for source in eventtype_to_sources_map[prim_event]:
-                "Iterate over all Sources of the PrimEvent"
+        """
+        # Optional: Convert sets back to lists if you need lists as the final output
+        for node in node_prim_events_dict:
+            node_prim_events_dict[node] = sorted(list(node_prim_events_dict[node]))
+        total_cost = 0
+
+        # TODO: Fix costs! Currently it calculates all-push-costs for every singly node making the costs way to high,
+        #  since pushing all events to node 0 already includes pushing events through an intermediate node in the network,
+        #  so we do not need to count the separate costs of pushing events to the intermediate node into the all push costs
+        for node in node_prim_events_dict:
+            "Here we are in our Sinks"
+            for prim_event in node_prim_events_dict[node]:
+                "Iterate over all PrimEvents of the Sink"
                 "Calculate the Costs to send the PrimEvent to the Sink"
                 "Rate * Path"
-                rate = all_eventtype_output_rates[prim_event]
-                cost = allPairs[node][source] * rate
-                total_cost += cost
-    filtered_dict = {k: v for k, v in query_node_dict.items() if v != [0]}
+                for source in eventtype_to_sources_map[prim_event]:
+                    "Iterate over all Sources of the PrimEvent"
+                    "Calculate the Costs to send the PrimEvent to the Sink"
+                    "Rate * Path"
+                    rate = all_eventtype_output_rates[prim_event]
+                    cost = allPairs[node][source] * rate
+                    total_cost += cost
+        filtered_dict = {k: v for k, v in query_node_dict.items() if v != [0]}
 
-    # print(f"total central push cost is {total_cost}")
-    central_push_costs = total_cost
-    reversed_query_network = []
-    # print(f"[DEBUG] Original query_network has {len(query_network)} queries")
-    for i in range(len(query_network) - 1, -1, -1):
-        # print(f"[DEBUG] Processing query_network[{i}]: '{query_network[i].query}'")
-        reversed_query_network.append(query_network[i])
-        if query_network[i].query == '':
-            continue
-        multi_sink_placement = is_single_sink_placement(query_network[i])
+        # print(f"total central push cost is {total_cost}")
+        central_push_costs = total_cost
+        reversed_query_network = []
+        # print(f"[DEBUG] Original query_network has {len(query_network)} queries")
+        for i in range(len(query_network) - 1, -1, -1):
+            # print(f"[DEBUG] Processing query_network[{i}]: '{query_network[i].query}'")
+            reversed_query_network.append(query_network[i])
+            if query_network[i].query == '':
+                continue
+            multi_sink_placement = is_single_sink_placement(query_network[i])
 
-        eventtype_to_sources_map[query_network[i].query] = query_network[i].node_placement
-        all_eventtype_output_rates[query_network[i].query] = determine_total_query_rate(query_network[i],
-                                                                                        all_eventtype_output_rates,
-                                                                                        eventtype_to_sources_map,
-                                                                                        eventtype_pair_to_selectivity)
-    # for query in query_network:
-    #     print(query.query)
-    # print("~~")
-    query_network = reversed_query_network
-    # for query in single_sink_query_network:
-    #     print(query.query)
+            eventtype_to_sources_map[query_network[i].query] = query_network[i].node_placement
+            all_eventtype_output_rates[query_network[i].query] = determine_total_query_rate(query_network[i],
+                                                                                            all_eventtype_output_rates,
+                                                                                            eventtype_to_sources_map,
+                                                                                            eventtype_pair_to_selectivity)
+        # for query in query_network:
+        #     print(query.query)
+        # print("~~")
+        query_network = reversed_query_network
+        # for query in single_sink_query_network:
+        #     print(query.query)
 
-    all_needed_primitive_events, biggest_query_length_to_be_processed = get_all_distinct_eventtypes_of_used_queries_and_largest_query(
-        queries_to_process)
-    number_of_samples = int(runs)
-    all_exact_costs = 0
-    # print(queries_to_process)
-    old_eventtype_pair_to_selectivity = eventtype_pair_to_selectivity.copy()
+        all_needed_primitive_events, biggest_query_length_to_be_processed = get_all_distinct_eventtypes_of_used_queries_and_largest_query(
+            queries_to_process)
+        number_of_samples = int(runs)
+        all_exact_costs = 0
+        # print(queries_to_process)
+        old_eventtype_pair_to_selectivity = eventtype_pair_to_selectivity.copy()
 
-    query_network_copy = copy.deepcopy(query_network)
-    single_sink_query_network_copy = copy.deepcopy(single_sink_query_network)
-    all_costs = []
+        query_network_copy = copy.deepcopy(query_network)
+        single_sink_query_network_copy = copy.deepcopy(single_sink_query_network)
+        all_costs = []
 
-    highest_primitive_eventtype_to_be_processed = all_needed_primitive_events[len(all_needed_primitive_events) - 1]
-    all_eventtypes = [chr(i) for i in range(ord('A'), ord(highest_primitive_eventtype_to_be_processed) + 1)]
-    eventtype_combinations = determine_permutations_of_all_relevant_lengths(all_eventtypes, 2,
-                                                                            biggest_query_length_to_be_processed)
+        highest_primitive_eventtype_to_be_processed = all_needed_primitive_events[len(all_needed_primitive_events) - 1]
+        all_eventtypes = [chr(i) for i in range(ord('A'), ord(highest_primitive_eventtype_to_be_processed) + 1)]
+        eventtype_combinations = determine_permutations_of_all_relevant_lengths(all_eventtypes, 2,
+                                                                                biggest_query_length_to_be_processed)
 
-    exact_accumulated_exec_time = 0
-    exact_worst_generated_costs = 0
-    exact_best_generated_costs = float('inf')
+        exact_accumulated_exec_time = 0
+        exact_worst_generated_costs = 0
+        exact_best_generated_costs = float('inf')
 
-    greedy_costs_avg = []
-    sampling_costs_avg = []
-    factorial_costs_avg = []
-    exact_costs_avg = []
+        greedy_costs_avg = []
+        sampling_costs_avg = []
+        factorial_costs_avg = []
+        exact_costs_avg = []
 
-    for idx in range(1, number_of_samples + 1):
-        eventtype_pair_to_selectivity = old_eventtype_pair_to_selectivity.copy()
-        single_selectivity_of_eventtype_within_projection = generate_hardcoded_projection_selectivities()
-        determine_all_single_selectivities_for_every_possible_projection(eventtype_pair_to_selectivity,
-                                                                         all_eventtype_output_rates,
-                                                                         eventtype_to_sources_map,
-                                                                         single_selectivity_of_eventtype_within_projection,
-                                                                         queries_to_process,
-                                                                         is_deterministic)
+        for idx in range(1, number_of_samples + 1):
+            eventtype_pair_to_selectivity = old_eventtype_pair_to_selectivity.copy()
+            if is_deterministic:
+                single_selectivity_of_eventtype_within_projection = generate_hardcoded_projection_selectivities()
+            else:
+                single_selectivity_of_eventtype_within_projection = {}
+            determine_all_single_selectivities_for_every_possible_projection(eventtype_pair_to_selectivity,
+                                                                             all_eventtype_output_rates,
+                                                                             eventtype_to_sources_map,
+                                                                             single_selectivity_of_eventtype_within_projection,
+                                                                             queries_to_process,
+                                                                             is_deterministic)
 
-        eventtypes_single_selectivities = generate_hardcoded_single_selectivities()
-        single_selectivity_of_eventtype_within_projection = generate_hardcoded_projection_selectivities()
+            if is_deterministic:
+                eventtypes_single_selectivities = generate_hardcoded_single_selectivities()
+                single_selectivity_of_eventtype_within_projection = generate_hardcoded_projection_selectivities()
+            else:
+                eventtypes_single_selectivities = generate_hardcoded_single_selectivities()
+                # Keep the dynamically generated selectivities from determine_all_single_selectivities_for_every_possible_projection
 
-        q_network = query_network_copy if method == "ppmuse" else single_sink_query_network_copy
-        # print(f"[DEBUG] About to process q_network with {len(q_network)} queries, method={method}")
-        for i, q in enumerate(q_network):
-            # print(f"[DEBUG] q_network[{i}]: query='{q.query}', node_placement={getattr(q, 'node_placement', 'None')}")
-            pass
+            q_network = query_network_copy if method == "ppmuse" else single_sink_query_network_copy
+            # print(f"[DEBUG] About to process q_network with {len(q_network)} queries, method={method}")
+            for i, q in enumerate(q_network):
+                # print(f"[DEBUG] q_network[{i}]: query='{q.query}', node_placement={getattr(q, 'node_placement', 'None')}")
+                pass
 
-        if method == "ppmuse":
+            if method == "ppmuse":
 
-            result = determine_randomized_distribution_push_pull_costs(
-                q_network,
-                eventtype_combinations,
-                highest_primitive_eventtype_to_be_processed,
-                algorithm,
-                samples,
-                topk,
-                plan_print,
-                allPairs,
-                eventtype_pair_to_selectivity,
-                eventtype_to_sources_map,
-                all_eventtype_output_rates,
-                eventtypes_single_selectivities,
-                single_selectivity_of_eventtype_within_projection,
-                CLOUD_EVALUATION_NODE
-            )
+                result = determine_randomized_distribution_push_pull_costs(
+                    q_network,
+                    eventtype_combinations,
+                    highest_primitive_eventtype_to_be_processed,
+                    algorithm,
+                    samples,
+                    topk,
+                    plan_print,
+                    allPairs,
+                    eventtype_pair_to_selectivity,
+                    eventtype_to_sources_map,
+                    all_eventtype_output_rates,
+                    eventtypes_single_selectivities,
+                    single_selectivity_of_eventtype_within_projection,
+                    CLOUD_EVALUATION_NODE
+                )
 
-            (greedy_costs,
-             sampling_costs,
-             factorial_costs,
-             exact_costs,
-             greedy_algo_time,
-             exact_algo_time,
-             factorial_algo_time,
-             sampling_algo_time,
-             max_latency,
-             node_received_eventtypes,
-             aquisition_steps
-             ) = result
+                (greedy_costs,
+                 sampling_costs,
+                 factorial_costs,
+                 exact_costs,
+                 greedy_algo_time,
+                 exact_algo_time,
+                 factorial_algo_time,
+                 sampling_algo_time,
+                 max_latency,
+                 node_received_eventtypes,
+                 aquisition_steps
+                 ) = result
 
-            greedy_costs_avg.append(greedy_costs)
-            sampling_costs_avg.append(sampling_costs)
-            factorial_costs_avg.append(factorial_costs)
-            exact_costs_avg.append(exact_costs)
-            # print(f"greedy_costs: {greedy_costs}")
-            # print(f"sampling_costs: {sampling_costs}")
-            # print(f"factorial_costs: {factorial_costs}")
-            # print(f"exact_costs: {exact_costs}")
+                greedy_costs_avg.append(greedy_costs)
+                sampling_costs_avg.append(sampling_costs)
+                factorial_costs_avg.append(factorial_costs)
+                exact_costs_avg.append(exact_costs)
+                # print(f"greedy_costs: {greedy_costs}")
+                # print(f"sampling_costs: {sampling_costs}")
+                # print(f"factorial_costs: {factorial_costs}")
+                # print(f"exact_costs: {exact_costs}")
 
-            # print("§§§§§§§§§§ Push-Pull MuSE costs §§§§§§§§§§")
-            if algorithm == "e":
-                # print("####### EXACT #######")
-                # print("Exact network costs:", exact_costs)
-                all_exact_costs += exact_costs
-                # print("Exact Average:", all_exact_costs/idx)
+                # print("§§§§§§§§§§ Push-Pull MuSE costs §§§§§§§§§§")
+                if algorithm == "e":
+                    # print("####### EXACT #######")
+                    # print("Exact network costs:", exact_costs)
+                    all_exact_costs += exact_costs
+                    # print("Exact Average:", all_exact_costs/idx)
 
-                endTransmissionRatio = (all_exact_costs / idx) / central_push_costs if central_push_costs != 0 else 0
-                # print("Exact Average Transmission Ratio:", endTransmissionRatio)
+                    endTransmissionRatio = (
+                                                   all_exact_costs / idx) / central_push_costs if central_push_costs != 0 else 0
+                    # print("Exact Average Transmission Ratio:", endTransmissionRatio)
 
-                #print("Exact Average Transsmission Ratio:", (all_exact_costs/idx) / central_push_costs)
-                if exact_costs < exact_best_generated_costs:
-                    exact_best_generated_costs = exact_costs
+                    # print("Exact Average Transsmission Ratio:", (all_exact_costs/idx) / central_push_costs)
+                    if exact_costs < exact_best_generated_costs:
+                        exact_best_generated_costs = exact_costs
 
-                if exact_costs > exact_worst_generated_costs:
-                    exact_worst_generated_costs = exact_costs
+                    if exact_costs > exact_worst_generated_costs:
+                        exact_worst_generated_costs = exact_costs
 
-                exact_accumulated_exec_time += exact_algo_time
-                # print("Average exact algorithm execution time:", exact_accumulated_exec_time/idx)
+                    exact_accumulated_exec_time += exact_algo_time
+                    # print("Average exact algorithm execution time:", exact_accumulated_exec_time/idx)
 
-            query_network_copy = copy.deepcopy(query_network)
-            single_sink_query_network_copy = copy.deepcopy(single_sink_query_network)
+                query_network_copy = copy.deepcopy(query_network)
+                single_sink_query_network_copy = copy.deepcopy(single_sink_query_network)
 
-    end_time = time.time()
-    total_time = end_time - start_time
-    exact_cost = sum(exact_costs_avg) / len(exact_costs_avg)
-    pushPullTime = total_time
-    maxPushPullLatency = max_latency
-
-    return [exact_cost, pushPullTime, maxPushPullLatency, endTransmissionRatio, total_cost, node_received_eventtypes, aquisition_steps]
+        end_time = time.time()
+        total_time = end_time - start_time
+        exact_cost = sum(exact_costs_avg) / len(exact_costs_avg)
+        pushPullTime = total_time
+        maxPushPullLatency = max_latency
+        return [exact_cost, pushPullTime, maxPushPullLatency, endTransmissionRatio, total_cost,
+                node_received_eventtypes,
+                aquisition_steps]
+    except Exception as e:
+        print(f"[Error] Reading input buffer failed: {e}")
+        return None
