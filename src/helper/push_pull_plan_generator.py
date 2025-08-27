@@ -60,6 +60,26 @@ class Initiate():
         
         self.optimal_pull_strategy_cache = {}
     
+    def get_selectivity_with_fallback(self, event_type, combination):
+        """
+        Try different key variations to find selectivity value.
+        1. Try original key: event_type|combination
+        2. Try with sorted combination: event_type|sorted_combination  
+        3. Default to 1.0 if not found
+        """
+        # Original key
+        original_key = str(event_type) + '|' + str(combination)
+        if original_key in self.single_selectivity_of_eventtype_within_projection:
+            return self.single_selectivity_of_eventtype_within_projection[original_key]
+        
+        # Try with sorted combination (handles order variations like BH vs HB)
+        sorted_combination = ''.join(sorted(str(combination)))
+        sorted_key = str(event_type) + '|' + sorted_combination
+        if sorted_key in self.single_selectivity_of_eventtype_within_projection:
+            return self.single_selectivity_of_eventtype_within_projection[sorted_key]
+            
+        # Default fallback
+        return 1.0
 
     ######################Greedy Algorithm###############################################
 
@@ -108,7 +128,7 @@ class Initiate():
                         
                     single_selectivity_key = str(prim_event_type) + '|' + sorted_all_eventtypes_key
                     
-                    multiple_single_selectivities *= self.single_selectivity_of_eventtype_within_projection[single_selectivity_key]
+                    multiple_single_selectivities *= self.get_selectivity_with_fallback(prim_event_type, sorted_all_eventtypes_key)
                     
                 current_costs = self.outputrate_map[type_to_acquire] * multiple_single_selectivities * self.determine_correct_number_of_sources(node, type_to_acquire)
                 
@@ -389,7 +409,7 @@ class Initiate():
                         + '|'
                         + self.remove_duplicates_and_sort_key(acquired_eventtypes)
                 )
-                selectivity = self.single_selectivity_of_eventtype_within_projection[single_selectivity_key]
+                selectivity = self.get_selectivity_with_fallback(eventtype_to_pull_with, self.remove_duplicates_and_sort_key(acquired_eventtypes))
                 cost_component = (
                         self.outputrate_map[eventtype_to_pull_with]
                         * selectivity
@@ -416,7 +436,7 @@ class Initiate():
             single_selectivity_key =  str(next_eventtype) + '|' + str(sorted_all_eventtypes_key)
                 
             "TODO hinzufügen von anzahl Hops pro Source durch das Netzwerk"    
-            selectivity = self.single_selectivity_of_eventtype_within_projection[single_selectivity_key]
+            selectivity = self.get_selectivity_with_fallback(next_eventtype, sorted_all_eventtypes_key)
             cost_component = self.outputrate_map[next_eventtype] * selectivity
             optimized_pull_answer += cost_component 
         
@@ -616,7 +636,15 @@ class Initiate():
             for x in plan:
                 tmp_list = list(x)
                 for i in range(0,len(tmp_list)):
-                    tmp_list[i] = self.single_eventtype_to_projection_map[tmp_list[i]]
+                    try:
+                        tmp_list[i] = self.single_eventtype_to_projection_map[tmp_list[i]]
+                    except KeyError as e:
+                        print(f"[ERROR] KeyError in weak_ordered_plans_generator: key '{tmp_list[i]}' not found in single_eventtype_to_projection_map")
+                        print(f"[ERROR] Available keys in single_eventtype_to_projection_map: {list(self.single_eventtype_to_projection_map.keys())}")
+                        print(f"[ERROR] eventtypes_to_match_projection: {eventtypes_to_match_projection}")
+                        print(f"[ERROR] tmp_list: {tmp_list}")
+                        print(f"[ERROR] Current plan: {plan}")
+                        raise
                 tmp.append(tmp_list)
             
             yield tmp
@@ -648,11 +676,22 @@ class Initiate():
 
     #in order to create all weakorders containing arbitrary projections (e.g., A, SEQ(B,C), D,..)
     def initiate_mapping_from_projection_to_single_eventtype(self,eventtypes_to_match_projection):
-        char_counter = 0
-        for eventtype in eventtypes_to_match_projection:
-            self.projection_to_single_eventtype_map[eventtype] = (chr(ord('A')+char_counter))
-            self.single_eventtype_to_projection_map[(chr(ord('A')+char_counter))] = eventtype
-            char_counter+=1
+        try:
+            print(f"[DEBUG] initiate_mapping_from_projection_to_single_eventtype called with: {eventtypes_to_match_projection}")
+            print(f"[DEBUG] Type of eventtypes_to_match_projection: {type(eventtypes_to_match_projection)}")
+            
+            char_counter = 0
+            for eventtype in eventtypes_to_match_projection:
+                print(f"[DEBUG] Processing eventtype: '{eventtype}' (type: {type(eventtype)})")
+                self.projection_to_single_eventtype_map[eventtype] = (chr(ord('A')+char_counter))
+                self.single_eventtype_to_projection_map[(chr(ord('A')+char_counter))] = eventtype
+                char_counter+=1
+                
+            print(f"[DEBUG] Final single_eventtype_to_projection_map: {self.single_eventtype_to_projection_map}")
+        except Exception as e:
+            print(f"[ERROR] Exception in initiate_mapping_from_projection_to_single_eventtype: {e}")
+            print(f"[ERROR] eventtypes_to_match_projection: {eventtypes_to_match_projection}")
+            raise
 
         char_counter = 0
         for eventtype in eventtypes_to_match_projection:
@@ -834,10 +873,20 @@ class Initiate():
         if str(projection_to_process.query) == 'SEQ(A, B, C)':
             print("Debug hook projection SEQ(A, B, C)")
 
-        best_push_pull_plan = ""
-        lowest_normal_costs = float('inf')
+        try:
+            print(f"[DEBUG] determine_exact_push_pull_plan called for query: '{projection_to_process.query}'")
+            print(f"[DEBUG] primitive_operators: {projection_to_process.primitive_operators}")
+            print(f"[DEBUG] node_placement: {projection_to_process.node_placement}")
+            
+            best_push_pull_plan = ""
+            lowest_normal_costs = float('inf')
 
-        self.initiate_mapping_from_projection_to_single_eventtype(projection_to_process.primitive_operators)
+            self.initiate_mapping_from_projection_to_single_eventtype(projection_to_process.primitive_operators)
+        except Exception as e:
+            print(f"[ERROR] Exception in determine_exact_push_pull_plan setup: {e}")
+            print(f"[ERROR] Query: '{projection_to_process.query}'")
+            print(f"[ERROR] primitive_operators: {projection_to_process.primitive_operators}")
+            raise
         
         old_source_sent_this_type_to_node_map = copy.deepcopy(self.source_sent_this_type_to_node)
         
