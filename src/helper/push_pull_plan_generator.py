@@ -473,11 +473,6 @@ class Initiate():
         if key in self.optimal_pull_strategy_cache:
             return self.optimal_pull_strategy_cache[key].lowest_costs, self.optimal_pull_strategy_cache[key].best_step,self.optimal_pull_strategy_cache[key].highest_latency
 
-        if key == ('AB', 'C', 1):
-            print("DEBUG")
-
-
-
         all_permutations = determine_permutations_of_all_relevant_lengths(acquired_eventtypes, 1, len(acquired_eventtypes))
         lowest_costs_for_step = float('inf')
         best_step = ''
@@ -518,9 +513,6 @@ class Initiate():
         costs = 0
 
         available_predicates = []
-
-        if plan == [['SEQ(A, B)'], ['C']]:
-            print("DEBUG")
              
         for eventtype_group in plan:
             for eventtype in eventtype_group:
@@ -558,8 +550,7 @@ class Initiate():
 
 
     def determine_costs_for_projection_on_node(self, plan, projection_to_process, node, node_received_eventtypes,allPairs):
-        if str(projection_to_process.query) == 'SEQ(A, B, C)':
-            print("Debug hook SEQ(A, B, C)")
+
         push = True
         costs = 0
 
@@ -677,21 +668,21 @@ class Initiate():
     #in order to create all weakorders containing arbitrary projections (e.g., A, SEQ(B,C), D,..)
     def initiate_mapping_from_projection_to_single_eventtype(self,eventtypes_to_match_projection):
         try:
-            print(f"[DEBUG] initiate_mapping_from_projection_to_single_eventtype called with: {eventtypes_to_match_projection}")
-            print(f"[DEBUG] Type of eventtypes_to_match_projection: {type(eventtypes_to_match_projection)}")
+            # print(f"[DEBUG] initiate_mapping_from_projection_to_single_eventtype called with: {eventtypes_to_match_projection}")
+            # print(f"[DEBUG] Type of eventtypes_to_match_projection: {type(eventtypes_to_match_projection)}")
             
             char_counter = 0
             for eventtype in eventtypes_to_match_projection:
-                print(f"[DEBUG] Processing eventtype: '{eventtype}' (type: {type(eventtype)})")
+                # print(f"[DEBUG] Processing eventtype: '{eventtype}' (type: {type(eventtype)})")
                 self.projection_to_single_eventtype_map[eventtype] = (chr(ord('A')+char_counter))
                 self.single_eventtype_to_projection_map[(chr(ord('A')+char_counter))] = eventtype
                 char_counter+=1
                 
-            print(f"[DEBUG] Final single_eventtype_to_projection_map: {self.single_eventtype_to_projection_map}")
+            # print(f"[DEBUG] Final single_eventtype_to_projection_map: {self.single_eventtype_to_projection_map}")
         except Exception as e:
             print(f"[ERROR] Exception in initiate_mapping_from_projection_to_single_eventtype: {e}")
             print(f"[ERROR] eventtypes_to_match_projection: {eventtypes_to_match_projection}")
-            raise
+            raise e
 
         char_counter = 0
         for eventtype in eventtypes_to_match_projection:
@@ -870,13 +861,11 @@ class Initiate():
 
     
     def determine_exact_push_pull_plan(self, projection_to_process, node, allPairs):
-        if str(projection_to_process.query) == 'SEQ(A, B, C)':
-            print("Debug hook projection SEQ(A, B, C)")
 
         try:
-            print(f"[DEBUG] determine_exact_push_pull_plan called for query: '{projection_to_process.query}'")
-            print(f"[DEBUG] primitive_operators: {projection_to_process.primitive_operators}")
-            print(f"[DEBUG] node_placement: {projection_to_process.node_placement}")
+            # print(f"[DEBUG] determine_exact_push_pull_plan called for query: '{projection_to_process.query}'")
+            # print(f"[DEBUG] primitive_operators: {projection_to_process.primitive_operators}")
+            # print(f"[DEBUG] node_placement: {projection_to_process.node_placement}")
             
             best_push_pull_plan = ""
             lowest_normal_costs = float('inf')
@@ -916,7 +905,7 @@ class Initiate():
             current_node,
             aquisition_steps,
     ):
-        print("DEBUG")
+
 
         if len(eventtypes_in_pull_request) == 0:
             # We have a push acquisition step, we need to return 0 costs here
@@ -975,23 +964,28 @@ class Initiate():
                 allPairs,
                 current_node
         ):
-        print("DEBUG")
-
-        # Calculate selectivity for combined event types (e.g., if eventtypes_in_pull_request = ['B'] and eventtypes_to_acquire = ['A'], 
-        # then the relevant selectivity would be for 'A|AB')
-        combined_eventtypes = list(set(eventtypes_in_pull_request + eventtypes_to_acquire))
-        combined_eventtypes.sort()  # Sort to ensure consistent ordering
         
-        selectivity = 1.0
-        # Calculate selectivity for all pairs in the combined event types
-        for eventtype in eventtypes_to_acquire:
-            for i in range(len(combined_eventtypes)):
-                for j in range(i + 1, len(combined_eventtypes)):
-                    pair_key = eventtype + '|' + combined_eventtypes[i] + combined_eventtypes[j]
-                    if pair_key in self.single_selectivity_of_eventtype_within_projection:
-                        selectivity *= self.single_selectivity_of_eventtype_within_projection[pair_key]
 
-        # Then let's get the global rate:
+        # Calculate selectivity for combined event types (e.g., if eventtypes_in_pull_request = ['B'] and eventtypes_to_acquire = ['A'],
+        # then the relevant selectivity would be for 'A|AB')
+
+        selectivity = 1.0
+
+        if eventtypes_in_pull_request is not None and len(eventtypes_in_pull_request) > 0:
+            # We have a pull request, so we need to calculate the selectivity based on the combined event types
+            # Calculate selectivity for all pairs in the combined event types
+
+            combined_eventtypes = list(set(eventtypes_in_pull_request + eventtypes_to_acquire))
+            combined_eventtypes.sort()  # Sort to ensure consistent ordering
+
+            for eventtype in eventtypes_to_acquire:
+                for i in range(len(combined_eventtypes)):
+                    for j in range(i + 1, len(combined_eventtypes)):
+                        pair_key = eventtype + '|' + combined_eventtypes[i] + combined_eventtypes[j]
+                        if pair_key in self.single_selectivity_of_eventtype_within_projection:
+                            selectivity *= self.single_selectivity_of_eventtype_within_projection[pair_key]
+
+        # Get the global output rate for all event types to acquire
         global_output_rate = 0
 
         latency = 0
