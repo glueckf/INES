@@ -31,7 +31,8 @@ class PlacementDecision:
     """
     Represents a placement decision for a projection at a specific node.
     """
-    def __init__(self, node, costs, strategy, all_push_costs, push_pull_costs=None, 
+
+    def __init__(self, node, costs, strategy, all_push_costs, push_pull_costs=None,
                  has_sufficient_resources=False, subgraph_info=None, plan_details=None):
         self.node = node
         self.costs = costs
@@ -42,13 +43,13 @@ class PlacementDecision:
         self.subgraph_info = subgraph_info or {}
         self.plan_details = plan_details or {}
         self.savings = all_push_costs - costs if costs < all_push_costs else 0.0
-        
+
     def __str__(self):
         return f"PlacementDecision(node={self.node}, strategy={self.strategy}, costs={self.costs:.2f}, savings={self.savings:.2f})"
-        
+
     def __repr__(self):
         return self.__str__()
-        
+
     def to_dict(self):
         """Convert to dictionary for serialization or logging."""
         return {
@@ -68,56 +69,57 @@ class PlacementDecisionTracker:
     """
     Tracks and manages placement decisions for a projection across multiple nodes.
     """
+
     def __init__(self, projection):
         self.projection = projection
         self.decisions = []  # List of PlacementDecision objects
         self.best_decision = None
-        
+
     def add_decision(self, decision):
         """Add a new placement decision."""
         self.decisions.append(decision)
-        
+
         # Update best decision if this is better
         if self.best_decision is None or decision.costs < self.best_decision.costs:
             self.best_decision = decision
-            
+
     def get_best_decision(self):
         """Get the best (lowest cost) placement decision."""
         return self.best_decision
-        
+
     def get_decisions_by_strategy(self, strategy):
         """Get all decisions using a specific strategy."""
         return [d for d in self.decisions if d.strategy == strategy]
-        
+
     def get_resource_constrained_decisions(self):
         """Get decisions where resources were insufficient for push-pull."""
         return [d for d in self.decisions if not d.has_sufficient_resources]
-        
+
     def summarize(self):
         """Generate a summary of all placement decisions."""
         if not self.decisions:
             return "No placement decisions recorded."
-            
+
         summary = []
         summary.append(f"Placement Analysis for {self.projection}:")
         summary.append(f"  Total candidates evaluated: {len(self.decisions)}")
-        
+
         push_pull_decisions = self.get_decisions_by_strategy('push_pull')
         all_push_decisions = self.get_decisions_by_strategy('all_push')
         resource_constrained = self.get_resource_constrained_decisions()
-        
+
         summary.append(f"  Push-pull viable: {len(push_pull_decisions)}")
         summary.append(f"  All-push only: {len(all_push_decisions)}")
         summary.append(f"  Resource constrained: {len(resource_constrained)}")
-        
+
         if self.best_decision:
             summary.append(f"  Best placement: Node {self.best_decision.node}")
             summary.append(f"  Best strategy: {self.best_decision.strategy}")
             summary.append(f"  Best cost: {self.best_decision.costs:.2f}")
             summary.append(f"  Savings vs all-push: {self.best_decision.savings:.2f}")
-            
+
         return "\n".join(summary)
-        
+
     def export_decisions(self):
         """Export all decisions as a list of dictionaries."""
         return [decision.to_dict() for decision in self.decisions]
@@ -543,8 +545,7 @@ def NEWcomputeMSplacementCosts_Path(self, projection, sourcetypes, destinationty
 #     return costs, pathLength, newInstances
 
 
-def findBestSource(self, sources,
-                   actualDestNodes):  #this is only a heuristic, as the closest node can still be shit with respect to a good steiner tree ?+
+def findBestSource(self, sources, actualDestNodes):  #this is only a heuristic, as the closest node can still be shit with respect to a good steiner tree ?+
     allPairs = self.allPairs
     curmin = np.inf
     for node in sources:
@@ -553,30 +554,6 @@ def findBestSource(self, sources,
             bestSource = node
     return bestSource
 
-
-# def findBestSource(self, sources, actualDestNodes, allowedSources=None):
-#     """
-#     Wählt die beste Quelle aus einer Liste `sources`, die am nächsten zu einem Ziel in `actualDestNodes` liegt.
-#     Optional: Nur Quellen aus `allowedSources` werden berücksichtigt.
-#     """
-#     allPairs = self.allPairs
-#     curmin = np.inf
-#     bestSource = None
-
-#     # Falls eine Filtermenge angegeben ist, filtere die Quellen
-#     filtered_sources = [s for s in sources if allowedSources is None or s in allowedSources]
-
-#     for node in filtered_sources:
-#         min_dist = min([allPairs[node][x] for x in actualDestNodes])
-#         if min_dist < curmin:
-#             curmin = min_dist
-#             bestSource = node
-
-#     return bestSource
-
-
-# def getDestinationsUpstream(projection):
-#     return  range(len(allPairs))       
 
 def ComputeSingleSinkPlacement(projection, combination, noFilter, projFilterDict, EventNodes, IndexEventNodes,
                                network_data, allPairs, mycombi, rates, singleSelectivities, projrates, Graph, network):
@@ -596,36 +573,24 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter, projFilterDict
         intercombi.append(proj)
         #print(list(map(lambda x: str(x), list(projFilterDict.keys()))))
         proj_len = len(proj)
-        
         # Check if proj exists in projFilterDict before calling getMaximalFilter
         if proj in projFilterDict:
             maximal_filter = getMaximalFilter(projFilterDict, proj, noFilter)
             maximal_filter_len = len(maximal_filter)
-            
             if proj_len > 1 and maximal_filter_len > 0:
                 Filters.append((proj, maximal_filter))
                 for etype in maximal_filter:
                     intercombi.append(etype)
-    
     intercombi_set = set(intercombi)
     combination = list(intercombi_set)
 
-    myProjection = Projection(projection, {}, [], [], Filters)  #!
-    # print(f"[NETWORK DEBUG] Network nodes: {len(network)} total")
-    # print(f"[NETWORK DEBUG] Network data structure: {list(network_data.keys())[:5]}..." if len(
-    #     network_data) > 5 else f"[NETWORK DEBUG] Network data: {network_data}")
-    # print(
-    #     f"[NETWORK DEBUG] Sample network info: {[(i, getattr(node, 'computational_power', 'N/A')) for i, node in enumerate(network[:3])]}" if isinstance(
-    #         network, list) else f"[NETWORK DEBUG] Network type: {type(network)}")
-    # Extract only the keys (nodes) with an empty list of connections
-    # iterate through less nodes if possible
+    myProjection = Projection(projection, {}, [], [], Filters)
+
     non_leaf = [node for node, neighbors in network_data.items() if
                 not neighbors and network[node].computational_power >= projection.computing_requirements]
+    
 
     for destination in non_leaf:
-        # consider relevant nodes for placement
-        # if not Graph.nodes[destination].get('relevant', False):  # Out of calculation if not relevant
-        #     continue
         skip_destination = False  # Flag to determine if we should skip this destination
         for eventtype in combination:
             for etb in IndexEventNodes[eventtype]:
@@ -634,7 +599,6 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter, projFilterDict
                     # Use the routing_dict to get the common ancestor
                     common_ancestor = routingDict[destination][source]['common_ancestor']
                     if common_ancestor != destination:
-                        # print(f"Skipping destination {destination} for source {source} (Common ancestor: {common_ancestor})")
                         skip_destination = True
                         break
                 if skip_destination:
@@ -645,50 +609,78 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter, projFilterDict
             continue  # Move on to the next destination without computing costs
 
         mycosts = 0
-        for eventtype in combination:
-            # if not Graph.nodes[destination].get('relevant', False):  # Out of calculation if not relevant
-            #     continue
-            for etb in IndexEventNodes[
-                eventtype]:  #check for all sources #here iterated over length of IndesEventNodes to get all sources for etb Instances
+        eventtype_costs = {}
 
+        '''
+        Problem: Placement does not consider the ouput rate of the projection that is placed
+        Only Calculates the costs of sending the inputs to the possible placement node 
+        
+        The solution would be: 
+        input_costs = mycosts 
+        output_costs = query_output_rate * hops_to_cloud
+        total_costs = input_costs + output_costs
+        '''
+        for eventtype in combination:
+            eventtype_cost = 0
+            for etb_idx, etb in enumerate(IndexEventNodes[eventtype]):
                 possibleSources = getNodes(etb, EventNodes, IndexEventNodes)
                 mySource = possibleSources[0]
                 for source in possibleSources:
                     if allPairs[destination][source] < allPairs[destination][mySource]:
                         mySource = source
-                "check for computing power"
-                #print(hops)
-                if eventtype in projFilterDict.keys() and getMaximalFilter(projFilterDict, eventtype,
-                                                                           noFilter):  #case filter
-                    mycosts += allPairs[destination][mySource] * getDecomposedTotal(
-                        getMaximalFilter(projFilterDict, eventtype, noFilter), eventtype)
+                
+                etb_cost = 0
+                if eventtype in projFilterDict.keys() and getMaximalFilter(projFilterDict, eventtype, noFilter):  # case filter
+                    maximal_filter = getMaximalFilter(projFilterDict, eventtype, noFilter)
+                    decomposed_total = getDecomposedTotal(maximal_filter, eventtype)
+                    base_cost = allPairs[destination][mySource] * decomposed_total
+                    etb_cost += base_cost
+
                     if len(IndexEventNodes[eventtype]) > 1:  # filtered projection has ms placement
                         partType = returnPartitioning(eventtype, mycombi[eventtype])[0]
-                        mycosts -= allPairs[destination][mySource] * rates[partType] * singleSelectivities[
-                            getKeySingleSelect(partType, eventtype)] * len(IndexEventNodes[eventtype])
-                        mycosts += allPairs[destination][mySource] * rates[partType] * singleSelectivities[
-                            getKeySingleSelect(partType, eventtype)]
-                elif eventtype in rates.keys():  # case primitive event
+                        key_single_select = getKeySingleSelect(partType, eventtype)
+                        ms_reduction = allPairs[destination][mySource] * rates[partType] * singleSelectivities[key_single_select] * len(IndexEventNodes[eventtype])
+                        ms_addition = allPairs[destination][mySource] * rates[partType] * singleSelectivities[key_single_select]
+                        
+                        etb_cost -= ms_reduction
+                        etb_cost += ms_addition
 
-                    mycosts += (rates[eventtype] * allPairs[destination][mySource])
+                elif eventtype in rates.keys():  # case primitive event
+                    rate = rates[eventtype]
+                    distance = allPairs[destination][mySource]
+                    etb_cost = rate * distance
+
                 else:  # case projection
                     num = NumETBsByKey(etb, eventtype, IndexEventNodes)
-                    mycosts += projrates[eventtype][1] * allPairs[destination][mySource] * num
-        # print(f"[COSTS] Current mycosts: {mycosts}")
+                    proj_rate = projrates[eventtype][1]
+                    distance = allPairs[destination][mySource]
+                    etb_cost = proj_rate * distance * num
+
+                eventtype_cost += etb_cost
+
+            eventtype_costs[eventtype] = eventtype_cost
+            mycosts += eventtype_cost
+
         if mycosts < costs:
             costs = mycosts
             node = destination
+
     myProjection.addSinks(node)  #!
+    
+    print(f"\n[COST_DEBUG] === FINAL PLACEMENT RESULTS ===")
+    print(f"[COST_DEBUG] Best destination node: {node}")
+    print(f"[COST_DEBUG] Best total cost: {costs}")
 
     # Remove computational power of sink for next iteration
     # if network[node].computational_power >= projection.computing_requirements:
     #     network[node].computational_power -= projection.computing_requirements
 
     newInstances = []  #!
-    # Update Event Node Matrice, by adding events etbs sent to node through node x to events of node x
     longestPath = 0
+
     for eventtype in combination:
         curInstances = []  #!
+
         for etb in IndexEventNodes[eventtype]:
             possibleSources = getNodes(etb, EventNodes, IndexEventNodes)
             mySource = possibleSources[0]  #??
@@ -716,20 +708,12 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter, projFilterDict
     myProjection.addSpawned([IndexEventNodes[projection][0]])  #!
 
     # Costs should also include the rates of the evaluated projection
-    costs += (hops * projrates[projection][1]) if projection in projrates else 0
+    if projection in projrates:
+        output_rate = projrates[projection][1]
+        extra_costs = output_rate * hops
+        costs += extra_costs
     return costs, node, longestPath, myProjection, newInstances, Filters
 
-
-# def costsAt(eventtype, node):
-#     mycosts = 0
-#     for etb in IndexEventNodes[eventtype]:
-#                 possibleSources = getNodes(etb)
-#                 mySource = possibleSources[0]
-#                 for source in possibleSources:
-#                     if allPairs[node][source] <= allPairs[node][mySource]:
-#                        mySource  = source
-#                 mycosts += rates[eventtype] * allPairs[node][mySource] 
-#     return mycosts
 
 def NEWcomputeCentralCosts(workload, IndexEventNodes, allPairs, rates, EventNodes, G):
     #Adding all Eventtypes (simple events) to the list
@@ -737,17 +721,11 @@ def NEWcomputeCentralCosts(workload, IndexEventNodes, allPairs, rates, EventNode
     eventtypes = []
     for i in workload:
         myevents = i.leafs()
-        #print(myevents)
         for e in myevents:
-            # print(e)
-            # print("Eventtypes")
-            # print(eventtypes)
             if not e in eventtypes:
                 eventtypes.append(e)
-    #print(eventtypes)
     costs = np.inf
     node = 0
-    # for destination in range(len(allPairs)):
     destination = 0
     mycosts = 0
     for eventtype in eventtypes:
@@ -780,1019 +758,4 @@ def NEWcomputeCentralCosts(workload, IndexEventNodes, allPairs, rates, EventNode
         for etb in IndexEventNodes[eventtype]:
             mySource = getNodes(etb, EventNodes, IndexEventNodes)[0]
             thiscosts += rates[eventtype] * allPairs[node][mySource]
-            #print(allPairs[node][mySource])
-        #print(eventtype, thiscosts )    
-    return (costs, node, longestPath, routingDict)
-
-
-#TODO compute and print rates saved by placement
-
-def compute_operator_placement_with_prepp(
-        self,
-        projection: dict,
-        combination: list,
-        no_filter: int,
-        proj_filter_dict: dict,
-        event_nodes: list,
-        index_event_nodes: dict,
-        network_data: dict,
-        all_pairs: list,
-        mycombi: dict,
-        rates: dict,
-        single_selectivity: dict,
-        projrates: dict,
-        graph: networkx.Graph,
-        network: list,
-        central_eval_plan):
-    """
-    Integrated function to compute operator placement with prepp in an integrated manner.
-
-    Args:
-        self: Instance of the class containing all necessary data.
-        projection: The projection for which the placement is computed.
-        combination: The combination of event types to consider for the placement.
-        no_filter: Flag to indicate whether to apply filters or not.
-        proj_filter_dict: Dictionary containing filters for projections and ?.
-        event_nodes: Matrix mapping event types to nodes.
-        IndexEventnodes: Indexed dictionary mapping event types to their respective ETBs.
-        network_data: Dictionary containing data on which node produces which event types.
-        all_pairs: Matrix containing all pairwise distances between nodes.
-        mycombi: Dictionary mapping event types to their combinations.
-        rates: Dictionary containing rates for each event type.
-        single_selectivity: Dictionary containing selectivity for single event types.
-        projrates: Dictionary containing rates for each projection.
-        graph: NetworkX graph representing the network topology.
-        network: Network object containing all nodes and their respective properties as a dictionary.
-
-    Returns:
-        PlacementDecision: Object containing the best placement decision with costs and plan details.
-
-    Comments:
-        Enhanced implementation that calculates all push costs first, then uses them efficiently
-        for push-pull calculations. Includes comprehensive cost comparison and decision tracking.
-
-    """
-    from helper.push_pull_plan_generator import Initiate
-
-    # Initialize placement state and decision tracking
-    placement_state = _initialize_placement_state(
-        combination, proj_filter_dict, no_filter, projection, graph
-    )
-
-    # Initialize decision tracker
-    placement_decisions = PlacementDecisionTracker(projection)
-
-    # print(f"[PLACEMENT] Starting placement computation for: {projection}")
-
-    possible_placement_nodes = check_possible_placement_nodes_for_input(
-        projection,
-        placement_state['extended_combination'],
-        network_data,
-        network,
-        index_event_nodes,
-        event_nodes,
-        placement_state['routing_dict']
-    )
-
-    # Reverse the order of the possible placement nodes to prioritize nodes closer to the source
-    possible_placement_nodes.reverse()
-    # print(f"[PLACEMENT] Evaluating {len(possible_placement_nodes)} placement candidates")
-
-    # Initialize push-pull cost calculator
-    push_pull_calculator = _initialize_push_pull_calculator(
-        self, projection, combination, rates, single_selectivity, projrates, mycombi, index_event_nodes
-    )
-
-    for node in possible_placement_nodes:
-        # print(f"[PLACEMENT] Evaluating node {node}")
-
-        has_enough_resources = check_resources(node, projection, network, combination)
-
-        subgraph = extract_subgraph(
-            node,
-            network,
-            graph,
-            placement_state['extended_combination'],
-            index_event_nodes,
-            event_nodes,
-            placement_state['routing_dict']
-        )
-
-        # Step 1: Calculate all-push costs (always needed as baseline)
-        all_push_costs = calculate_all_push_costs_on_subgraph(
-            subgraph, projection, combination, rates, projrates, index_event_nodes, event_nodes
-        )
-
-        print(f"[PLACEMENT] Node {node} - All-push costs: {all_push_costs:.2f}")
-
-        # Step 2: Calculate push-pull costs if resources allow
-        if has_enough_resources:
-            try:
-                push_pull_costs = calculate_prepp_costs_on_subgraph(
-                    self, node, subgraph, projection, central_eval_plan, all_push_costs
-                )
-                print(f"[PLACEMENT] Node {node} - Push-pull costs: {push_pull_costs:.2f}")
-
-                # Choose the better option
-                if push_pull_costs < all_push_costs:
-                    best_costs = push_pull_costs
-                    strategy = 'push_pull'
-                    print(f"[PLACEMENT] Node {node} - Push-pull strategy selected (savings: {all_push_costs - push_pull_costs:.2f})")
-                else:
-                    best_costs = all_push_costs
-                    strategy = 'all_push'
-                    print(f"[PLACEMENT] Node {node} - All-push strategy selected")
-            except Exception as e:
-                print(f"[PLACEMENT] Node {node} - Push-pull calculation failed: {e}")
-                best_costs = all_push_costs
-                strategy = 'all_push'
-        else:
-            # Only all-push is possible
-            best_costs = all_push_costs
-            strategy = 'all_push'
-            print(f"[PLACEMENT] Node {node} - Insufficient resources, using all-push strategy")
-
-        # Create placement decision
-        decision = PlacementDecision(
-            node=node,
-            costs=best_costs,
-            strategy=strategy,
-            all_push_costs=all_push_costs,
-            push_pull_costs=push_pull_costs if has_enough_resources else None,
-            has_sufficient_resources=has_enough_resources,
-            subgraph_info={
-                'node_count': len(subgraph['relevant_nodes']),
-                'edge_count': subgraph['subgraph'].number_of_edges()
-            }
-        )
-
-        # Track this decision
-        placement_decisions.add_decision(decision)
-
-        # Update best placement if this is better
-        if best_costs < placement_state['costs']:
-            placement_state['costs'] = best_costs
-            placement_state['best_node'] = node
-            placement_state['best_strategy'] = strategy
-            print(f"[PLACEMENT] New best placement: Node {node} with {strategy} strategy (cost: {best_costs:.2f})")
-
-    # Finalize and return the best decision
-    best_decision = placement_decisions.get_best_decision()
-    print(f"[PLACEMENT] Final decision: {best_decision}")
-
-    return best_decision
-
-
-def _initialize_placement_state(combination, proj_filter_dict, no_filter, projection, graph):
-    """
-    Prepare and return the initial state needed for computing projection placement in the network.
-
-    This function is responsible for:
-      1. **Routing information setup** – Precomputes shortest paths and a routing dictionary
-         so later placement logic can quickly check relationships between nodes.
-      2. **Filter application** – Determines and attaches maximal filters to certain
-         event-type combinations if they are relevant, unless `no_filter` is set.
-      3. **Extended combination generation** – Expands the given `combination` with
-         any additional event types required by those filters.
-      4. **Projection object creation** – Builds a `Projection` object holding the
-         projection’s identity and its associated filters.
-
-    Args:
-        combination (list):
-            List of event types (or tuples of event types) that the projection depends on.
-        proj_filter_dict (dict):
-            Mapping of event-type combinations to their available filters.
-        no_filter (bool):
-            If True, ignore all filters; if False, apply maximal filters when available.
-        projection (str or object):
-            Identifier or definition of the projection we are placing.
-        graph (networkx.Graph):
-            The network topology, where nodes represent processing locations and edges
-            represent possible routing paths.
-
-    Returns:
-        dict: A dictionary containing the initialized placement state:
-            - **routing_dict**: Nested dict describing routing info, including common ancestors.
-            - **routing_algo**: Dictionary of all shortest paths between nodes.
-            - **filters**: List of `(combination, maximal_filter)` tuples applied.
-            - **extended_combination**: The combination plus any added filters (duplicates removed).
-            - **projection**: The constructed `Projection` object.
-            - **costs**: Initial cost set to `math.inf` (placeholder for later optimization).
-            - **best_node**: Initial best node set to `0` (no placement chosen yet).
-
-    Comments:
-        N/A
-    """
-    from allPairs import create_routing_dict
-    import networkx as nx
-
-    # Create routing structures
-    routing_dict = create_routing_dict(graph)
-    routing_algo = dict(nx.all_pairs_shortest_path(graph))
-
-    # Process filters and extend combination
-    filters = []
-    extended_combination = []
-
-    for proj in combination:
-        extended_combination.append(proj)
-        if len(proj) > 1 and len(getMaximalFilter(proj_filter_dict, proj, no_filter)) > 0:
-            max_filter = getMaximalFilter(proj_filter_dict, proj, no_filter)
-            filters.append((proj, max_filter))
-            extended_combination.extend(max_filter)
-
-    # Remove duplicates from extended combination
-    extended_combination = list(set(extended_combination))
-
-    # Create projection object
-    my_projection = Projection(projection, {}, [], [], filters)
-
-    return {
-        'routing_dict': routing_dict,
-        'routing_algo': routing_algo,
-        'filters': filters,
-        'extended_combination': extended_combination,
-        'projection': my_projection,
-        'costs': math.inf,
-        'best_node': 0
-    }
-
-
-def check_possible_placement_nodes_for_input(projection, combination, network_data, network, index_event_nodes,
-                                             event_nodes, routing_dict):
-    """
-    Check which non-leaf nodes are suitable for placing a projection based on common ancestor requirements.
-
-    This function identifies fog/cloud nodes (non-leaf nodes that don't produce events) where the projection
-    could be placed by checking if the node can be a common ancestor for all required ETB sources.
-    No resource checks are performed - only topological placement feasibility is considered.
-
-    # TODO: Here we could also consider to do some prefiltering or add some heuristic to reduce the search space.
-
-    Args:
-        projection: The projection object for which placement is being computed
-        combination: The combination of event types to consider for the placement
-        network_data: Dictionary mapping nodes to the event types they produce
-        index_event_nodes: Indexed dictionary mapping event types to their respective ETBs
-        event_nodes: Matrix mapping event types to nodes
-        routing_dict: Dictionary containing routing information with common ancestors
-
-    Returns:
-        list: List of non-leaf node indices where the projection can be placed
-    """
-    from helper.structures import getNodes
-
-    print(f"[PLACEMENT] Analyzing placement options for: {projection}")
-    print(f"[PLACEMENT] Combination context: {combination}")
-
-    # Get non-leaf nodes (nodes that don't produce events - fog/cloud nodes)
-    non_leaf = [node for node, neighbors in network_data.items() if not neighbors]
-    print(
-        f"[PLACEMENT] Available fog/cloud nodes: {len(non_leaf)} nodes - {non_leaf[:5]}{'...' if len(non_leaf) > 5 else ''}")
-
-    suitable_nodes = []
-
-    # Check each non-leaf node for placement feasibility
-    for destination in non_leaf:
-        # print(f"[PLACEMENT] Evaluating node {destination}...")
-
-        skip_destination = False  # Flag to determine if we should skip this destination
-
-        # Check all event types in the combination
-        for eventtype in combination:
-            if skip_destination:
-                break
-
-            print(f"[PLACEMENT]   Processing event type: {eventtype}")
-
-            # Handle Tree objects by getting their leaf events instead of treating them as single entities
-            if hasattr(eventtype, 'children') and hasattr(eventtype, 'leafs'):
-                # This is a Tree object (AND, SEQ, etc.), get its leaf events
-                leaf_events = eventtype.leafs()
-                print(f"[PLACEMENT]     Tree object {eventtype} has leaf events: {leaf_events}")
-                for leaf_event in leaf_events:
-                    if skip_destination:
-                        break
-                    print(f"[PLACEMENT]     Processing leaf event: {leaf_event}")
-                    # Check all ETBs for this leaf event type
-                    for etb in index_event_nodes[leaf_event]:
-                        if skip_destination:
-                            break
-
-                        print(f"[PLACEMENT]     Analyzing ETB: {etb}")
-                        possible_sources = getNodes(etb, event_nodes, index_event_nodes)
-                        print(
-                            f"[PLACEMENT]     Available sources: {len(possible_sources)} - {possible_sources[:3]}{'...' if len(possible_sources) > 3 else ''}")
-
-                        # Check each source for this ETB
-                        for source in possible_sources:
-                            # Use the routing_dict to get the common ancestor
-                            common_ancestor = routing_dict[destination][source]['common_ancestor']
-                            print(
-                                f"[Placement]       Source {source} -> Destination {destination}, Common ancestor: {common_ancestor}")
-
-                            if common_ancestor != destination:
-                                print(
-                                    f"[PLACEMENT]       SKIP: Node {destination} cannot be common ancestor for source {source}")
-                                skip_destination = True
-                                break
-
-                        if skip_destination:
-                            break  # Break out of the etb loop
-
-                    if skip_destination:
-                        break  # Break out of the leaf_events loop
-            else:
-                # This is a primitive event type (string)
-                eventtype_key = eventtype
-                print(f"[PLACEMENT]     Processing primitive event: {eventtype_key}")
-
-                # Check all ETBs for this event type
-                for etb in index_event_nodes[eventtype_key]:
-                    if skip_destination:
-                        break
-
-                    print(f"[PLACEMENT]     Analyzing ETB: {etb}")
-                    possible_sources = getNodes(etb, event_nodes, index_event_nodes)
-                    print(
-                        f"[PLACEMENT]     Available sources: {len(possible_sources)} - {possible_sources[:3]}{'...' if len(possible_sources) > 3 else ''}")
-
-                    # Check each source for this ETB
-                    for source in possible_sources:
-                        # Use the routing_dict to get the common ancestor
-                        common_ancestor = routing_dict[destination][source]['common_ancestor']
-                        print(
-                            f"[Placement]       Source {source} -> Destination {destination}, Common ancestor: {common_ancestor}")
-
-                        if common_ancestor != destination:
-                            print(
-                                f"[Placement]       SKIP: Node {destination} cannot be common ancestor for source {source}")
-                            skip_destination = True
-                            break
-
-                    if skip_destination:
-                        break  # Break out of the etb loop
-
-            if skip_destination:
-                break  # Break out of the eventtype loop
-
-        if not skip_destination:
-            suitable_nodes.append(destination)
-            print(f"[PLACEMENT] Node {destination}: SUITABLE - Can serve as common ancestor")
-        else:
-            print(f"[PLACEMENT] Node {destination}: SKIPPED - Cannot be common ancestor")
-
-    print(f"[PLACEMENT] Result: {len(suitable_nodes)} suitable nodes found: {suitable_nodes}")
-    return suitable_nodes
-
-
-def check_resources(node: int, projection: dict, network: list, combination: list) -> bool:
-    """
-    Function to check if a node has enough resources to place a projection.
-    Checks computational power for all-push scenario and memory for push-pull scenario.
-
-    Args:
-        node: Node ID to check resources for
-        projection: Projection object with computing_requirements
-        network: List of network nodes with computational_power and memory attributes
-        combination: List of projections in the combination (unused for now)
-
-    Returns:
-        bool: True if node has sufficient resources, False otherwise
-
-    Comments:
-        As of now, this function checks the given computing_requirements for a projection.
-        In the future, they should probably be calculated based on the actual inputs of the projection.
-        TODO: Add more complex computing requirements calculation.
-
-    """
-
-    # Get the node from network
-    if node >= len(network) or node < 0:
-        return False
-
-    target_node = network[node]
-
-    try:
-        # Check if projection has computing requirements attribute
-        if not hasattr(projection, 'computing_requirements'):
-            return False
-
-        # Check computational power for all-push scenario
-        if target_node.computational_power < projection.computing_requirements:
-            return False
-
-        # Check memory for push-pull scenario (needs 2x projection requirements)
-        if target_node.memory < (2 * projection.computing_requirements):
-            return False
-
-        return True
-    except Exception as e:
-        print(f"[ERROR] Node {node} does not have required attributes: {e}")
-        return False
-
-
-def extract_subgraph(placement_node, network, graph, combination, index_event_nodes, event_nodes, routing_dict):
-    """
-    Extract a subgraph for a given placement node containing all relevant nodes and paths
-    needed for routing event data to that node.
-
-    Args:
-        placement_node: The target node where the projection will be placed
-        network: List of Node objects representing the network topology
-        graph: NetworkX graph representing the network connectivity
-        combination: List of event types that need to be routed to the placement node
-        index_event_nodes: Dictionary mapping event types to their ETB instances
-        event_nodes: Matrix mapping event types to nodes
-        routing_dict: Dictionary containing routing information including shortest paths
-
-    Returns:
-        dict: A dictionary containing the subgraph data structures needed for generate_prePP:
-            - 'subgraph': NetworkX subgraph containing only relevant nodes and edges
-            - 'node_mapping': Mapping from original node IDs to subgraph node IDs
-            - 'reverse_mapping': Mapping from subgraph node IDs to original node IDs
-            - 'event_nodes_sub': Filtered event nodes matrix for the subgraph
-            - 'index_event_nodes_sub': Filtered index event nodes for the subgraph
-            - 'network_data_sub': Network data filtered for subgraph nodes
-            - 'all_pairs_sub': Distance matrix for subgraph nodes
-            - 'relevant_nodes': Set of all nodes included in the subgraph
-
-    Comments:
-        As of now, this function implements a basic extraction of relevant nodes and paths like in original.
-        In the future this could be improved by adding simpler filter techniques and existing structures.
-        TODO: Improve extraction logic.
-    """
-    import networkx as nx
-    from helper.structures import getNodes
-
-    # Start with the placement node
-    relevant_nodes = {placement_node}
-
-    # Find all source nodes for events in the combination
-    for event_type in combination:
-        if event_type in index_event_nodes:
-            for etb in index_event_nodes[event_type]:
-                # Get all nodes that produce this ETB
-                source_nodes = getNodes(etb, event_nodes, index_event_nodes)
-                relevant_nodes.update(source_nodes)
-
-                # Add all nodes on the shortest paths from sources to placement node
-                for source_node in source_nodes:
-                    if source_node != placement_node:
-                        try:
-                            # Get shortest path from routing dict or compute it
-                            if placement_node in routing_dict and source_node in routing_dict[placement_node]:
-                                path_info = routing_dict[placement_node][source_node]
-                                if 'path' in path_info:
-                                    path_nodes = path_info['path']
-                                elif 'shortest_path' in path_info:
-                                    path_nodes = path_info['shortest_path']
-                                else:
-                                    # Fallback: compute shortest path
-                                    path_nodes = nx.shortest_path(graph, source_node, placement_node)
-                            else:
-                                # Fallback: compute shortest path
-                                path_nodes = nx.shortest_path(graph, source_node, placement_node)
-
-                            relevant_nodes.update(path_nodes)
-                        except (nx.NetworkXNoPath, KeyError):
-                            # If no path exists, just add the source node
-                            relevant_nodes.add(source_node)
-
-    # Create subgraph with relevant nodes
-    subgraph = graph.subgraph(relevant_nodes).copy()
-
-    # Create node mappings (original ID -> subgraph ID)
-    relevant_nodes_list = sorted(list(relevant_nodes))
-    node_mapping = {orig_id: new_id for new_id, orig_id in enumerate(relevant_nodes_list)}
-    reverse_mapping = {new_id: orig_id for orig_id, new_id in node_mapping.items()}
-
-    # Create remapped subgraph with sequential node IDs
-    remapped_subgraph = nx.Graph()
-    for orig_node in relevant_nodes_list:
-        new_node_id = node_mapping[orig_node]
-        remapped_subgraph.add_node(new_node_id)
-
-        # Copy node attributes if they exist
-        if graph.has_node(orig_node):
-            for attr_key, attr_val in graph.nodes[orig_node].items():
-                remapped_subgraph.nodes[new_node_id][attr_key] = attr_val
-
-    # Add edges with remapped node IDs
-    for orig_u, orig_v in subgraph.edges():
-        new_u = node_mapping[orig_u]
-        new_v = node_mapping[orig_v]
-        remapped_subgraph.add_edge(new_u, new_v)
-
-        # Copy edge attributes if they exist
-        if graph.has_edge(orig_u, orig_v):
-            for attr_key, attr_val in graph.edges[orig_u, orig_v].items():
-                remapped_subgraph.edges[new_u, new_v][attr_key] = attr_val
-
-    # Create filtered event nodes matrix for subgraph
-    event_nodes_sub = []
-    for event_row in event_nodes:
-        # Create new row with only relevant nodes
-        new_row = [event_row[orig_id] if orig_id < len(event_row) else 0
-                   for orig_id in relevant_nodes_list]
-        event_nodes_sub.append(new_row)
-
-    # Create filtered index event nodes for subgraph
-    index_event_nodes_sub = {}
-    for event_type, etb_list in index_event_nodes.items():
-        if isinstance(etb_list, list):
-            index_event_nodes_sub[event_type] = etb_list.copy()
-        else:
-            # Handle case where etb_list might be a single value
-            index_event_nodes_sub[event_type] = etb_list
-
-    # Create network data for subgraph (mapping node -> events produced)
-    network_data_sub = {}
-    for new_node_id, orig_node_id in reverse_mapping.items():
-        # Initialize with empty list (non-leaf nodes don't produce events)
-        network_data_sub[new_node_id] = []
-
-        # Check if this node produces any events
-        if orig_node_id < len(network):
-            node_obj = network[orig_node_id]
-            if hasattr(node_obj, 'eventrates') and node_obj.eventrates:
-                # Find which event types this node produces
-                produced_events = []
-                for event_idx, rate in enumerate(node_obj.eventrates):
-                    if rate > 0:
-                        # Convert event index to event type letter
-                        event_type = chr(ord('A') + event_idx)
-                        produced_events.append(event_type)
-                network_data_sub[new_node_id] = produced_events
-
-    # Create all-pairs shortest path matrix for subgraph
-    try:
-        # Compute shortest paths for remapped subgraph
-        all_pairs_dict = dict(nx.all_pairs_shortest_path_length(remapped_subgraph))
-
-        # Convert to matrix format
-        num_nodes = len(relevant_nodes_list)
-        all_pairs_sub = [[float('inf')] * num_nodes for _ in range(num_nodes)]
-
-        for i in range(num_nodes):
-            for j in range(num_nodes):
-                if i == j:
-                    all_pairs_sub[i][j] = 0
-                elif j in all_pairs_dict.get(i, {}):
-                    all_pairs_sub[i][j] = all_pairs_dict[i][j]
-
-    except nx.NetworkXError:
-        # Fallback: create basic distance matrix
-        num_nodes = len(relevant_nodes_list)
-        all_pairs_sub = [[1 if i != j else 0 for j in range(num_nodes)] for i in range(num_nodes)]
-
-    # Create sub_network with same structure as network variable (list of Node objects)
-    from Node import Node
-    sub_network = []
-
-    for new_node_id in sorted(reverse_mapping.keys()):
-        orig_node_id = reverse_mapping[new_node_id]
-
-        # Create new Node object for subgraph
-        if orig_node_id < len(network):
-            orig_node = network[orig_node_id]
-            # Create new node with remapped ID but original attributes
-            sub_node = Node(new_node_id, orig_node.computational_power, orig_node.memory)
-            sub_node.eventrates = orig_node.eventrates.copy() if orig_node.eventrates else []
-
-            # Remap parent/child/sibling relationships to subgraph node IDs
-            sub_node.Parent = []
-            sub_node.Child = []
-            sub_node.Sibling = []
-
-            # Only include relationships if both nodes are in the subgraph
-            if hasattr(orig_node, 'Parent') and orig_node.Parent:
-                for parent in orig_node.Parent:
-                    if parent.id in node_mapping:
-                        # Find the corresponding sub_node for this parent
-                        parent_sub_id = node_mapping[parent.id]
-                        # We'll need to set this after all nodes are created
-                        sub_node.Parent.append(parent_sub_id)  # Store ID for now
-
-            if hasattr(orig_node, 'Child') and orig_node.Child:
-                for child in orig_node.Child:
-                    if child.id in node_mapping:
-                        child_sub_id = node_mapping[child.id]
-                        sub_node.Child.append(child_sub_id)  # Store ID for now
-
-            if hasattr(orig_node, 'Sibling') and orig_node.Sibling:
-                for sibling in orig_node.Sibling:
-                    if sibling.id in node_mapping:
-                        sibling_sub_id = node_mapping[sibling.id]
-                        sub_node.Sibling.append(sibling_sub_id)  # Store ID for now
-
-            sub_network.append(sub_node)
-
-    # Convert ID references back to object references
-    for sub_node in sub_network:
-        # Convert Parent IDs to Node objects
-        parent_objects = []
-        for parent_id in sub_node.Parent:
-            if isinstance(parent_id, int):
-                parent_node = next((n for n in sub_network if n.id == parent_id), None)
-                if parent_node:
-                    parent_objects.append(parent_node)
-        sub_node.Parent = parent_objects
-
-        # Convert Child IDs to Node objects
-        child_objects = []
-        for child_id in sub_node.Child:
-            if isinstance(child_id, int):
-                child_node = next((n for n in sub_network if n.id == child_id), None)
-                if child_node:
-                    child_objects.append(child_node)
-        sub_node.Child = child_objects
-
-        # Convert Sibling IDs to Node objects
-        sibling_objects = []
-        for sibling_id in sub_node.Sibling:
-            if isinstance(sibling_id, int):
-                sibling_node = next((n for n in sub_network if n.id == sibling_id), None)
-                if sibling_node:
-                    sibling_objects.append(sibling_node)
-        sub_node.Sibling = sibling_objects
-
-    return {
-        'subgraph': remapped_subgraph,
-        'node_mapping': node_mapping,
-        'reverse_mapping': reverse_mapping,
-        'event_nodes_sub': event_nodes_sub,
-        'index_event_nodes_sub': index_event_nodes_sub,
-        'network_data_sub': network_data_sub,
-        'all_pairs_sub': all_pairs_sub,
-        'relevant_nodes': relevant_nodes,
-        'placement_node_remapped': node_mapping[placement_node],
-        'sub_network': sub_network
-    }
-
-
-def calculate_prepp_costs_on_subgraph(self, node, subgraph, projection, central_eval_plan, all_push_baseline=None):
-    """
-    Calculate prepp costs on the extracted subgraph by generating evaluation plan and calling prePP.
-    Enhanced version that uses all_push_baseline for comparison.
-
-    Args:
-        self: Instance with network data
-        node: Original placement node ID
-        subgraph: Subgraph information dictionary
-        projection: Projection being placed
-        central_eval_plan: Central evaluation plan
-        all_push_baseline: Pre-calculated all-push costs for comparison
-
-    Returns:
-        float: Push-pull strategy cost
-    """
-    from generateEvalPlan import generate_eval_plan
-    from prepp import generate_prePP
-    import networkx as nx
-
-    print(f"[PUSH-PULL] Calculating push-pull costs for node {node}")
-    if all_push_baseline:
-        print(f"[PUSH-PULL] All-push baseline: {all_push_baseline:.2f}")
-
-    # myPlan and centralPlan need to be defined in order for us to use the generate_eval_plan function.
-    routing_algo = dict(nx.all_pairs_shortest_path(subgraph['subgraph']))
-
-    # Create myPlan structure for subgraph - this should be an EvaluationPlan
-    subgraph_plan = _create_subgraph_evaluation_plan(self, subgraph, projection, node, routing_algo)
-
-    # Create centralPlan structure for subgraph
-    central_plan_subgraph = _create_central_plan_for_subgraph(self, subgraph, projection, central_eval_plan)
-
-    try:
-        # Generate evaluation plan using existing function
-        print("Debug hook")
-        eval_plan_buffer = generate_eval_plan(
-            nw=subgraph['sub_network'],
-            selectivities=self.selectivities,
-            myPlan=[subgraph_plan, int(np.random.uniform(0, 10000000)), {}],  # Format: [plan, ID, dict]
-            centralPlan=central_plan_subgraph,  # Format: [source, dict, workload]
-            workload=[projection]  # Single projection as workload
-        )
-
-        # Create all_pairs matrix for subgraph (simplified distance matrix)
-        all_pairs = subgraph['all_pairs_sub']
-
-        content = eval_plan_buffer.getvalue()
-
-        # Call generate_prePP with the evaluation plan
-        prepp_results = generate_prePP(
-            input_buffer=eval_plan_buffer,
-            method="ppmuse",
-            algorithm="e",  # exact
-            samples=0,
-            top_k=0,
-            runs=1,
-            plan_print=True,  # Enable detailed plan printing
-            allPairs=all_pairs
-        )
-
-        # Extract costs from prePP results
-        # prepp_results format: [exact_cost, pushPullTime, maxPushPullLatency, endTransmissionRatio]
-        if prepp_results and len(prepp_results) > 0:
-            costs = prepp_results[0]  # exact_cost
-            print(f"[PUSH-PULL] PrePP costs calculated: {costs:.2f}")
-
-            if all_push_baseline:
-                savings = all_push_baseline - costs
-                print(f"[PUSH-PULL] Savings vs all-push: {savings:.2f} ({(savings/all_push_baseline*100):.1f}%)")
-
-            return costs
-        else:
-            print("[PUSH-PULL] Warning: No valid prePP results returned, using fallback")
-            return _calculate_fallback_costs(node, subgraph, projection, all_push_baseline)
-
-    except Exception as e:
-        print(f"[PUSH-PULL] Error calculating prePP costs: {e}")
-        # Fallback to simple cost calculation
-        return _calculate_fallback_costs(node, subgraph, projection, all_push_baseline)
-
-
-def _calculate_fallback_costs(node, subgraph, projection, all_push_baseline=None):
-    """
-    Fallback cost calculation if prePP fails.
-    Uses all-push baseline if available, otherwise estimates cost.
-
-    Args:
-        node: Placement node
-        subgraph: Subgraph information
-        projection: Projection being placed
-        all_push_baseline: Pre-calculated all-push costs
-
-    Returns:
-        float: Fallback cost estimate
-    """
-    try:
-        print(f"[FALLBACK] Calculating fallback costs for node {node}")
-
-        # If we have all-push baseline, use a conservative estimate
-        # (assume push-pull is at most 20% better than all-push)
-        if all_push_baseline is not None:
-            fallback_cost = all_push_baseline * 0.8
-            print(f"[FALLBACK] Using conservative estimate: {fallback_cost:.2f} (80% of all-push baseline)")
-            return fallback_cost
-
-        # Otherwise, simple cost based on distance from sources to sink
-        total_cost = 0.0
-        all_pairs = subgraph['all_pairs_sub']
-        remapped_node = subgraph['placement_node_remapped']
-
-        # Calculate basic routing costs
-        for i in range(len(all_pairs)):
-            if i != remapped_node:
-                total_cost += all_pairs[remapped_node][i]
-
-        print(f"[FALLBACK] Basic routing costs calculated: {total_cost:.2f}")
-        return total_cost
-
-    except Exception as e:
-        print(f"[FALLBACK] Error in fallback cost calculation: {e}")
-        return float('inf')
-
-
-def _create_subgraph_evaluation_plan(self, subgraph, projection, placement_node, routing_algo):
-    """
-    Create an EvaluationPlan object for the subgraph containing the specific projection and placement.
-    This represents the myPlan structure needed by generate_eval_plan.
-
-    Args:
-        self: Instance of the class containing network data
-        subgraph: Dictionary containing subgraph information
-        projection: The specific projection being placed
-        placement_node: Original node ID where projection is placed (before remapping)
-
-    Returns:
-        EvaluationPlan: Object containing projections and instances for the subgraph
-    """
-    from EvaluationPlan import EvaluationPlan, Projection, Instance
-
-    # Create empty evaluation plan
-    evaluation_plan = EvaluationPlan([], [])
-
-    # Initialize instances for primitive events in the subgraph
-    # Based on the subgraph's index_event_nodes
-    evaluation_plan.initInstances(subgraph['index_event_nodes_sub'])
-
-    # Create a projection for our specific placement
-    # Get the remapped placement node ID
-    remapped_placement_node = subgraph['placement_node_remapped']
-
-    # Create projection with placement node as sink
-    my_projection = Projection(projection, {}, [remapped_placement_node], [], [])
-
-    # Add instances for event types that feed into this projection
-    # Look at which event types are needed for this projection
-    if hasattr(projection, 'leafs'):
-        event_types = projection.leafs()
-    else:
-        # Fallback: try to extract event types from the projection name/string
-        event_types = _extract_event_types_from_projection(projection)
-
-    for event_type in event_types:
-        if event_type in subgraph['index_event_nodes_sub']:
-            instances_for_event = []
-            for etb in subgraph['index_event_nodes_sub'][event_type]:
-                # Create instance for this ETB
-                # Find the source nodes in the subgraph
-                from helper.structures import getNodes
-                original_sources = getNodes(etb, self.h_eventNodes, self.h_IndexEventNodes)
-
-                # mySource = original_sources[0]  # Default to first source
-
-                # Map original source nodes to subgraph node IDs
-                subgraph_sources = []
-                for orig_source in original_sources:
-                    if orig_source in subgraph['node_mapping']:
-                        subgraph_sources.append(subgraph['node_mapping'][orig_source])
-
-                if subgraph_sources:
-                    # Create routing info from sources to placement node
-                    shortest_path = find_shortest_path_or_ancestor(routing_algo, subgraph_sources[0], remapped_placement_node)
-
-                    instance = Instance(name=event_type, projname=etb, sources=subgraph_sources, routingDict={projection: shortest_path})
-                    instances_for_event.append(instance)
-
-            if instances_for_event:
-                my_projection.addInstances(event_type, instances_for_event)
-
-    # Add the projection to the evaluation plan
-    evaluation_plan.addProjection(my_projection)
-
-    return evaluation_plan
-
-
-def _create_central_plan_for_subgraph(self, subgraph, projection,central_eval_plan):
-    """
-    Create centralPlan structure for the subgraph based on the global central_eval_plan.
-    This filters and maps the global central plan to subgraph context.
-
-    Args:
-        self: Instance of the class containing network data
-        subgraph: Dictionary containing subgraph information
-        projection: The specific projection being placed
-        central_eval_plan: Global central evaluation plan
-
-    Returns:
-        list: [source_node, event_dict, workload] formatted for subgraph
-    """
-    # Central plan structure: [source_node, event_type_dict, workload_list]
-
-    print("lets try")
-
-    central_plan = NEWcomputeCentralCosts(
-        workload=[projection],
-        IndexEventNodes=subgraph['index_event_nodes_sub'],
-        allPairs=subgraph['all_pairs_sub'],
-        rates=self.h_rates_data,
-        EventNodes=subgraph['event_nodes_sub'],
-        G=subgraph['subgraph']
-    )
-
-    central_eval_plan = [central_plan[1], central_plan[3], projection]
-
-    return central_eval_plan
-
-
-def _initialize_push_pull_calculator(self, projection, combination, rates, single_selectivity, projrates, mycombi, index_event_nodes):
-    """
-    Initialize the push-pull cost calculator with necessary data structures.
-
-    Args:
-        self: Main instance with network data
-        projection: Projection being placed
-        combination: Event type combination
-        rates: Event type rates
-        single_selectivity: Single selectivity values
-        projrates: Projection rates
-        mycombi: Event type combinations
-        index_event_nodes: Event node indices
-
-    Returns:
-        dict: Initialized calculator data structures
-    """
-    from helper.push_pull_plan_generator import Initiate
-
-    # Extract event types from projection
-    if hasattr(projection, 'leafs'):
-        event_types = projection.leafs()
-    else:
-        event_types = _extract_event_types_from_projection(projection)
-
-    # Build eventtype to sources mapping from index_event_nodes
-    eventtype_to_sources_map = {}
-    for event_type in event_types:
-        if event_type in index_event_nodes:
-            sources = set()
-            for etb in index_event_nodes[event_type]:
-                etb_sources = getNodes(etb, self.h_eventNodes, self.h_IndexEventNodes)
-                sources.update(etb_sources)
-            eventtype_to_sources_map[event_type] = list(sources)
-
-    # Create output rate map
-    outputrate_map = {}
-    for event_type in event_types:
-        if len(event_type) == 1:  # Primitive event
-            outputrate_map[event_type] = rates.get(event_type, 1.0)
-        else:  # Complex event/projection
-            outputrate_map[event_type] = projrates.get(event_type, [0, 1.0])[1]
-
-    return {
-        'eventtype_to_sources_map': eventtype_to_sources_map,
-        'outputrate_map': outputrate_map,
-        'event_types': event_types
-    }
-
-
-def _extract_event_types_from_projection(projection):
-    """
-    Helper function to extract event types from a projection object or string.
-
-    Args:
-        projection: Projection object or string representation
-
-    Returns:
-        list: List of event type characters (e.g., ['A', 'B', 'C'])
-    """
-    if hasattr(projection, 'leafs'):
-        return projection.leafs()
-
-    # Fallback: try to extract from string representation
-    projection_str = str(projection)
-    import re
-    # Extract capital letters that represent event types
-    event_types = re.findall(r'[A-Z]', projection_str)
-    return list(set(event_types))  # Remove duplicates
-
-
-def calculate_all_push_costs_on_subgraph(subgraph, projection, combination, rates, projrates, index_event_nodes, event_nodes):
-    """
-    Calculate the costs of using all-push strategy for a projection on a subgraph.
-    This is an efficient implementation that reuses logic from push_pull_plan_generator.
-
-    Args:
-        subgraph: Dictionary containing subgraph information
-        projection: The projection being placed
-        combination: List of event types in the combination
-        rates: Dictionary of event type rates
-        projrates: Dictionary of projection rates
-        index_event_nodes: Mapping of event types to ETBs
-        event_nodes: Event nodes matrix
-
-    Returns:
-        float: Total cost of all-push strategy
-    """
-    from helper.structures import getNodes
-
-    total_cost = 0.0
-    placement_node_remapped = subgraph['placement_node_remapped']
-    all_pairs = subgraph['all_pairs_sub']
-
-    print(f"[ALL-PUSH] Calculating costs for placement at node {placement_node_remapped}")
-
-    # Calculate cost for each event type in the combination
-    for event_type in combination:
-        if event_type in index_event_nodes:
-            event_cost = 0.0
-
-            for etb in index_event_nodes[event_type]:
-                # Get source nodes for this ETB in the original graph
-                original_sources = getNodes(etb, event_nodes, index_event_nodes)
-
-                # Find corresponding sources in subgraph
-                subgraph_sources = []
-                for orig_source in original_sources:
-                    if orig_source in subgraph['node_mapping']:
-                        subgraph_sources.append(subgraph['node_mapping'][orig_source])
-
-                if subgraph_sources:
-                    # Find best (closest) source
-                    best_source = subgraph_sources[0]
-                    min_distance = all_pairs[placement_node_remapped][best_source]
-
-                    for source in subgraph_sources[1:]:
-                        distance = all_pairs[placement_node_remapped][source]
-                        if distance < min_distance:
-                            min_distance = distance
-                            best_source = source
-
-                    # Calculate cost for this ETB
-                    if len(event_type) == 1:  # Primitive event
-                        rate = rates.get(event_type, 1.0)
-                    else:  # Complex event/projection
-                        rate = projrates.get(event_type, [0, 1.0])[1]
-
-                    etb_cost = rate * min_distance
-                    event_cost += etb_cost
-
-                    print(f"[ALL-PUSH]   Event {event_type}, ETB {etb}: source {best_source} -> sink {placement_node_remapped}, distance {min_distance}, rate {rate:.3f}, cost {etb_cost:.2f}")
-
-            total_cost += event_cost
-            print(f"[ALL-PUSH]   Total cost for event {event_type}: {event_cost:.2f}")
-
-    print(f"[ALL-PUSH] Total all-push cost: {total_cost:.2f}")
-    return total_cost
+    return costs, node, longestPath, routingDict
