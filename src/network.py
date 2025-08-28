@@ -9,8 +9,11 @@ from Node import Node
 import pandas as pd
 
 
-def generate_eventrates(eventskew, numb_eventtypes,total_count=10000):
-        # Ensure all eventrates are greater than 0
+def generate_eventrates(eventskew, numb_eventtypes,total_count=5000):
+    # Ensure all eventrates are greater than 0
+    # Note Finn Glück: 27.08.2025 changed total_count from 10000 to 5000
+
+    # TODO: Find better way to calculate event rates, as they should be really distibuted for good results
     min_value = 1
     max_value = 1000
     # Generate ranks
@@ -18,6 +21,19 @@ def generate_eventrates(eventskew, numb_eventtypes,total_count=10000):
     
     # Calculate weights based on Zipf's law
     weights = 1 / k ** eventskew
+
+    """
+    Note from Finn Glück 28.08.2025: 
+    Maybe we should introduce a noise value. This should make the events behave in less
+    predictable sequences and also give us better edge case distribution of events. 
+    Currently events behave in a very predictable way. 
+    E.g. for eventskew = 3, r(A) is always 1000, r(B) is 528,6 +- 15 etc. not much variance. 
+    """
+    # TODO: Discuss this approach with Ariane
+    # NOISE_FACTOR = 1.5
+    # noise = np.random.lognormal(mean=0, sigma=NOISE_FACTOR, size=numb_eventtypes)
+    # weights = weights * noise
+
     weights /= weights.sum()  # Normalize to sum to 1
     
     # Sample event rates from multinomial distribution
@@ -39,7 +55,6 @@ def generate_events(eventrates, n_e_r):
             myevents.append(int(eventrates[i]))
         else:
             myevents.append(0)
-    
     return myevents
 
 
