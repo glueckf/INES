@@ -76,7 +76,6 @@ def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any],
         central_plan_subgraph = central_eval_plan
 
         # Generate evaluation plan using adapter
-        print("Debug hook")
         eval_plan_buffer = build_eval_plan(
             nw=subgraph['sub_network'],
             selectivities=self.selectivities,
@@ -114,23 +113,6 @@ def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any],
             # ===========================================
             # PREPP RESULT LOGGING FOR NODE
             # ===========================================
-            print(f"\n{'='*50}")
-            print(f"PREPP RESULT FOR NODE {node}")
-            print(f"{'='*50}")
-            print(f"Projection: {projection}")
-            print(f"Push-Pull Cost: {costs:.4f}")
-            print(f"All-Push Baseline: {all_push_baseline:.4f}" if all_push_baseline else "All-Push Baseline: N/A")
-            print(f"Central Costs: {central_costs:.4f}")
-            print(f"Transmission Ratio: {transmission_ratio:.4f}")
-            print(f"Execution Time: {exec_time:.4f} seconds")
-            print(f"Latency: {latency}")
-            
-            if all_push_baseline:
-                savings = all_push_baseline - costs
-                savings_pct = (savings / all_push_baseline * 100) if all_push_baseline > 0 else 0
-                print(f"Cost Savings: {savings:.4f} ({savings_pct:.1f}%)")
-                print(f"Strategy Recommendation: {'Push-Pull' if costs < all_push_baseline else 'All-Push'}")
-            print(f"{'='*50}\n")
             
             logger.info(f"PrePP costs calculated: {costs:.2f}")
 
@@ -782,6 +764,8 @@ def get_selection_rate(projection: Any, combination_dict, selectivities):
                 event_combinations.append(combo_str)
 
     # Calculate selection rate as product of relevant selectivities
+    # TODO: Implement a better logic here,
+    #  because we do not need to set a warning everytime since we are only looking at pairwise selectivities
     res = 1.0
     for combo_str in event_combinations:
         if combo_str in selectivities:
@@ -793,7 +777,8 @@ def get_selection_rate(projection: Any, combination_dict, selectivities):
             else:
                 logger.warning(f"Invalid selectivity value for {combo_str}: {selectivity_value}")
         else:
-            logger.warning(f"Selectivity not found for combination: {combo_str}")
+            if len(combo_str) <= 2:
+                logger.warning(f"Selectivity not found for pair: {combo_str}")
 
     logger.info(f"Final selection rate for {projection}: {res}")
     return res
@@ -830,7 +815,6 @@ def update_selectivity(self, projection, selection_rate):
 
 
 def process_results_from_prepp(results, query, node, workload):
-    # print("DEBUG")
     projection_as_string = str(query)
     all_push_costs = results[4] if len(results) > 4 else 0
 
@@ -850,7 +834,6 @@ def process_results_from_prepp(results, query, node, workload):
             total_plan_costs += aquisition_step_costs
             total_plan_latency += aquisition_step_latency
 
-            # print(f"\n{'='*50}")
 
         transmission_ratio = (total_plan_costs / all_push_costs) if all_push_costs > 0 else 0
     else:
