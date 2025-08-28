@@ -43,7 +43,7 @@ def generate_workload(size, maxlength,primitive_events_data): #count, lenthh
     #for i in range(size):          # changed
     while len(qwl) !=  size:
         mylength = int(rd.uniform(maxlength/2 , maxlength+1)) 
-        while mylength == 2:
+        while mylength <= 2:
             mylength = int(rd.uniform(2, maxlength+1))         
         nesting_depth = rd.uniform(1,mylength-1)        
         x = rd.uniform(0,1)
