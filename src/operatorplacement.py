@@ -60,8 +60,6 @@ def getLowerBound(query,
                    :len(list(set(MS))) - 1]
     if not len(nonMS) == len(query.leafs()):
         minimalRate += sum(minimalProjs) * longestPath
-    # print("→ totalRate call for:", self.h_projection)
-    # print("→ result:", self.h_projrates.get(self.h_projection, 0))
 
     return minimalRate  #, nonMS)
 
@@ -95,15 +93,24 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
     filename = file_path
     number_parents = max_parents
 
-    print(f"[PLACEMENT] Processing file: {filename}")
-    print(f"[PLACEMENT] Index Event Nodes: {IndexEventNodes}")
+    print("\n" + "="*60)
+    print("SEQUENTIAL APPROACH - STARTING PLACEMENT")
+    print("="*60)
+    print(f"[SEQUENTIAL] Processing file: {filename}")
+    print(f"[SEQUENTIAL] Workload size: {len(wl)} queries")
+    print(f"[SEQUENTIAL] Query workload: {[str(q) for q in wl]}")
+    print(f"[SEQUENTIAL] Network nodes: {len(network)} nodes")
+    print(f"[SEQUENTIAL] Available event nodes: {list(IndexEventNodes.keys())}")
     ccosts = NEWcomputeCentralCosts(wl, IndexEventNodes, allPairs, rates, EventNodes, self.graph)
-    #print("central costs : " + str(ccosts))
     centralHopLatency = max(allPairs[ccosts[1]])
     numberHops = sum(allPairs[ccosts[1]])
-    print(f"[CENTRAL COSTS] Cost: {ccosts[0]:.2f}")
-    print(f"[CENTRAL COSTS] Total Hops: {numberHops}")
-    print(f"[CENTRAL COSTS] Hop Latency: {centralHopLatency:.2f}")
+    print(f"\n[SEQUENTIAL] Central Placement Baseline:")
+    print(f"  Central Cost: {ccosts[0]:.2f}")
+    print(f"  Central Node: {ccosts[1]}")
+    print(f"  Total Hops: {numberHops}")
+    print(f"  Hop Latency: {centralHopLatency:.2f}")
+    print(f"  Target: Beat central cost of {ccosts[0]:.2f}")
+    print("="*60 + "\n")
     MSPlacements = {}
     curcosts = 1
     start_time = time.time()
@@ -126,8 +133,6 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
     unfolded = self.h_mycombi
     criticalMSTypes = self.h_criticalMSTypes
     sharedDict = getSharedMSinput(self, unfolded, projFilterDict)
-    # print(f"[MS PLACEMENT] Unfolded projections: {unfolded}")
-    # print(f"[MS PLACEMENT] Critical MS types: {criticalMSTypes}")
     dependencies = compute_dependencies(self, unfolded, criticalMSTypes)
     processingOrder = sorted(dependencies.keys(), key=lambda x: dependencies[x])  # unfolded enthält kombi
     costs = 0
@@ -135,6 +140,9 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
     central_eval_plan = [ccosts[1], ccosts[3], wl]
 
     temp_results_dict = {}
+
+    print(f"[SEQUENTIAL] Starting placement for {len(processingOrder)} projections in dependency order...")
+    print(f"[SEQUENTIAL] Processing order: {[str(p) for p in processingOrder[:5]]}{'...' if len(processingOrder) > 5 else ''}")
 
     for projection in processingOrder:  #parallelize computation for all projections at the same level
         if set(unfolded[projection]) == set(projection.leafs()):  #initialize hop latency with maximum of children
@@ -151,15 +159,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
         if partType:
             MSPlacements[projection] = partType
             result = computeMSplacementCosts(self, projection, unfolded[projection], partType, sharedDict, noFilter, G)
-            # if not result:
-            #     print(f"[Fehler] Leeres Ergebnis für MS-Placement von {projection} erhalten. Überspringe...")
-            #     continue  # continue / return / break
             additional = result[0]
-            #     print(f"[DEBUG] MS Projection: {projection}")
-            #     print(f"        → PlacementCost: {additional}")
-            #     print(f"        → Sink: {result[2].sinks}")
-            #    #print(f"        → Used Nodes: {[inst.nodes for inst in result[3]]}")
-            #     print(f"        → Routes: {[inst.routingDict.get(projection) for inst in result[3] if projection in inst.routingDict]}")
 
             costs += additional
             hopLatency[projection] += result[1]
@@ -173,20 +173,16 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
 
             Filters += result[4]
             #if partType, and projection in wl and partType kleene component of projection, add sink
-            # print(f"[MS PLACEMENT] {projection} → Node: {partType}, Cost: {additional:.2f}, Hops: {result[1]}")
 
             if projection.get_original(wl) in wl and partType[0] in list(
                     map(lambda x: str(x), projection.get_original(wl).kleene_components())):
                 result = ComputeSingleSinkPlacement(projection.get_original(wl), [projection], noFilter)
                 additional = result[0]
                 costs += additional
-                # print(f"[SiS KLEENE] Sink at {partType}{projection.get_original(wl)}, Cost: {additional:.2f}, Hops: {result[1]}")
 
         else:
             # INFO: ComputeSingleSinkPlacement is called for the sequential approach.
             # Implementing a new function for the integrated approach
-            # if str(projection) == 'AND(SEQ(B, C), F)':
-            #     print("Hook")
 
             result = ComputeSingleSinkPlacement(projection, unfolded[projection], noFilter, projFilterDict, EventNodes,
                                                 IndexEventNodes, self.h_network_data, allPairs, mycombi, rates,
@@ -210,31 +206,71 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
             Filters += result[5]
 
 
-    print(temp_results_dict)
+    # SEQUENTIAL APPROACH - FINAL PLACEMENT DECISIONS
+    print("\n" + "="*60)
+    print("SEQUENTIAL APPROACH - PLACEMENT DECISIONS SUMMARY")
+    print("="*60)
+    
+    if temp_results_dict:
+        total_projections = len(temp_results_dict)
+        total_placement_cost = sum(result["placement_costs"] for result in temp_results_dict.values())
+        
+        print(f"[SEQUENTIAL] Total Projections Placed: {total_projections}")
+        print(f"[SEQUENTIAL] Total Placement Cost: {total_placement_cost:.2f}")
+        
+        # Group placements by node
+        placements_by_node = {}
+        for projection, result in temp_results_dict.items():
+            node = result["placement_node"]
+            if node not in placements_by_node:
+                placements_by_node[node] = []
+            placements_by_node[node].append((projection, result["placement_costs"]))
+        
+        print(f"\n[SEQUENTIAL] Placement Distribution Across Nodes:")
+        for node in sorted(placements_by_node.keys()):
+            projections = placements_by_node[node]
+            node_total_cost = sum(cost for _, cost in projections)
+            print(f"  Node {node}: {len(projections)} projection(s), Total Cost: {node_total_cost:.2f}")
+            for proj, cost in projections:
+                print(f"    - {proj}: {cost:.2f}")
+    else:
+        print("[SEQUENTIAL] No projections were placed")
+    
+    print("="*60 + "\n")
     mycosts = costs / ccosts[0]
-    print(f"[TRANSMISSION] INES with MS - Total Cost: {costs:.2f}")
+    print(f"[SEQUENTIAL] Final Aggregate Results:")
+    print(f"[SEQUENTIAL] Total Transmission Cost: {costs:.2f}")
+    print(f"[SEQUENTIAL] Central Cost Baseline: {ccosts[0]:.2f}")
+    print(f"[SEQUENTIAL] Cost Reduction Ratio: {mycosts:.4f}")
+    
     if len(wl) > 1 or wl[0].hasKleene() or wl[0].hasNegation():
         lowerBound = 0
     else:
         for query in wl:
             lowerBound = getLowerBound(query, self)
-    print(f"[BOUNDS] Lower Bound Ratio: {lowerBound / ccosts[0]:.4f}")
-
-    print(f"[TRANSMISSION] Ratio: {mycosts:.4f}")
-    #print("INEv Depth: " + str(float(max(list(dependencies.values()))+1)/2))
+    print(f"[SEQUENTIAL] Lower Bound Efficiency: {lowerBound / ccosts[0]:.4f}")
+    
+    # Calculate and display savings
+    total_savings = ccosts[0] - costs
+    savings_percentage = (total_savings / ccosts[0] * 100) if ccosts[0] > 0 else 0
+    print(f"[SEQUENTIAL] Total Savings: {total_savings:.2f} ({savings_percentage:.1f}%)")
 
     ID = int(np.random.uniform(0, 10000000))
 
     totaltime = str(round(time.time() - start_time, 2))
 
-    print(f"[TIMING] Execution Summary:")
-    print(f"[TIMING] Start: {start_time:.2f}")
-    print(f"[TIMING] End: {time.time():.2f}")
-    print(f"[TIMING] Duration: {totaltime} seconds")
+    print(f"\n[SEQUENTIAL] Execution Summary:")
+    print(f"  Execution Time: {totaltime} seconds")
+    print(f"  Projections per Second: {len(temp_results_dict)/float(totaltime) if float(totaltime) > 0 else 0:.2f}")
+    print(f"  Average Cost per Projection: {(costs/len(temp_results_dict)) if temp_results_dict else 0:.2f}")
+    print("\n" + "="*60)
 
     ID = int(np.random.uniform(0, 10000000))
 
-    print(f"[DEPENDENCIES] Final dependencies: {dependencies}")
+    print(f"\n[SEQUENTIAL] Processing Order & Dependencies:")
+    print(f"  Processing Order: {[str(p) for p in processingOrder]}")
+    print(f"  Dependency Levels: {len(set(dependencies.values()))} levels")
+    # print(f"  Max Dependency Depth: {max_dependency:.1f}")
     #hoplatency = max([hopLatency[x] for x in hopLatency.keys()])   
     if dependencies:
         max_dependency = float(max(list(dependencies.values())) / 2)
