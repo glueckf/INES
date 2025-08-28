@@ -224,7 +224,6 @@ class EventPlacementTracker:
         }
 
     def find_aquisition_step_for_event_at_node(self, node_id: int, event: str):
-        print("DEBUG")
 
         metadata = self.get_event_metadata(node_id, event)
         aquisition_steps = metadata.acquisition_steps if metadata else None
