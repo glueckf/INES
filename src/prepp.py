@@ -400,8 +400,6 @@ def extract_muse_graph_selectivities(line, all_event_combinations, eventtype_pai
         second_product_index = all_positions_of_eventcombinations[1 + index_adjust]
 
         event_product = line[first_product_index + 1:second_product_index]
-        if event_product == 'SEQ(A, B, C)':
-            print("Debug Hook")
 
         if (index_adjust // 2) % 2 == 0:
             all_event_combinations.append(event_product)
@@ -471,7 +469,6 @@ def determine_randomized_distribution_push_pull_costs(
         top_k = int(k)
 
         for current_node in query.node_placement:
-            print("~~~~~~~~")
             query.primitive_operators = copy.deepcopy(old_copy)
 
             if algorithm == "e":
@@ -502,13 +499,15 @@ def determine_randomized_distribution_push_pull_costs(
                 # FINAL PREPP RESULT LOGGING
                 # ===========================================
                 print(f"PLACEMENT: {query.query} -> Node {current_node} (Cost: {exact_costs:.2f})")
-                print(f"  Push-Pull Plan: {exact_push_pull_plan_for_a_projection}")
-                print(f"  Events to Pull: {used_eventtypes_to_pull}")
-                print(f"  Latency: {latency:.2f}")
 
                 # already_aquired_eventtypes = already_received_eventtypes[current_node]
 
-                if len(exact_push_pull_plan_for_a_projection) == len(used_eventtypes_to_pull):
+                if len(exact_push_pull_plan_for_a_projection) == len(used_eventtypes_to_pull) or used_eventtypes_to_pull == [[]]:
+                    if used_eventtypes_to_pull == [[]]:
+                        # Every Aquisition step is a push aquisition step. We just need to expand the size of the list
+                        # to match the exact_push_pull_plan_for_a_projection
+                        used_eventtypes_to_pull = [[] for _ in range(len(exact_push_pull_plan_for_a_projection))]
+                        print("[DEBUG] Adjusted used_eventtypes_to_pull to match exact_push_pull_plan_for_a_projection length")
                     aquisition_steps[query.query] = {}
                     received_eventtypes = []
                     for i, aquired_eventtype in enumerate(exact_push_pull_plan_for_a_projection):
@@ -562,11 +561,6 @@ def determine_randomized_distribution_push_pull_costs(
                     }
 
 
-                if plan_print == "t":
-                    # print aquisition steps
-                    print("Aquisition Steps:")
-                    for step, details in aquisition_steps.items():
-                        print(f"  Step {step + 1}: Pull {details['pull_set']} to acquire {details['events_to_pull']}")
                 total_exact_costs += exact_costs
 
     return (
@@ -1164,5 +1158,6 @@ def generate_prePP(
                 node_received_eventtypes,
                 aquisition_steps]
     except Exception as e:
-        print(f"[Error] Reading input buffer failed: {e}")
+        # Minimal error logging
+        pass
         return None
