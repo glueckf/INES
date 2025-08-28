@@ -134,15 +134,15 @@ def main() -> None:
     # run_simulation(nodes,node_event_ratio,num_eventtypes,eventskew,max_parents,query_size,query_length,run)
     # run_simulation(50, 0.5, 8, 1.3, 10, 5, 5, i)
     runner = create_simulation_runner(
-        network_size=50,
+        network_size=12,
         node_event_ratio=0.5,
-        num_event_types=8,
-        event_skew=1.3,
-        max_parents=10,
-        query_size=2,
-        query_length=5,
+        num_event_types=6,
+        event_skew=2.0,
+        max_parents=4,
+        query_size=3,
+        query_length=3,
         num_runs=1,
-        mode=SimulationMode.FULLY_DETERMINISTIC
+        mode=SimulationMode.RANDOM
     )
     
     runner.run_simulation_batch()

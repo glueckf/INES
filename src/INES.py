@@ -202,10 +202,10 @@ def generate_hardcoded_workload():
 
     queries = []
 
-    # # Query 1: Simple SEQ - SEQ(A, B, C)
-    # q1 = SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C'))
-    # q1 = number_children(q1)
-    # queries.append(q1)
+    # Query 1: Simple SEQ - SEQ(A, B, C)
+    q1 = SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C'))
+    q1 = number_children(q1)
+    queries.append(q1)
 
     # # Query 2:
     # q2 = AND(PrimEvent('A'), PrimEvent('B'))
@@ -223,14 +223,14 @@ def generate_hardcoded_workload():
     # q4 = number_children(q4)
     # queries.append(q4)
     #
-    # Query 4: Complex nested - AND(SEQ(A, B, C), D, SEQ(E, F))
-    # Shares SEQ(A, B, C) with query 1, and has synergy with query 3
-    q5 = AND(SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C')), PrimEvent('D'), SEQ(PrimEvent('E'), PrimEvent('F')))
-    q5 = number_children(q5)
-    queries.append(q5)
-
-    # # Query 6: AND(A, F, E)
-    # q6 = AND(PrimEvent('F'), PrimEvent('E'))
+    # # Query 4: Complex nested - AND(SEQ(A, B, C), D, SEQ(E, F))
+    # # Shares SEQ(A, B, C) with query 1, and has synergy with query 3
+    # q5 = AND(SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C')), PrimEvent('D'), SEQ(PrimEvent('E'), PrimEvent('F')))
+    # q5 = number_children(q5)
+    # queries.append(q5)
+    #
+    # # Query 6: AND(A, B, C)
+    # q6 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('C'))
     # q6 = number_children(q6)
     # queries.append(q6)
 
@@ -291,7 +291,7 @@ def generate_hardcoded_primitive_events():
     return [1000, 2, 45, 203, 800, 5]  # A=1000, B=2, C=45, D=203, E=800, F=5
 
 
-def generate_fixed_global_eventrates(self):
+def calculate_global_eventrates(self):
     # print("Hook")
     global_event_rates = np.zeros_like(self.network[0].eventrates)
     for node in self.network:
@@ -433,7 +433,8 @@ class INES():
 
         # Initialize core simulation parameters
         from projections import generate_all_projections
-        self.eventrates = generate_eventrates(config.event_skew, config.num_event_types)
+        eventrates_per_source = generate_eventrates(config.event_skew, config.num_event_types)
+        self.eventrates = eventrates_per_source
         self.networkParams = [self.eventskew, self.number_eventtypes, self.node_event_ratio, self.nwSize,
                               min(self.eventrates) / max(self.eventrates)]
 
@@ -441,7 +442,7 @@ class INES():
         if config.is_selectivities_fixed():
             self.primitiveEvents = generate_hardcoded_primitive_events()
         else:
-            self.primitiveEvents = generate_events(self.eventrates, config.node_event_ratio)
+            self.primitiveEvents = eventrates_per_source
 
         # Initialize simulation components based on configuration mode
         self._initialize_network_topology()
@@ -449,10 +450,9 @@ class INES():
         self._initialize_query_workload()
         self._initialize_selectivities()
 
-        if config.is_topology_fixed():
-            global_event_rates = generate_fixed_global_eventrates(self)
-            self.primitiveEvents = global_event_rates
-            self.eventrates = global_event_rates
+        global_event_rates = calculate_global_eventrates(self)
+        self.primitiveEvents = global_event_rates
+        self.eventrates = global_event_rates
 
         # Generate configuration and single selectivities for detailed analysis
         self.config_single = generate_config_buffer(self.network, self.query_workload, self.selectivities)
@@ -474,7 +474,10 @@ class INES():
             self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
 
-        integrated_operator_placement_results = calculate_integrated_approach(self, 'test', 0)
+        # integrated_operator_placement_results = calculate_integrated_approach(self, 'test', 0)
+
+        # Print comprehensive placement results
+        # print_kraken(integrated_operator_placement_results)
 
         (self.eval_plan, self.central_eval_plan, self.experiment_result, self.results) = calculate_operatorPlacement(
             self, 'test', 0)
@@ -488,16 +491,18 @@ class INES():
             f"[INES_DEBUG] Calling generate_prePP with is_deterministic={deterministic_flag} (mode={self.config.mode})")
         prepp_results = generate_prePP(self.plan, 'ppmuse', 'e', 1, 0, 1, True, self.allPairs, deterministic_flag)
 
-        final_prepp_results = update_prepp_results(self, prepp_results)
+        __final_prepp_costs = int(update_prepp_results(self, prepp_results)[0])
+
+        # __costs_integrated = int(integrated_operator_placement_results['formatted_results']['summary']['total_cost'])
+        __sequential_costs = int(prepp_results[0])
 
         # Only take the first 4 results to match the schema
-        self.results += final_prepp_results[0:4]
+        self.results += prepp_results[0:4]
 
         # Get the ID from the INES simulation as a foreign key, to later map both
         ines_simulation_id = self.results[0]
 
-        # Print comprehensive placement results
-        # print_kraken(integrated_operator_placement_results)
+
 
         # write_results_to_csv(integrated_operator_placement_results, ines_simulation_id)
 
