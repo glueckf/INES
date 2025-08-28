@@ -5,10 +5,13 @@ import numpy as np
 from .core import compute_operator_placement_with_prepp
 from .global_placement_tracker import get_global_placement_tracker, reset_global_placement_tracker
 from .node_tracker import initialize_global_event_tracker
+from .logging import get_placement_logger
 import json
 import csv
 import os
 from typing import Dict, Any
+
+logger = get_placement_logger(__name__)
 
 
 def format_results_for_comparison(results_dict: Dict, execution_info: Dict, workload: list) -> Dict[str, Any]:
@@ -73,7 +76,7 @@ def save_results_to_json(results: Dict[str, Any], filename: str) -> None:
     """
     with open(filename, 'w') as f:
         json.dump(results, f, indent=2, default=str)
-    print(f"[RESULTS] Saved machine-readable results to {filename}")
+    logger.info(f"Saved machine-readable results to {filename}")
 
 
 def calculate_integrated_approach(self, file_path: str, max_parents: int):
@@ -97,8 +100,6 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     filename = file_path
     number_parents = max_parents
 
-    # print(f"[PLACEMENT] Processing file: {filename}")
-    # print(f"[PLACEMENT] Index Event Nodes: {IndexEventNodes}")
     central_computation_result = NEWcomputeCentralCosts(workload, IndexEventNodes, allPairs, rates, EventNodes, self.graph)
     (central_computation_cost,
      central_computation_node,
@@ -106,9 +107,6 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
      central_computation_routing_dict) = central_computation_result
     centralHopLatency = max(allPairs[central_computation_node])
     numberHops = sum(allPairs[central_computation_node])
-    # print(f"[CENTRAL COSTS] Cost: {central_computation_cost:.2f}")
-    # print(f"[CENTRAL COSTS] Total Hops: {numberHops}")
-    # print(f"[CENTRAL COSTS] Hop Latency: {centralHopLatency:.2f}")
     MSPlacements = {}
     start_time = time.time()
 
@@ -116,7 +114,6 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     reset_global_placement_tracker()  # Start fresh for each placement calculation
     global_placement_tracker = get_global_placement_tracker()
     global_event_tracker = initialize_global_event_tracker(h_network_data=self.h_network_data)
-    # print(f"[PLACEMENT] Initialized global placement tracker")
 
     hopLatency = {}
 
@@ -133,8 +130,6 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     central_evaluation_plan = [central_computation_node, central_computation_routing_dict, workload]
 
     integrated_placement_decision_by_projection = {}
-
-    # processingOrder = dependency_sort(processingOrder)
 
     for projection in processingOrder:  #parallelize computation for all projections at the same level
         if set(unfolded[projection]) == set(projection.leafs()):  #initialize hop latency with maximum of children
@@ -222,21 +217,11 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
             if latency > max_latency:
                 max_latency = latency
 
-    # Print global placement tracker summary
-    print("\n[PLACEMENT] Global Placement Tracker Summary:")
-    print(global_placement_tracker.get_summary())
-
-    #
     kraken_simulation_id = int(np.random.uniform(0, 10000000))
 
     end_time = time.time()
     totaltime = str(end_time - start_time)[:6]
 
-    print("[TIMING] Execution Summary:")
-    print(f"[TIMING] Start: {start_time:.2f}")
-    print(f"[TIMING] End: {time.time():.2f}")
-    print(f"[TIMING] Duration: {totaltime} seconds")
-    
     # Prepare execution metadata
     execution_info = {
         'experiment_id': kraken_simulation_id,
@@ -257,13 +242,6 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     
     # Format results for comparison
     formatted_results = format_results_for_comparison(integrated_placement_decision_by_projection, execution_info, workload)
-    
-    # Print summary for immediate feedback
-    print("\n[RESULTS SUMMARY]")
-    print(f"Total Projections: {formatted_results['summary']['total_projections']}")
-    print(f"Successful Placements: {formatted_results['summary']['successful_placements']}")
-    print(f"Failed Placements: {formatted_results['summary']['failed_placements']}")
-    print(f"Total Placement Cost: {formatted_results['summary']['total_cost']:.2f}")
 
     result = {
         'kraken_simulation_id': kraken_simulation_id,
@@ -352,8 +330,8 @@ def write_results_to_csv(integrated_placement_decision_by_projection, ines_simul
         # Write data row
         writer.writerow(row_data)
 
-    print(f"[CSV] Appended Kraken simulation results to {csv_file_path}")
-    print(f"[CSV] Kraken Simulation ID: {kraken_simulation_id}, INES Simulation ID: {ines_simulation_id}")
+    logger.info(f" Appended Kraken simulation results to {csv_file_path}")
+    logger.info(f" Kraken Simulation ID: {kraken_simulation_id}, INES Simulation ID: {ines_simulation_id}")
 
 
 def print_kraken(integrated_operator_placement_results):
@@ -363,9 +341,9 @@ def print_kraken(integrated_operator_placement_results):
     Args:
         integrated_operator_placement_results: Complete results dict containing all placement data
     """
-    print("\n" + "="*80)
-    print("KRAKEN SIMULATION RESULTS SUMMARY")
-    print("="*80)
+    logger.info("="*80)
+    logger.info("KRAKEN SIMULATION RESULTS SUMMARY")
+    logger.info("="*80)
     
     # Extract main components
     kraken_id = integrated_operator_placement_results.get('kraken_simulation_id', 'N/A')
@@ -374,73 +352,78 @@ def print_kraken(integrated_operator_placement_results):
     
     # Print simulation metadata
     metadata = formatted_results.get('metadata', {})
-    print("\nSIMULATION METADATA:")
-    print(f"   Kraken Simulation ID: {kraken_id}")
-    print(f"   Experiment ID: {metadata.get('experiment_id', 'N/A')}")
-    print(f"   File Path: {metadata.get('file_path', 'N/A')}")
-    print(f"   Execution Time: {metadata.get('execution_time_seconds', 0):.2f} seconds")
-    print(f"   Workload Size: {metadata.get('workload_size', 0)} queries")
-    print(f"   Max Parents: {metadata.get('max_parents', 0)}")
+    logger.info("   SIMULATION METADATA:")
+    logger.info(f"   Kraken Simulation ID: {kraken_id}")
+    logger.info(f"   Experiment ID: {metadata.get('experiment_id', 'N/A')}")
+    logger.info(f"   File Path: {metadata.get('file_path', 'N/A')}")
+    logger.info(f"   Execution Time: {metadata.get('execution_time_seconds', 0):.2f} seconds")
+    logger.info(f"   Workload Size: {metadata.get('workload_size', 0)} queries")
+    logger.info(f"   Max Parents: {metadata.get('max_parents', 0)}")
     
     # Print cost comparison
     central_cost = metadata.get('central_cost', 0)
     total_integrated_cost = metadata.get('total_cost_sum', 0)
     savings = central_cost - total_integrated_cost if central_cost > 0 else 0
     savings_pct = (savings / central_cost * 100) if central_cost > 0 else 0
-    
-    print("\nCOST ANALYSIS:")
-    print(f"   Central Placement Cost: {central_cost:,.2f}")
-    print(f"   Integrated Placement Cost: {total_integrated_cost:,.2f}")
-    print(f"   Total Savings: {savings:,.2f} ({savings_pct:.1f}%)")
+
+    logger.info("=" * 80)
+    logger.info("   COST ANALYSIS:")
+    logger.info(f"   Central Placement Cost: {central_cost:,.2f}")
+    logger.info(f"   Integrated Placement Cost: {total_integrated_cost:,.2f}")
+    logger.info(f"   Total Savings: {savings:,.2f} ({savings_pct:.1f}%)")
     
     # Print latency information
-    print("\nLATENCY METRICS:")
-    print(f"   Central Hop Latency: {metadata.get('central_hop_latency', 0)} hops")
-    print(f"   Total Network Hops: {metadata.get('number_hops', 0)}")
+    logger.info("=" * 80)
+    logger.info("   LATENCY METRICS:")
+    logger.info(f"   Central Hop Latency: {metadata.get('central_hop_latency', 0)} hops")
+    logger.info(f"   Total Network Hops: {metadata.get('number_hops', 0)}")
     
     # Print placement summary
     summary = formatted_results.get('summary', {})
-    print("\nPLACEMENT SUMMARY:")
-    print(f"   Total Projections: {summary.get('total_projections', 0)}")
-    print(f"   Successful Placements: {summary.get('successful_placements', 0)}")
-    print(f"   Failed Placements: {summary.get('failed_placements', 0)}")
-    print(f"   Success Rate: {(summary.get('successful_placements', 0) / max(summary.get('total_projections', 1), 1) * 100):.1f}%")
+    logger.info("=" * 80)
+    logger.info("   PLACEMENT SUMMARY:")
+    logger.info(f"   Total Projections: {summary.get('total_projections', 0)}")
+    logger.info(f"   Successful Placements: {summary.get('successful_placements', 0)}")
+    logger.info(f"   Failed Placements: {summary.get('failed_placements', 0)}")
+    logger.info(f"   Success Rate: {(summary.get('successful_placements', 0) / max(summary.get('total_projections', 1), 1) * 100):.1f}%")
     
     # Print detailed placement decisions
-    print("\nDETAILED PLACEMENT DECISIONS:")
+    logger.info("=" * 80)
+    logger.info("   DETAILED PLACEMENT DECISIONS:")
     for projection, decision in placement_decisions.items():
         if hasattr(decision, 'node') and hasattr(decision, 'costs'):
-            print(f"   {projection}:")
-            print(f"      Node: {decision.node}")
-            print(f"      Strategy: {decision.strategy}")
-            print(f"      Final Cost: {decision.costs:,.2f}")
-            print(f"      All-Push Cost: {decision.all_push_costs:,.2f}")
-            print(f"      Savings: {decision.savings:,.2f}")
-            print(f"      Resources Sufficient: {decision.has_sufficient_resources}")
+            logger.info(f"   {projection}:")
+            logger.info(f"      Node: {decision.node}")
+            logger.info(f"      Strategy: {decision.strategy}")
+            logger.info(f"      Final Cost: {decision.costs:,.2f}")
+            logger.info(f"      All-Push Cost: {decision.all_push_costs:,.2f}")
+            logger.info(f"      Savings: {decision.savings:,.2f}")
+            logger.info(f"      Resources Sufficient: {decision.has_sufficient_resources}")
             
             # Print plan details if available
             if hasattr(decision, 'plan_details') and decision.plan_details:
                 details = decision.plan_details
-                print(f"      Computing Time: {details.get('computing_time', 0):.4f}s")
-                print(f"      Latency: {details.get('latency', 0)} hops")
-                print(f"      Transmission Ratio: {details.get('transmission_ratio', 0):.6f}")
-            print()
+                logger.info(f"      Computing Time: {details.get('computing_time', 0):.4f}s")
+                logger.info(f"      Latency: {details.get('latency', 0)} hops")
+                logger.info(f"      Transmission Ratio: {details.get('transmission_ratio', 0):.6f}")
+            # Empty line
     
     # Print formatted placements summary
     placements = formatted_results.get('placements', {})
     if placements:
-        print("PLACEMENT NODES DISTRIBUTION:")
+        logger.info("=" * 80)
+        logger.info("PLACEMENT NODES DISTRIBUTION:")
         node_counts = {}
         for proj_name, placement_info in placements.items():
             node = placement_info.get('placement_node', 'unknown')
             node_counts[node] = node_counts.get(node, 0) + 1
         
         for node, count in sorted(node_counts.items()):
-            print(f"   Node {node}: {count} projection(s)")
+            logger.info(f"   Node {node}: {count} projection(s)")
     
-    print("="*80)
-    print(f"Kraken simulation {kraken_id} completed successfully!")
-    print("="*80)
+    logger.info("="*80)
+    logger.info(f"Kraken simulation {kraken_id} completed successfully!")
+    logger.info("="*80)
 
 
 def finalize_placement_results(self, placement_decisions_by_projection):
@@ -457,12 +440,8 @@ def finalize_placement_results(self, placement_decisions_by_projection):
     Returns:
         Dict: Updated placement decisions with aggregated costs for workload queries
     """
-    print("[FINALIZE] Starting placement result finalization")
     workload = self.query_workload
     unfolded_workload = self.h_mycombi
-    
-    print(f"[FINALIZE] Workload queries: {[str(q) for q in workload]}")
-    print(f"[FINALIZE] Total projections placed: {len(placement_decisions_by_projection)}")
     
     # Create a mapping from string representation to projection objects for lookup
     projection_str_to_obj = {}
@@ -487,52 +466,38 @@ def finalize_placement_results(self, placement_decisions_by_projection):
         
         # Avoid infinite recursion
         if projection_str in visited:
-            print(f"[FINALIZE] Cycle detected for {projection_str}, skipping")
             return 0.0
             
         visited.add(projection_str)
         
         # Get the placement decision for this projection
         if projection not in placement_decisions_by_projection:
-            print(f"[FINALIZE] No placement decision found for {projection_str}")
             return 0.0
             
         decision = placement_decisions_by_projection[projection]
         base_cost = decision.costs
         total_cost = base_cost
         
-        print(f"[FINALIZE] Processing {projection_str} (base cost: {base_cost:.2f})")
-        
         # Check if this projection has acquisition steps
         acquisition_steps = decision.plan_details.get('aquisition_steps', {})
         
         if not acquisition_steps:
-            print(f"[FINALIZE] No acquisition steps for {projection_str}")
             return total_cost
             
         # Go through each acquisition step
         for step_idx, step_details in acquisition_steps.items():
             events_to_pull = step_details.get('events_to_pull', [])
             
-            print(f"[FINALIZE] Step {step_idx} events_to_pull: {events_to_pull}")
-            
             # Check each event being pulled in this step
             for event in events_to_pull:
                 # Check if this event is a subprojection (not a primitive event)
                 if event in projection_str_to_obj:
                     subprojection = projection_str_to_obj[event]
-                    print(f"[FINALIZE] Found subprojection: {event}")
-                    
+
                     # Recursively calculate the cost of the subprojection
                     subprojection_cost = calculate_total_cost_recursive(subprojection, visited.copy())
                     total_cost += subprojection_cost
-                    
-                    print(f"[FINALIZE] Added subprojection cost {subprojection_cost:.2f} for {event}")
-                else:
-                    # This is a primitive event, no additional cost
-                    print(f"[FINALIZE] Primitive event: {event}")
-        
-        print(f"[FINALIZE] Total aggregated cost for {projection_str}: {total_cost:.2f}")
+
         return total_cost
     
     # Create updated placement decisions with aggregated costs
@@ -549,7 +514,6 @@ def finalize_placement_results(self, placement_decisions_by_projection):
         
         # Update the costs if aggregation found additional costs
         if total_cost != decision.costs:
-            print(f"[FINALIZE] Updating costs for {str(projection)}: {decision.costs:.2f} -> {total_cost:.2f}")
             
             # Create a new decision object with updated cost
             class UpdatedDecision:
@@ -571,16 +535,5 @@ def finalize_placement_results(self, placement_decisions_by_projection):
             finalized_decision = UpdatedDecision(decision, total_cost)
         
         finalized_decisions[projection] = finalized_decision
-    
-    # Print summary of finalization
-    print(f"\n[FINALIZE] Summary:")
-    total_original_cost = sum(d.costs if hasattr(d, 'original_costs') else d.costs 
-                            for d in placement_decisions_by_projection.values() 
-                            if hasattr(d, 'costs'))
-    total_finalized_cost = sum(d.costs for d in finalized_decisions.values() if hasattr(d, 'costs') and d in workload)
-    
-    print(f"[FINALIZE] Original total cost: {total_original_cost:.2f}")
-    print(f"[FINALIZE] Finalized total cost: {total_finalized_cost:.2f}")
-    print(f"[FINALIZE] Additional aggregated cost: {total_finalized_cost - total_original_cost:.2f}")
-    
+
     return finalized_decisions
