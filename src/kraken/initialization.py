@@ -10,13 +10,19 @@ from typing import Dict, List, Any
 import networkx as nx
 from EvaluationPlan import Projection
 from helper.filter import getMaximalFilter
-from .logging import get_placement_logger
+from .logging import get_kraken_logger
+from .determinism import setup_deterministic_environment
 
-logger = get_placement_logger(__name__)
+logger = get_kraken_logger(__name__)
 
 
-def initialize_placement_state(combination: List[Any], proj_filter_dict: Dict[str, Any], 
-                             no_filter: bool, projection: Any, graph: nx.Graph) -> Dict[str, Any]:
+def initialize_placement_state(
+        combination: List[Any],
+        proj_filter_dict: Dict[str, Any],
+        no_filter: bool,
+        projection: Any,
+        graph: nx.Graph
+) -> Dict[str, Any]:
     """
     Prepare and return the initial state needed for computing projection placement in the network.
 
@@ -98,3 +104,14 @@ def initialize_placement_state(combination: List[Any], proj_filter_dict: Dict[st
     logger.info(f"Placement state initialized with {len(filters)} filters, {len(extended_combination)} event types")
     
     return placement_state
+
+
+def setup_run() -> None:
+    """
+    Set up the initial run environment for placement computation.
+    
+    This function initializes deterministic services and logs the start of
+    placement computation with deterministic behavior enabled.
+    """
+    setup_deterministic_environment()
+    logger.info("Starting placement computation with deterministic services")

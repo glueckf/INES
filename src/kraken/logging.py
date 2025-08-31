@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 
 
-def get_placement_logger(name: str) -> logging.Logger:
+def get_kraken_logger(name: str) -> logging.Logger:
     """
     Get a configured logger for placement engine components.
     
@@ -32,30 +32,3 @@ def get_placement_logger(name: str) -> logging.Logger:
         logger.setLevel(logging.INFO)
         
     return logger
-
-
-def log_dual_id(logger: logging.Logger, level: int, message: str, 
-                orig_id: int, sub_id: Optional[int] = None, **kwargs) -> None:
-    """
-    Log a message with dual ID information (original and subgraph IDs).
-    
-    Args:
-        logger: Logger instance to use
-        level: Logging level (e.g., logging.INFO)
-        message: Base message to log
-        orig_id: Original node ID
-        sub_id: Subgraph node ID (optional)
-        **kwargs: Additional context to include in the message
-    """
-    if sub_id is not None:
-        id_str = f"node={orig_id} (sub={sub_id})"
-    else:
-        id_str = f"node={orig_id}"
-        
-    context_str = ""
-    if kwargs:
-        context_parts = [f"{k}={v}" for k, v in kwargs.items()]
-        context_str = f" {' '.join(context_parts)}"
-        
-    full_message = f"{message} {id_str}{context_str}"
-    logger.log(level, full_message)

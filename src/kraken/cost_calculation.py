@@ -5,222 +5,34 @@ This module handles the cost calculation logic for both placement
 strategies, coordinating with adapters for legacy function calls.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Union, Tuple
 import re
-from helper.structures import getNodes
-from allPairs import find_shortest_path_or_ancestor
-from helper.placement_aug import NEWcomputeCentralCosts
-from .adapters import build_eval_plan, run_prepp
-from .logging import get_placement_logger
-from .fallback import calculate_fallback_costs
+from .adapters import run_prepp
+from .logging import get_kraken_logger
+from .node_tracker import get_global_event_placement_tracker
+
 
 # Import SimulationMode for deterministic mode checking
 try:
     from INES import SimulationMode
+
 except ImportError:
     # Fallback if import fails
     class SimulationMode:
         FULLY_DETERMINISTIC = "deterministic"
+        RANDOM = "random"
 
-logger = get_placement_logger(__name__)
+logger = get_kraken_logger(__name__)
 
+# Initialize global trackers lazily to avoid initialization issues
+def _get_global_event_placement_tracker():
+    """Get global event placement tracker with lazy initialization."""
+    return get_global_event_placement_tracker()
 
-def calculate_all_push_costs_on_subgraph(self, subgraph: Dict[str, Any], projection: Any):
-    """
-    Calculate the costs of using all-push strategy for a projection on a subgraph.
-    This is an efficient implementation that reuses logic from push_pull_plan_generator.
-    
-    Args:
-        subgraph: Dictionary containing subgraph information
-        projection: The projection being placed
-        
-    Returns:
-        float: Total cost of all-push strategy
-    """
-    return NEWcomputeCentralCosts(
-        workload=[projection],
-        IndexEventNodes=subgraph['index_event_nodes_sub'],
-        allPairs=subgraph['all_pairs_sub'],
-        rates=self.h_rates_data,
-        EventNodes=subgraph['event_nodes_sub'],
-        G=subgraph['subgraph']
-    )
-
-
-def calculate_prepp_costs_on_subgraph(self, node: int, subgraph: Dict[str, Any], projection: Any,
-                                      central_eval_plan: Any, routing_algo: Any,
-                                      all_push_baseline: Optional[float] = 6278.0,
-                                      ) -> float:
-    """
-    Calculate prepp costs on the extracted subgraph by generating evaluation plan and calling prePP.
-    Enhanced version that uses all_push_baseline for comparison.
-    
-    Args:
-        self: Instance with network data
-        node: Original placement node ID
-        subgraph: Subgraph information dictionary
-        projection: Projection being placed
-        central_eval_plan: Central evaluation plan
-        all_push_baseline: Pre-calculated all-push costs for comparison
-    
-    Returns:
-        float: Push-pull strategy cost
-    """
-    logger.info(f"Calculating push-pull costs for node {node}")
-    if all_push_baseline:
-        logger.info(f"All-push baseline: {all_push_baseline:.2f}")
-
-    try:
-        # Create evaluation plan structures (simplified)
-        subgraph_plan = _create_basic_evaluation_plan(self, subgraph, projection, routing_algo)
-        central_plan_subgraph = central_eval_plan
-
-        # Generate evaluation plan using adapter
-        eval_plan_buffer = build_eval_plan(
-            nw=subgraph['sub_network'],
-            selectivities=self.selectivities,
-            my_plan=[subgraph_plan, 12345, {}],  # Format: [plan, ID, dict]
-            central_plan=central_plan_subgraph,  # Format: [source, dict, workload]
-            workload=[projection]  # Single projection as workload
-        )
-
-        content = eval_plan_buffer.getvalue()
-
-        # Check if we should use deterministic behavior
-        is_deterministic = getattr(self, 'config', None) and getattr(self.config, 'mode', None) == SimulationMode.FULLY_DETERMINISTIC
-        
-        # Call generate_prePP using adapter
-        prepp_results = run_prepp(
-            input_buffer=eval_plan_buffer,
-            method="ppmuse",
-            algorithm="e",  # exact
-            samples=0,
-            top_k=0,
-            runs=1,
-            plan_print=True,
-            all_pairs=subgraph['all_pairs_sub'],
-            is_deterministic=is_deterministic
-        )
-
-        # Extract costs from prePP results
-        if prepp_results and len(prepp_results) > 0:
-            costs = prepp_results[0]  # exact_cost
-            exec_time = prepp_results[1] if len(prepp_results) > 1 else 0
-            latency = prepp_results[2] if len(prepp_results) > 2 else 0
-            transmission_ratio = prepp_results[3] if len(prepp_results) > 3 else 0
-            central_costs = prepp_results[4] if len(prepp_results) > 4 else 0
-            
-            # ===========================================
-            # PREPP RESULT LOGGING FOR NODE
-            # ===========================================
-            
-            logger.info(f"PrePP costs calculated: {costs:.2f}")
-
-            if all_push_baseline:
-                savings = all_push_baseline - costs
-                logger.info(f"Savings vs all-push: {savings:.2f} ({(savings / all_push_baseline * 100):.1f}%)")
-
-            return costs
-        else:
-            logger.warning("No valid prePP results returned, using fallback")
-            return calculate_fallback_costs(node, subgraph, projection, all_push_baseline)
-
-    except Exception as e:
-        logger.error(f"Error calculating prePP costs: {e}")
-        # Fallback to simple cost calculation
-        return calculate_fallback_costs(node, subgraph, projection, all_push_baseline)
-
-
-def _extract_event_types_from_projection(projection: Any) -> List[str]:
-    """
-    Extract event types from a projection.
-    
-    Args:
-        projection: The projection object or string
-    
-    Returns:
-        List of event type strings
-    """
-    if hasattr(projection, 'leafs'):
-        return projection.leafs()
-
-    # Fallback: try to extract from string representation
-    projection_str = str(projection)
-    # Extract capital letters that represent event types
-    event_types = re.findall(r'[A-Z]', projection_str)
-    return list(set(event_types))  # Remove duplicates
-
-
-def _create_basic_evaluation_plan(self, subgraph: Dict[str, Any], projection: Any, routing_algo: Any) -> Any:
-    """Create a basic evaluation plan structure for the subgraph."""
-    from EvaluationPlan import EvaluationPlan, Projection, Instance
-
-    # Create empty evaluation plan
-    evaluation_plan = EvaluationPlan([], [])
-
-    # Initialize instances for primitive events in the subgraph
-    evaluation_plan.initInstances(subgraph['index_event_nodes_sub'])
-
-    # Remap the placement node to the subgraph's placement node
-    remapped_placement_node = subgraph['placement_node_remapped']
-
-    # Create a relevant projection for the evaluation plan
-    current_projection = Projection(
-        name=projection,
-        combination={},
-        sinks=[remapped_placement_node],
-        spawnedInstances=[],
-        Filters=[])
-
-    # Extract event types from projection
-    event_types = _extract_event_types_from_projection(projection)
-
-    # Add instances to the projection based on the subgraph's event nodes
-    for event_type in event_types:
-        if event_type in subgraph['index_event_nodes_sub']:
-            instances_for_event = []
-
-            for etb in subgraph['index_event_nodes_sub'][event_type]:
-                # Get source nodes for this ETB in the original graph
-                original_sources = getNodes(etb, self.h_eventNodes, self.h_IndexEventNodes)
-
-                # Find corresponding sources in subgraph
-                subgraph_sources = []
-                for orig_source in original_sources:
-                    if orig_source in subgraph['node_mapping']:
-                        subgraph_sources.append(subgraph['node_mapping'][orig_source])
-
-                if subgraph_sources:
-                    # Create routing info - use simple direct path for now
-
-                    routing_dict = find_shortest_path_or_ancestor(
-                        routingDict=routing_algo,
-                        me=subgraph_sources[0],
-                        j=remapped_placement_node)
-
-                    # Create instance for this ETB
-                    instance = Instance(
-                        name=event_type,
-                        projname=etb,
-                        sources=subgraph_sources,
-                        routingDict={projection: routing_dict}
-                    )
-                    instances_for_event.append(instance)
-
-            if instances_for_event:
-                current_projection.addInstances(event_type, instances_for_event)
-
-    # Add the projection to the evaluation plan
-    evaluation_plan.addProjection(current_projection)
-
-    return evaluation_plan
-
-
-def _create_basic_central_plan(self, subgraph: Dict[str, Any], central_eval_plan: Any) -> List[Any]:
-    """Create a basic central plan structure for the subgraph."""
-    # Simplified central plan - use first node as source
-    source_node = 0 if subgraph['sub_network'] else 0
-    return [source_node, {}, []]
+def _get_global_placement_tracker():
+    """Get global placement tracker with lazy initialization."""
+    from .global_placement_tracker import get_global_placement_tracker
+    return get_global_placement_tracker()
 
 
 def calculate_final_costs_for_sending_to_sinks(
@@ -229,11 +41,11 @@ def calculate_final_costs_for_sending_to_sinks(
         current_latency: float,
         current_transmission_ratio: float,
         placement_node: int,
-        query_projection: Any,
+        projection: Any,
         sink_nodes: List[int],
         projection_rates: Dict[Any, tuple],
         shortest_path_distances: Dict[int, Dict[int, int]]
-) -> Dict[str, Any]:
+) -> Any:
     """
     Calculate the final transmission costs for sending query results to sink nodes.
     
@@ -242,10 +54,12 @@ def calculate_final_costs_for_sending_to_sinks(
     projection and the shortest path distances.
     
     Args:
-        cost_results: Dictionary containing placement results with keys like:
-                     'all_push_costs', 'push_pull_costs', 'latency', etc.
+        current_push_pull_costs: Current cost for push-pull strategy
+        current_all_push_costs: Current cost for all-push strategy
+        current_latency: Current latency before adding transmission costs
+        current_transmission_ratio: Current transmission efficiency ratio
         placement_node: Node ID where the projection is placed
-        query_projection: The projection/query being processed
+        projection: The projection/query being processed
         sink_nodes: List of destination node IDs to send results to
         projection_rates: Dictionary mapping projections to their rate tuples
         shortest_path_distances: All-pairs shortest path distance matrix
@@ -253,11 +67,10 @@ def calculate_final_costs_for_sending_to_sinks(
     Returns:
         Dict: Updated results dictionary with transmission costs included
     """
-
-    
     # Get the output rate for this projection
-    if isinstance(projection_rates, dict) and query_projection in projection_rates:
-        projection_output_rate = projection_rates[query_projection][1]
+
+    if isinstance(projection_rates, dict) and projection in projection_rates:
+        projection_output_rate = projection_rates[projection][1]
     else:
         projection_output_rate = 1  # Default fallback rate
     
@@ -268,7 +81,7 @@ def calculate_final_costs_for_sending_to_sinks(
         distances_to_each_sink.append(distance)
         
     # Log transmission planning details
-    logger.info(f"Projection {query_projection} output rate: {projection_output_rate}")
+    logger.info(f"Projection {projection} output rate: {projection_output_rate}")
     for i, sink in enumerate(sink_nodes):
         logger.info(f"Distance from placement node {placement_node} to sink {sink}: {distances_to_each_sink[i]}")
     
@@ -298,28 +111,38 @@ def calculate_final_costs_for_sending_to_sinks(
 
 
 def calculate_prepp_with_placement(
-        self,
-        node: int,
+        placement_node: int,
         projection: Any,
+        query_workload,
         network,
         selectivity_rate: float,
-        global_placement_tracker,
+        selectivities,
+        combination_dict,
+        rates,
+        projection_rates,
+        index_event_nodes,
+        mode,
+        shortest_path_distances,
         has_placed_subqueries: bool = False,
 ):
 
     input_buffer = initiate_buffer(
-        node, 
+        placement_node,
         projection, 
         network, 
-        self.selectivities, 
+        selectivities,
         selectivity_rate, 
-        global_placement_tracker=global_placement_tracker,
+        global_placement_tracker=_get_global_placement_tracker(),
         has_placed_subqueries=has_placed_subqueries,
-        mycombi=getattr(self, 'h_mycombi', {}),
-        rates=getattr(self, 'h_rates_data', {}),
-        projrates=getattr(self, 'h_projrates', {}),
-        index_event_nodes=getattr(self, 'h_IndexEventNodes', {})
+        mycombi=combination_dict,
+        rates=rates,
+        projrates=projection_rates,
+        index_event_nodes=index_event_nodes
     )
+
+    if input_buffer is None:
+        logger.error("Failed to create input buffer for prePP computation")
+        raise ValueError("Failed to create input buffer for prePP computation")
 
     content = input_buffer.getvalue()
 
@@ -328,7 +151,7 @@ def calculate_prepp_with_placement(
     algorithm = "e"
 
     # Check if we should use deterministic behavior
-    config_mode = (getattr(self, 'config', None) and getattr(self.config, 'mode', None)).value
+    config_mode = mode.value
     is_deterministic = config_mode == SimulationMode.FULLY_DETERMINISTIC
     
     results = run_prepp(
@@ -339,12 +162,12 @@ def calculate_prepp_with_placement(
         top_k=0,
         runs=1,
         plan_print=True,
-        all_pairs=self.allPairs,
+        all_pairs=shortest_path_distances,
         is_deterministic=is_deterministic)
 
     # process results
     if results and len(results) >= 5:
-        return process_results_from_prepp(results, query=projection, node=node, workload=self.query_workload)
+        return process_results_from_prepp(results, query=projection, node=placement_node, workload=query_workload)
     else:
         logger.warning("No valid prePP results returned, using fallback")
         raise ValueError("Invalid prePP results")
@@ -435,7 +258,6 @@ def initiate_buffer(
             selection_rate_dict=selection_rate_dict,
             projection=projection,
             has_placed_subqueries=has_placed_subqueries,
-            global_placement_tracker=global_placement_tracker,
             mycombi=mycombi,
             projrates=projrates
         )
@@ -518,8 +340,7 @@ def _process_forwarding_dict(projection, forwarding_dict):
 
 
 def _generate_plan_content(network, selectivities, workload, combination_dict, sink_dict, selection_rate_dict, 
-                          projection=None, has_placed_subqueries=False, global_placement_tracker=None, 
-                          mycombi=None, projrates=None):
+                          projection=None, has_placed_subqueries=False, mycombi=None, projrates=None):
     """Generate the actual plan content string."""
     lines = []
 
@@ -630,7 +451,8 @@ def _generate_plan_content(network, selectivities, workload, combination_dict, s
         lines.append("muse graph")
         
         # Check if we have placed subqueries and need to handle them differently
-        if has_placed_subqueries and projection and mycombi and global_placement_tracker and projrates:
+        if has_placed_subqueries and projection and mycombi and projrates:
+            global_placement_tracker = _get_global_placement_tracker()
             # Get subqueries for this projection
             if projection in mycombi:
                 subqueries = mycombi[projection]
@@ -850,3 +672,292 @@ def process_results_from_prepp(results, query, node, workload):
         'transmission_ratio': transmission_ratio,
         'aquisition_steps': aquisition_steps
     }
+
+
+def calculate_costs(
+        placement_node: int,
+        projection: Any,
+        query_workload,
+        network,
+        selectivity_rate: float,
+        selectivities,
+        combination_dict,
+        rates,
+        projection_rates,
+        index_event_nodes,
+        mode,
+        shortest_path_distances,
+        sink_nodes,
+        has_placed_subqueries: bool = False,
+) -> Any:
+    """
+    Calculate all placement costs for a given node and projection.
+    
+    This function orchestrates the cost calculation process by:
+    1. Running initial cost calculation via prePP
+    2. Adjusting costs for locally available events
+    3. Adding transmission costs to sinks if needed
+    
+    Args:
+        placement_node: Node ID where projection will be placed
+        projection: The projection/query being processed
+        query_workload: List of queries in the workload
+        network: List of network nodes
+        selectivity_rate: Selection rate for the projection
+        selectivities: Dictionary of selectivity values
+        combination_dict: Dictionary mapping projections to combinations
+        rates: Event rate dictionary
+        projection_rates: Projection output rates
+        index_event_nodes: Event node index mapping
+        mode: Simulation mode (deterministic/random)
+        shortest_path_distances: All-pairs shortest path distances
+        sink_nodes: List of sink node IDs
+        has_placed_subqueries: Whether subqueries are already placed
+        
+    Returns:
+        Tuple: (all_push_costs, push_pull_costs, latency, computing_time, 
+                transmission_ratio, acquisition_steps)
+    """
+    logger.debug(f"Calculating costs for node {placement_node}, projection {projection}")
+
+    # Initial cost calculation
+    results = calculate_prepp_with_placement(
+        placement_node=placement_node,
+        projection=projection,
+        query_workload=query_workload,
+        network=network,
+        selectivity_rate=selectivity_rate,
+        selectivities=selectivities,
+        combination_dict=combination_dict,
+        rates=rates,
+        projection_rates=projection_rates,
+        index_event_nodes=index_event_nodes,
+        mode=mode,
+        shortest_path_distances=shortest_path_distances,
+        has_placed_subqueries=has_placed_subqueries
+    )
+
+    # Adjust costs if some events are already available at the node
+    all_push_costs, push_pull_costs, latency, transmission_ratio = handle_locally_available_events(
+        results=results,
+        placement_node=placement_node,
+        projection=projection
+    )
+
+    # Check if we need to send results to sinks (e.g., cloud)
+    needs_to_be_sent_to_cloud = check_if_projection_needs_to_be_sent_to_cloud(
+        projection=projection,
+        query_workload=query_workload,
+        placement_node=placement_node,
+        sink_nodes=sink_nodes
+    )
+
+    if needs_to_be_sent_to_cloud:
+        # Add transmission costs to sinks
+        all_push_costs, push_pull_costs, latency, transmission_ratio = calculate_final_costs_for_sending_to_sinks(
+            current_push_pull_costs=push_pull_costs,
+            current_all_push_costs=all_push_costs,
+            current_latency=latency,
+            current_transmission_ratio=transmission_ratio,
+            placement_node=placement_node,
+            projection=projection,
+            sink_nodes=sink_nodes,
+            projection_rates=projection_rates,
+            shortest_path_distances=shortest_path_distances
+        )
+
+    # Return final costs and metrics
+    return (
+        all_push_costs,
+        push_pull_costs,
+        latency,
+        results['computing_time'],
+        transmission_ratio,
+        results['aquisition_steps']
+    )
+
+
+def check_if_projection_needs_to_be_sent_to_cloud(
+        projection,
+        query_workload,
+        placement_node,
+        sink_nodes
+) -> bool:
+    """
+    Check if projection results need to be sent to cloud/sink nodes.
+    
+    Args:
+        projection: The projection being evaluated
+        query_workload: List of queries in the workload
+        placement_node: Node where projection is placed
+        sink_nodes: List of sink node IDs
+        
+    Returns:
+        bool: True if projection needs to be sent to sinks
+    """
+    # If the projection is part of the workload and not placed at a sink, it needs to be sent to the cloud
+    return projection in query_workload and placement_node not in sink_nodes
+
+
+def handle_locally_available_events(
+        results,
+        placement_node,
+        projection
+) -> Tuple[float, float, float, float]:
+    """
+    Handle cost adjustments for locally available events at placement node.
+    
+    Args:
+        results: Results from initial cost calculation
+        placement_node: Node ID where projection is placed
+        projection: The projection being processed
+        
+    Returns:
+        Tuple: (adjusted_all_push_costs, adjusted_push_pull_costs, latency, transmission_ratio)
+    """
+    available_events = set(_get_global_event_placement_tracker().get_events_at_node(placement_node))
+    needed_events = get_events_for_projection(projection)
+
+    if available_events & needed_events:  # If there's intersection
+        return handle_intersection(
+            results, available_events, needed_events, logger
+        )
+    else:
+        return (
+            results['all_push_costs'],
+            results['push_pull_costs'],
+            results['latency'],
+            results['transmission_ratio']
+        )
+
+
+def handle_intersection(results, available_events, needed_events, logger) -> Tuple[float, float, float, float]:
+    """
+    Handle cost adjustments when some events are already available at the placement node.
+    
+    This function removes acquisition costs for events that don't need to be acquired
+    because they're already present at the node. It handles both primitive events (A, B, C)
+    and complex events (SEQ(A, B), AND(C, D)) by extracting the primitive components.
+    
+    Args:
+        results: Cost calculation results dictionary
+        available_events: Set of events available at the node
+        needed_events: Set of events needed for the projection
+        logger: Logger instance
+        
+    Returns:
+        Tuple: (adjusted_all_push_costs, adjusted_push_pull_costs, latency, transmission_ratio)
+    """
+    # Extract current costs from results
+    current_all_push_costs = results['all_push_costs']
+    current_push_pull_costs = results['push_pull_costs']
+    current_latency = results['latency']
+    current_transmission_ratio = results['transmission_ratio']
+    current_acquisition_steps = results['aquisition_steps']
+
+    # Find events that are both available and needed (intersection)
+    events_already_available = available_events & needed_events
+
+    # Track total cost adjustments
+    total_cost_adjustment = 0.0
+
+    # Go through each acquisition step and check if we can skip it
+    for step_index, step_details in current_acquisition_steps.items():
+        events_to_pull_in_this_step = step_details.get('events_to_pull', [])
+        step_total_cost = step_details.get('total_step_costs', 0.0)
+
+        # Extract primitive events from each event in this step
+        all_primitive_events_in_step = set()
+        for event_or_subquery in events_to_pull_in_this_step:
+            if isinstance(event_or_subquery, str):
+                # Handle string representations like 'SEQ(A, B)' or simple events like 'A'
+                primitive_events = determine_all_primitive_events_of_projection(event_or_subquery)
+                all_primitive_events_in_step.update(primitive_events)
+            else:
+                # Handle object representations - try to get string representation
+                primitive_events = determine_all_primitive_events_of_projection(str(event_or_subquery))
+                all_primitive_events_in_step.update(primitive_events)
+
+        # Check if any of the primitive events in this step are already available
+        events_we_can_skip = all_primitive_events_in_step & events_already_available
+
+        if events_we_can_skip:
+            # If all primitive events in this step are already available, skip entire step cost
+            if all_primitive_events_in_step <= events_already_available:  # All events in step are available
+                total_cost_adjustment += step_total_cost
+            else:
+                # Partial adjustment - some primitive events in step are available
+                fraction_available = len(events_we_can_skip) / len(all_primitive_events_in_step)
+                partial_adjustment = step_total_cost * fraction_available
+                total_cost_adjustment += partial_adjustment
+
+    # Apply cost adjustments
+    adjusted_push_pull_costs = current_push_pull_costs - total_cost_adjustment
+
+    # TODO: Fix all-push cost adjustment logic because it should not be reduced only by push pull change
+    adjusted_all_push_costs = current_all_push_costs - total_cost_adjustment
+
+    # Ensure costs don't go negative
+    adjusted_push_pull_costs = max(0.0, adjusted_push_pull_costs)
+    adjusted_all_push_costs = max(0.0, adjusted_all_push_costs)
+
+    # Recalculate transmission ratio if needed
+    if adjusted_all_push_costs > 0:
+        adjusted_transmission_ratio = adjusted_push_pull_costs / adjusted_all_push_costs
+    else:
+        adjusted_transmission_ratio = current_transmission_ratio
+
+    return adjusted_all_push_costs, adjusted_push_pull_costs, current_latency, adjusted_transmission_ratio
+
+
+def determine_all_primitive_events_of_projection(projection) -> List[str]:
+    """
+    Extract primitive events from a projection string like 'SEQ(A, B)' -> ['A', 'B'].
+    
+    Args:
+        projection: Projection string to parse
+        
+    Returns:
+        List of primitive event strings
+    """
+    given_predicates = str(projection).replace('AND', '')
+    given_predicates = given_predicates.replace('SEQ', '')
+    given_predicates = given_predicates.replace('(', '')
+    given_predicates = given_predicates.replace(')', '')
+    given_predicates = re.sub(r'[0-9]+', '', given_predicates)
+    given_predicates = given_predicates.replace(' ', '')
+    if ',' in given_predicates:
+        return given_predicates.split(',')
+    else:
+        # Handle single events without comma
+        return list(given_predicates)
+
+
+def get_events_for_projection(projection):
+    """
+    Recursively extract all primitive events from a projection.
+    
+    Args:
+        projection: Tree node (SEQ, AND, or PrimEvent)
+        
+    Returns:
+        set: Set of primitive event types (strings) contained in the projection
+    """
+    from helper.Tree import PrimEvent, SEQ, AND
+    events = set()
+
+    # Handle primitive events directly
+    if isinstance(projection, PrimEvent):
+        return {projection.evtype}
+
+    # Handle composite projections (SEQ, AND, etc.)
+    if hasattr(projection, 'children') and projection.children:
+        for child in projection.children:
+            if isinstance(child, PrimEvent):
+                events.add(child.evtype)
+            else:
+                # We have a subquery - call recursively and merge the sets
+                child_events = get_events_for_projection(child)
+                events.update(child_events)
+
+    return events

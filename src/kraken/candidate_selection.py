@@ -7,10 +7,11 @@ and validation of their resource availability.
 
 from typing import Dict, List, Any
 from helper.structures import getNodes
-from .logging import get_placement_logger
+from .logging import get_kraken_logger
 from .state import ResourceReport
+from .determinism import validate_deterministic_inputs
 
-logger = get_placement_logger(__name__)
+logger = get_kraken_logger(__name__)
 
 
 def check_possible_placement_nodes_for_input(
@@ -198,47 +199,44 @@ def check_resources(node: int, projection: Any, network: List[Any], combination:
         return False
 
 
-def get_detailed_resource_report(node: int, projection: Any, network: List[Any], 
-                               combination: List[Any]) -> ResourceReport:
+def get_all_possible_placement_nodes(
+        projection,
+        placement_state,
+        network_data,
+        index_event_nodes,
+        event_nodes
+) -> List[int]:
     """
-    Get a detailed resource report for a node and projection.
+    Get all possible placement nodes for a projection.
+    
+    This function finds all nodes where the projection could potentially be placed
+    by checking common ancestor requirements and applies deterministic validation.
     
     Args:
-        node: Node ID to check
-        projection: Projection object
-        network: Network node list
-        combination: List of projections in combination
+        projection: The projection being placed
+        placement_state: Placement state containing extended_combination and routing_dict
+        network_data: Dictionary mapping nodes to event types they produce
+        index_event_nodes: Event node index mapping
+        event_nodes: Event-to-node matrix
         
     Returns:
-        ResourceReport: Detailed report with success/failure reasons
+        List of validated node IDs suitable for placement
     """
-    reasons = []
-    
-    try:
-        # Basic bounds check
-        if node >= len(network) or node < 0:
-            reasons.append(f"Node {node} out of range (network size: {len(network)})")
-            return ResourceReport(False, tuple(reasons))
+    logger.debug(f"Finding possible placement nodes for projection {projection}")
 
-        target_node = network[node]
-        
-        # Check if projection has requirements
-        if not hasattr(projection, 'computing_requirements'):
-            reasons.append("Projection missing computing_requirements attribute")
-            return ResourceReport(False, tuple(reasons))
+    # Find possible placement nodes
+    possible_placement_nodes = check_possible_placement_nodes_for_input(
+        projection=projection,
+        combination=placement_state['extended_combination'],
+        network_data=network_data,
+        index_event_nodes=index_event_nodes,
+        event_nodes=event_nodes,
+        routing_dict=placement_state['routing_dict']
+    )
 
-        # Check computational power
-        if target_node.computational_power < projection.computing_requirements:
-            reasons.append(f"Insufficient CPU: {target_node.computational_power} < {projection.computing_requirements}")
+    # Validate and sort candidates for deterministic processing
+    possible_placement_nodes = validate_deterministic_inputs(possible_placement_nodes, logger)
 
-        # Check memory (2x for push-pull)
-        required_memory = 2 * projection.computing_requirements
-        if target_node.memory < required_memory:
-            reasons.append(f"Insufficient memory: {target_node.memory} < {required_memory}")
+    logger.info(f"Found {len(possible_placement_nodes)} possible placement nodes: {possible_placement_nodes}")
+    return possible_placement_nodes
 
-        success = len(reasons) == 0
-        return ResourceReport(success, tuple(reasons))
-        
-    except Exception as e:
-        reasons.append(f"Resource check exception: {e}")
-        return ResourceReport(False, tuple(reasons))

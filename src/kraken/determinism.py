@@ -31,20 +31,6 @@ def ensure_deterministic_iteration(items: Iterable[Any], key_func=None) -> List[
             return sorted(items, key=str)
 
 
-def generate_deterministic_id(services: RuntimeServices, prefix: str = "") -> int:
-    """
-    Generate a deterministic ID using the seeded RNG.
-    
-    Args:
-        services: Runtime services with seeded RNG
-        prefix: Optional prefix for logging (not used in ID generation)
-        
-    Returns:
-        Deterministic integer ID
-    """
-    return int(services.rng.integers(0, 10000000))
-
-
 def setup_deterministic_environment() -> None:
     """
     Set up environment variables for deterministic execution.
@@ -55,18 +41,6 @@ def setup_deterministic_environment() -> None:
     if 'PYTHONHASHSEED' not in os.environ:
         os.environ['PYTHONHASHSEED'] = '0'
         # Note: This only affects subprocesses, not the current process
-
-
-def log_determinism_info(services: RuntimeServices, logger) -> None:
-    """
-    Log information about determinism settings.
-    
-    Args:
-        services: Runtime services containing configuration
-        logger: Logger instance to use
-    """
-    logger.info(f"Determinism settings: seed={services.seed}, debug={services.debug}, strict_compat={services.strict_compat}")
-    logger.info(f"PYTHONHASHSEED={os.environ.get('PYTHONHASHSEED', 'unset')}")
 
 
 def validate_deterministic_inputs(candidates: List[Any], logger) -> List[Any]:

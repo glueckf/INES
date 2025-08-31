@@ -2,16 +2,16 @@ from helper.placement_aug import NEWcomputeCentralCosts, ComputeSingleSinkPlacem
 from helper.processCombination_aug import compute_dependencies, getSharedMSinput
 import time
 import numpy as np
-from .core import compute_operator_placement_with_prepp
+from .core import compute_kraken_for_projection
 from .global_placement_tracker import get_global_placement_tracker, reset_global_placement_tracker
 from .node_tracker import initialize_global_event_tracker
-from .logging import get_placement_logger
+from .logging import get_kraken_logger
 import json
 import csv
 import os
 from typing import Dict, Any
 
-logger = get_placement_logger(__name__)
+logger = get_kraken_logger(__name__)
 
 
 def format_results_for_comparison(results_dict: Dict, execution_info: Dict, workload: list) -> Dict[str, Any]:
@@ -35,10 +35,10 @@ def format_results_for_comparison(results_dict: Dict, execution_info: Dict, work
             'failed_placements': 0
         }
     }
-    
+
     for projection, result in results_dict.items():
         projection_str = str(projection)
-        
+
         if hasattr(result, 'costs') and hasattr(result, 'node'):
             # New placement engine result format
             formatted_results['placements'][projection_str] = {
@@ -62,7 +62,7 @@ def format_results_for_comparison(results_dict: Dict, execution_info: Dict, work
                 'result_data': str(result) if result else None
             }
             formatted_results['summary']['failed_placements'] += 1
-    
+
     return formatted_results
 
 
@@ -100,7 +100,8 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     filename = file_path
     number_parents = max_parents
 
-    central_computation_result = NEWcomputeCentralCosts(workload, IndexEventNodes, allPairs, rates, EventNodes, self.graph)
+    central_computation_result = NEWcomputeCentralCosts(workload, IndexEventNodes, allPairs, rates, EventNodes,
+                                                        self.graph)
     (central_computation_cost,
      central_computation_node,
      central_computation_longest_path,
@@ -166,7 +167,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
 
         else:
 
-            integrated_optimization_result_for_given_projection = compute_operator_placement_with_prepp(
+            integrated_optimization_result_for_given_projection = compute_kraken_for_projection(
                 self,
                 projection,
                 unfolded[projection],
@@ -186,8 +187,10 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
             integrated_placement_decision_by_projection[projection] = (
                 integrated_optimization_result_for_given_projection)
 
-
-    integrated_placement_decision_by_projection = finalize_placement_results(self, integrated_placement_decision_by_projection)
+    integrated_placement_decision_by_projection = finalize_placement_results(
+        self=self,
+        placement_decisions_by_projection=integrated_placement_decision_by_projection
+    )
 
     costs_for_evaluation_total_workload = 0
     # Go through each placement decision
@@ -196,7 +199,6 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         if projection in self.query_workload:
             # If so, add costs to the total costs
             costs_for_evaluation_total_workload += integrated_placement_decision_by_projection[projection].costs
-
 
     max_latency = 0
 
@@ -239,66 +241,111 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         'workload_size': len(workload),
         'global_tracker_entries': len(global_placement_tracker._placement_history) if global_placement_tracker else 0
     }
-    
+
     # Format results for comparison
-    formatted_results = format_results_for_comparison(integrated_placement_decision_by_projection, execution_info, workload)
+    formatted_results = format_results_for_comparison(integrated_placement_decision_by_projection, execution_info,
+                                                      workload)
 
     result = {
         'kraken_simulation_id': kraken_simulation_id,
         'integrated_placement_decision_by_projection': integrated_placement_decision_by_projection,
         'formatted_results': formatted_results
     }
-    
+
     return result
 
 
-def write_results_to_csv(integrated_placement_decision_by_projection, ines_simulation_id):
+def write_results_to_csv(integrated_placement_decision_by_projection, ines_simulation_id, simulation_config=None):
     """
-    Write aggregated placement results to CSV file for comparison analysis.
+    Append placement results to the kraken_results.csv file for analysis.
     
     Args:
         integrated_placement_decision_by_projection: Dict containing placement decisions by projection
         ines_simulation_id: Foreign key ID to link with INES simulation data
+        simulation_config: Optional simulation configuration object to include parameters
     """
-    
-    # Ensure res directory exists
-    res_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'res')
-    os.makedirs(res_dir, exist_ok=True)
-    
-    csv_file_path = os.path.join(res_dir, 'kraken_simulation.csv')
 
-    # Define CSV headers
+    # Ensure result directory exists in kraken folder
+    result_dir = os.path.join(os.path.dirname(__file__), 'result')
+    os.makedirs(result_dir, exist_ok=True)
+
+    csv_file_path = os.path.join(result_dir, 'kraken_results.csv')
+
+    # Define CSV headers (using consistent names with INES where applicable)
     headers = [
         'kraken_simulation_id',
-        'ines_simulation_id', 
+        'INES_ID',  # INES ID (foreign key) - same as INES
         'timestamp',
         'execution_time_seconds',
         'total_projections_placed',
         'central_placement_cost',
-        'integrated_placement-cost',
+        'integrated_placement_cost',
         'central_latency',
         'integrated_placement_latency',
         'cost_reduction_ratio',
         'latency_increase',
         'workload_size',
-        'nodes_with_placements'
+        'nodes_with_placements',
+        # Configuration parameters (same as INES)
+        'network_size',
+        'node_event_ratio',
+        'num_event_types',
+        'event_skew',
+        'max_parents',
+        'query_size',
+        'query_length',
+        'simulation_mode'
     ]
 
+    # Extract relevant data from results
+    run_metadata = integrated_placement_decision_by_projection['formatted_results']['metadata']
+    run_summary = integrated_placement_decision_by_projection['formatted_results']['summary']
+
+    # Simulation ID
     kraken_simulation_id = integrated_placement_decision_by_projection['kraken_simulation_id']
-    timestamp = integrated_placement_decision_by_projection['formatted_results']['metadata']['start_time']
-    execution_time_seconds = integrated_placement_decision_by_projection['formatted_results']['metadata']['execution_time_seconds']
-    total_projections_placed = integrated_placement_decision_by_projection['formatted_results']['summary']['total_projections']
-    central_placement_cost = integrated_placement_decision_by_projection['formatted_results']['metadata']['central_cost']
-    integrated_placement_cost = integrated_placement_decision_by_projection['formatted_results']['metadata']['total_cost_sum']
-    central_latency = integrated_placement_decision_by_projection['formatted_results']['metadata']['central_hop_latency']
 
-    # TODO: Not returned as of right now, needs to be calculated
-    integrated_placement_latency = central_latency
+    # Everything that can be extracted from metadata
+    timestamp = run_metadata['start_time']
+    execution_time_seconds = run_metadata['execution_time_seconds']
+    central_placement_cost = run_metadata['central_cost']
+    integrated_placement_cost = run_metadata['push_pull_plan_cost_sum']
+    central_latency = run_metadata['central_hop_latency']
+    integrated_placement_latency = run_metadata['push_pull_plan_latency']
+    workload_size = run_metadata['workload_size']
+    nodes_with_placements = run_metadata['global_tracker_entries']
 
-    cost_reduction_ratio = integrated_placement_cost / central_placement_cost
-    latency_increase = (integrated_placement_latency / central_latency) - 1
-    workload_size = integrated_placement_decision_by_projection['formatted_results']['metadata']['workload_size']
-    nodes_with_placements = integrated_placement_decision_by_projection['formatted_results']['metadata']['global_tracker_entries']
+    # Everything that can be extracted from summary
+    total_projections_placed = run_summary['total_projections']
+
+    # Calculate derived metrics
+    cost_reduction_ratio = integrated_placement_cost / central_placement_cost if central_placement_cost > 0 else 0
+    latency_increase = (integrated_placement_latency / central_latency) - 1 if central_latency > 0 else 0
+
+    # Extract configuration parameters from simulation_config if available
+    config_params = {}
+    if simulation_config:
+        config_params = {
+            'network_size': simulation_config.network_size,
+            'node_event_ratio': simulation_config.node_event_ratio,
+            'num_event_types': simulation_config.num_event_types,
+            'event_skew': simulation_config.event_skew,
+            'max_parents': simulation_config.max_parents,
+            'query_size': simulation_config.query_size,
+            'query_length': simulation_config.query_length,
+            'simulation_mode': simulation_config.mode.value
+        }
+    else:
+        # Default values if config not provided
+        config_params = {
+            'network_size': None,
+            'node_event_ratio': None,
+            'num_event_types': None,
+            'event_skew': None,
+            'max_parents': None,
+            'query_size': None,
+            'query_length': None,
+            'simulation_mode': None
+        }
 
     row_data = [
         kraken_simulation_id,
@@ -313,7 +360,15 @@ def write_results_to_csv(integrated_placement_decision_by_projection, ines_simul
         cost_reduction_ratio,
         latency_increase,
         workload_size,
-        nodes_with_placements
+        nodes_with_placements,
+        config_params['network_size'],
+        config_params['node_event_ratio'],
+        config_params['num_event_types'],
+        config_params['event_skew'],
+        config_params['max_parents'],
+        config_params['query_size'],
+        config_params['query_length'],
+        config_params['simulation_mode']
     ]
 
     # Check if file exists to determine if we need to write headers
@@ -341,15 +396,15 @@ def print_kraken(integrated_operator_placement_results):
     Args:
         integrated_operator_placement_results: Complete results dict containing all placement data
     """
-    logger.info("="*80)
+    logger.info("=" * 80)
     logger.info("KRAKEN SIMULATION RESULTS SUMMARY")
-    logger.info("="*80)
-    
+    logger.info("=" * 80)
+
     # Extract main components
     kraken_id = integrated_operator_placement_results.get('kraken_simulation_id', 'N/A')
     placement_decisions = integrated_operator_placement_results.get('integrated_placement_decision_by_projection', {})
     formatted_results = integrated_operator_placement_results.get('formatted_results', {})
-    
+
     # Print simulation metadata
     metadata = formatted_results.get('metadata', {})
     logger.info("   SIMULATION METADATA:")
@@ -359,7 +414,7 @@ def print_kraken(integrated_operator_placement_results):
     logger.info(f"   Execution Time: {metadata.get('execution_time_seconds', 0):.2f} seconds")
     logger.info(f"   Workload Size: {metadata.get('workload_size', 0)} queries")
     logger.info(f"   Max Parents: {metadata.get('max_parents', 0)}")
-    
+
     # Print cost comparison
     central_cost = metadata.get('central_cost', 0)
     total_integrated_cost = metadata.get('total_cost_sum', 0)
@@ -371,13 +426,13 @@ def print_kraken(integrated_operator_placement_results):
     logger.info(f"   Central Placement Cost: {central_cost:,.2f}")
     logger.info(f"   Integrated Placement Cost: {total_integrated_cost:,.2f}")
     logger.info(f"   Total Savings: {savings:,.2f} ({savings_pct:.1f}%)")
-    
+
     # Print latency information
     logger.info("=" * 80)
     logger.info("   LATENCY METRICS:")
     logger.info(f"   Central Hop Latency: {metadata.get('central_hop_latency', 0)} hops")
     logger.info(f"   Total Network Hops: {metadata.get('number_hops', 0)}")
-    
+
     # Print placement summary
     summary = formatted_results.get('summary', {})
     logger.info("=" * 80)
@@ -385,8 +440,9 @@ def print_kraken(integrated_operator_placement_results):
     logger.info(f"   Total Projections: {summary.get('total_projections', 0)}")
     logger.info(f"   Successful Placements: {summary.get('successful_placements', 0)}")
     logger.info(f"   Failed Placements: {summary.get('failed_placements', 0)}")
-    logger.info(f"   Success Rate: {(summary.get('successful_placements', 0) / max(summary.get('total_projections', 1), 1) * 100):.1f}%")
-    
+    logger.info(
+        f"   Success Rate: {(summary.get('successful_placements', 0) / max(summary.get('total_projections', 1), 1) * 100):.1f}%")
+
     # Print detailed placement decisions
     logger.info("=" * 80)
     logger.info("   DETAILED PLACEMENT DECISIONS:")
@@ -399,7 +455,7 @@ def print_kraken(integrated_operator_placement_results):
             logger.info(f"      All-Push Cost: {decision.all_push_costs:,.2f}")
             logger.info(f"      Savings: {decision.savings:,.2f}")
             logger.info(f"      Resources Sufficient: {decision.has_sufficient_resources}")
-            
+
             # Print plan details if available
             if hasattr(decision, 'plan_details') and decision.plan_details:
                 details = decision.plan_details
@@ -407,7 +463,7 @@ def print_kraken(integrated_operator_placement_results):
                 logger.info(f"      Latency: {details.get('latency', 0)} hops")
                 logger.info(f"      Transmission Ratio: {details.get('transmission_ratio', 0):.6f}")
             # Empty line
-    
+
     # Print formatted placements summary
     placements = formatted_results.get('placements', {})
     if placements:
@@ -417,13 +473,13 @@ def print_kraken(integrated_operator_placement_results):
         for proj_name, placement_info in placements.items():
             node = placement_info.get('placement_node', 'unknown')
             node_counts[node] = node_counts.get(node, 0) + 1
-        
+
         for node, count in sorted(node_counts.items()):
             logger.info(f"   Node {node}: {count} projection(s)")
-    
-    logger.info("="*80)
+
+    logger.info("=" * 80)
     logger.info(f"Kraken simulation {kraken_id} completed successfully!")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
 
 def finalize_placement_results(self, placement_decisions_by_projection):
@@ -442,12 +498,12 @@ def finalize_placement_results(self, placement_decisions_by_projection):
     """
     workload = self.query_workload
     unfolded_workload = self.h_mycombi
-    
+
     # Create a mapping from string representation to projection objects for lookup
     projection_str_to_obj = {}
     for proj in placement_decisions_by_projection.keys():
         projection_str_to_obj[str(proj)] = proj
-    
+
     def calculate_total_cost_recursive(projection, visited=None):
         """
         Recursively calculate the total cost for a projection including all subprojection costs.
@@ -461,33 +517,33 @@ def finalize_placement_results(self, placement_decisions_by_projection):
         """
         if visited is None:
             visited = set()
-            
+
         projection_str = str(projection)
-        
+
         # Avoid infinite recursion
         if projection_str in visited:
             return 0.0
-            
+
         visited.add(projection_str)
-        
+
         # Get the placement decision for this projection
         if projection not in placement_decisions_by_projection:
             return 0.0
-            
+
         decision = placement_decisions_by_projection[projection]
         base_cost = decision.costs
         total_cost = base_cost
-        
+
         # Check if this projection has acquisition steps
         acquisition_steps = decision.plan_details.get('aquisition_steps', {})
-        
+
         if not acquisition_steps:
             return total_cost
-            
+
         # Go through each acquisition step
         for step_idx, step_details in acquisition_steps.items():
             events_to_pull = step_details.get('events_to_pull', [])
-            
+
             # Check each event being pulled in this step
             for event in events_to_pull:
                 # Check if this event is a subprojection (not a primitive event)
@@ -499,22 +555,21 @@ def finalize_placement_results(self, placement_decisions_by_projection):
                     total_cost += subprojection_cost
 
         return total_cost
-    
+
     # Create updated placement decisions with aggregated costs
     finalized_decisions = {}
-    
+
     # Process each projection
     for projection, decision in placement_decisions_by_projection.items():
         # Calculate the total aggregated cost
         total_cost = calculate_total_cost_recursive(projection)
-        
+
         # Create a new decision object with updated costs
         # We'll create a copy of the original decision and update the costs
         finalized_decision = decision  # Start with original decision
-        
+
         # Update the costs if aggregation found additional costs
         if total_cost != decision.costs:
-            
             # Create a new decision object with updated cost
             class UpdatedDecision:
                 def __init__(self, original_decision, new_total_cost):
@@ -526,14 +581,14 @@ def finalize_placement_results(self, placement_decisions_by_projection):
                     self.has_sufficient_resources = original_decision.has_sufficient_resources
                     self.plan_details = original_decision.plan_details
                     self.savings = original_decision.savings
-                    
+
                     # Update the total cost with aggregated cost
                     self.costs = new_total_cost
                     self.original_costs = original_decision.costs
                     self.aggregated_additional_cost = new_total_cost - original_decision.costs
-            
+
             finalized_decision = UpdatedDecision(decision, total_cost)
-        
+
         finalized_decisions[projection] = finalized_decision
 
     return finalized_decisions

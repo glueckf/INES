@@ -9,9 +9,9 @@ while documenting their expected shapes and providing clear error messages.
 
 from typing import Any, Dict, List, Tuple
 import io
-from .logging import get_placement_logger
+from .logging import get_kraken_logger
 
-logger = get_placement_logger(__name__)
+logger = get_kraken_logger(__name__)
 
 
 def build_eval_plan(nw: List[Any], selectivities: Dict[str, Any], my_plan: List[Any], 
@@ -136,65 +136,3 @@ def run_prepp(input_buffer: io.StringIO, method: str, algorithm: str, samples: i
         logger.error(f"Error in run_prepp adapter: {e}")
         raise
 
-
-def compute_central_plan(workload: List[Any], index_event_nodes: Dict[str, Any], 
-                        all_pairs: List[List[float]], rates: Dict[str, float], 
-                        event_nodes: List[Any], graph: Any) -> Tuple[float, int, float, Dict[str, Any]]:
-    """
-    Adapter for NEWcomputeCentralCosts function.
-    
-    This adapter validates inputs and forwards the call to the legacy NEWcomputeCentralCosts
-    function for central placement cost calculation.
-    
-    Args:
-        workload: List of queries/projections
-        index_event_nodes: Mapping of event types to ETB instances
-        all_pairs: All-pairs distance matrix
-        rates: Event type rates dictionary
-        event_nodes: Event nodes matrix
-        graph: NetworkX graph
-        
-    Returns:
-        Tuple: (cost, node, longest_path, routing_dict)
-        
-    Raises:
-        ValueError: If input shapes don't match expected format
-        ImportError: If legacy function cannot be imported
-    """
-    try:
-        # Validate inputs
-        if not isinstance(workload, list):
-            raise ValueError(f"workload must be a list, got {type(workload)}")
-            
-        if not isinstance(index_event_nodes, dict):
-            raise ValueError(f"index_event_nodes must be dict, got {type(index_event_nodes)}")
-            
-        if not isinstance(all_pairs, list):
-            raise ValueError(f"all_pairs must be a list, got {type(all_pairs)}")
-            
-        if not isinstance(rates, dict):
-            raise ValueError(f"rates must be dict, got {type(rates)}")
-            
-        # Check all_pairs is a square matrix
-        if all_pairs and not isinstance(all_pairs[0], list):
-            raise ValueError("all_pairs must be a list of lists (matrix)")
-            
-        logger.debug(f"compute_central_plan called with workload={len(workload)} items, matrix_size={len(all_pairs) if all_pairs else 0}")
-        
-        # Import and call legacy function  
-        from helper.placement_aug import NEWcomputeCentralCosts
-        
-        result = NEWcomputeCentralCosts(workload, index_event_nodes, all_pairs, rates, event_nodes, graph)
-        
-        # Validate result format
-        if not isinstance(result, tuple) or len(result) != 4:
-            logger.warning(f"NEWcomputeCentralCosts returned unexpected format: {type(result)} with length {len(result) if hasattr(result, '__len__') else 'N/A'}")
-            
-        return result
-        
-    except ImportError as e:
-        logger.error(f"Failed to import legacy NEWcomputeCentralCosts: {e}")
-        raise ImportError(f"Cannot import legacy NEWcomputeCentralCosts function: {e}")
-    except Exception as e:
-        logger.error(f"Error in compute_central_plan adapter: {e}")
-        raise

@@ -10,6 +10,11 @@ from dataclasses import dataclass
 from typing import Dict, List, Set, Tuple, Any, Optional
 import numpy as np
 
+from .cost_calculation import get_events_for_projection
+from .logging import get_kraken_logger
+from .node_tracker import get_global_event_placement_tracker
+
+logger = get_kraken_logger(__name__)
 
 @dataclass(frozen=True)
 class RuntimeServices:
@@ -210,3 +215,70 @@ class PlacementDecisionTracker:
     def export_decisions(self) -> List[Dict[str, Any]]:
         """Export all decisions as a list of dictionaries."""
         return [decision.to_dict() for decision in self.decisions]
+
+
+def check_if_projection_has_placed_subqueries(projection, mycombi, global_tracker) -> bool:
+    """
+    Check if a projection has subqueries that have already been placed.
+    
+    Args:
+        projection: The projection to check
+        mycombi: Combination dictionary mapping projections to subqueries
+        global_tracker: Global placement tracker instance
+        
+    Returns:
+        bool: True if any subqueries have existing placements
+        
+    Raises:
+        ValueError: If projection not found in mycombi or invalid structure
+    """
+    if projection in mycombi:
+        subqueries = mycombi[projection]
+        global_tracker.register_query_hierarchy(projection, subqueries)
+
+        # Check if any subqueries have existing placements
+        for subquery in subqueries:
+            has_children = hasattr(subquery, 'children')
+            has_placement = global_tracker.has_placement_for(subquery)
+            if has_children and has_placement:
+                return True
+
+        return False
+    else:
+        raise ValueError("Projection not found in mycombi or invalid structure")
+
+
+def update_tracker(
+        best_decision,
+        placement_decision_tracker,
+        projection
+) -> None:
+    """
+    Update global placement and event trackers with the best placement decision.
+    
+    Args:
+        best_decision: The best placement decision selected
+        placement_decision_tracker: Tracker containing all placement decisions
+        projection: The projection that was placed
+        
+    Raises:
+        RuntimeError: If no valid placement nodes found
+    """
+    if not best_decision:
+        raise RuntimeError("No valid placement nodes found")
+
+    from .global_placement_tracker import get_global_placement_tracker
+    global_placement_tracker = get_global_placement_tracker()
+    global_event_placement_tracker = get_global_event_placement_tracker()
+
+    global_placement_tracker.store_placement_decisions(projection, placement_decision_tracker)
+
+    new_events_available = list(get_events_for_projection(projection))
+
+    global_event_placement_tracker.add_events_at_node(
+        node_id=best_decision.node,
+        events=new_events_available,
+        query_id=str(projection),
+        acquisition_type=best_decision.strategy,
+        acquisition_steps=best_decision.plan_details.get('aquisition_steps', [])
+    )

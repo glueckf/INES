@@ -25,15 +25,15 @@ class GlobalPlacementTracker:
         self._projection_mappings: Dict[Any, str] = {}
         self._query_hierarchy: Dict[Any, List[Any]] = {}
         
-    def store_placement_decisions(self, projection: Any, tracker: PlacementDecisionTracker) -> None:
+    def store_placement_decisions(self, projection: Any, placement_decisions: PlacementDecisionTracker) -> None:
         """
         Store placement decisions for a projection.
         
         Args:
             projection: The projection object (e.g., AND(A, B))
-            tracker: The PlacementDecisionTracker with all decisions
+            placement_decisions: The PlacementDecisionTracker with all decisions
         """
-        self._placement_history[projection] = tracker
+        self._placement_history[projection] = placement_decisions
         
     def get_placement_decisions(self, projection: Any) -> Optional[PlacementDecisionTracker]:
         """
