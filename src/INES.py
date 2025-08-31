@@ -1,3 +1,4 @@
+import string
 from enum import Enum
 from dataclasses import dataclass
 
@@ -457,10 +458,22 @@ class INES():
         # Generate configuration and single selectivities for detailed analysis
         self.config_single = generate_config_buffer(self.network, self.query_workload, self.selectivities)
         deterministic_flag = self.config.is_selectivities_fixed()
-        print(
-            f"[INES_DEBUG] Calling initializeSingleSelectivity with is_deterministic={deterministic_flag} (mode={self.config.mode})")
-        self.single_selectivity = initializeSingleSelectivity(self.CURRENT_SECTION, self.config_single,
-                                                              self.query_workload, deterministic_flag)
+
+        """
+        Finn Glück 31.08.2025: 
+        When using multiple runs the legacy system produces an error since some selectivities are not initialized properly. 
+        This is a quick fix to ensure that all selectivities are initialized properly.
+        """
+        # Get all events
+        all_events_array_string = list(string.ascii_uppercase[:config.num_event_types])
+
+        self.single_selectivity = initializeSingleSelectivity(
+            CURRENT_SECTION=self.CURRENT_SECTION,
+            config_single=self.config_single,
+            workload=self.query_workload,
+            is_deterministic=deterministic_flag,
+            all_events_array_string=all_events_array_string
+        )
 
         # Initialize remaining simulation components (legacy processing pipeline)
         self.h_network_data, self.h_rates_data, self.h_primEvents, self.h_instances, self.h_nodes = initialize_globals(
