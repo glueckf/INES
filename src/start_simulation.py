@@ -15,11 +15,11 @@ class SimulationRunner:
     
     config: SimulationConfig
     num_runs: int = 1
-    output_dir: Path = Path("./res")
+    output_dir: Path = Path("./kraken/result")
     
     def __post_init__(self):
         """Initialize output directory if it doesn't exist."""
-        self.output_dir.mkdir(exist_ok=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
     
     def run_single_simulation(self, run_id: int) -> Optional[pd.DataFrame]:
         """
@@ -43,48 +43,64 @@ class SimulationRunner:
     
     def run_simulation_batch(self) -> None:
         """
-        Execute multiple simulation runs and save results to CSV.
+        Execute multiple simulation runs and append results to persistent CSV files.
         
-        Runs simulations sequentially to avoid multiprocessing complexities.
-        Results are aggregated and saved to a timestamped CSV file.
+        Runs simulations sequentially and appends each result to ines_results.csv.
+        The kraken results are handled separately in the kraken module.
         """
-        timestamp = datetime.now().strftime("%d%m%Y%H%M%S")
-        filename = f"INES-simulation_{timestamp}.csv"
-        filepath = self.output_dir / filename
+        ines_filepath = self.output_dir / "ines_results.csv"
         
         print(f"[INES] Starting {self.num_runs} simulation runs...")
         print(f"[CONFIG] Mode: {self.config.mode.value}")
         print(f"[CONFIG] Network size: {self.config.network_size}")
         print(f"[CONFIG] Query parameters: size={self.config.query_size}, length={self.config.query_length}")
         
-        successful_results: List[pd.DataFrame] = []
+        successful_runs = 0
         
         for run_id in range(self.num_runs):
             result = self.run_single_simulation(run_id)
             if result is not None:
-                successful_results.append(result)
+                self._append_ines_result(result, ines_filepath)
+                successful_runs += 1
         
-        self._save_results(successful_results, filepath)
+        print(f"[RESULTS] {successful_runs} successful runs appended to: {ines_filepath.name}")
+        
+        if successful_runs < self.num_runs:
+            failed_runs = self.num_runs - successful_runs
+            print(f"[RESULTS] Warning: {failed_runs} run(s) failed")
     
-    def _save_results(self, results: List[pd.DataFrame], filepath: Path) -> None:
+    def _append_ines_result(self, result_df: pd.DataFrame, filepath: Path) -> None:
         """
-        Save aggregated results to CSV file.
+        Append a single simulation result to the INES results CSV file.
         
         Args:
-            results: List of DataFrames containing simulation results
-            filepath: Path where results should be saved
+            result_df: DataFrame containing a single simulation result
+            filepath: Path to the INES results CSV file
         """
-        if not results:
-            print("[RESULTS] Warning: No successful runs to save")
-            return
-            
-        final_df = pd.concat(results, ignore_index=True)
-        final_df.to_csv(filepath, index=False)
-        print(f"[RESULTS] {len(results)} successful runs saved to: {filepath.name}")
+        # Add simulation configuration parameters to the result
+        enhanced_result = result_df.copy()
         
-        if len(results) < self.num_runs:
-            failed_runs = self.num_runs - len(results)
-            print(f"[RESULTS] Warning: {failed_runs} run(s) failed")
+        # Add configuration parameters as additional columns
+        config_data = {
+            'network_size': self.config.network_size,
+            'node_event_ratio': self.config.node_event_ratio,
+            'num_event_types': self.config.num_event_types,
+            'event_skew': self.config.event_skew,
+            'max_parents': self.config.max_parents,
+            'query_size': self.config.query_size,
+            'query_length': self.config.query_length,
+            'simulation_mode': self.config.mode.value,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        for key, value in config_data.items():
+            enhanced_result[key] = value
+        
+        # Append to CSV file (create with headers if it doesn't exist)
+        if filepath.exists():
+            enhanced_result.to_csv(filepath, mode='a', header=False, index=False)
+        else:
+            enhanced_result.to_csv(filepath, mode='w', header=True, index=False)
 
 
 def create_simulation_runner(
@@ -134,15 +150,15 @@ def main() -> None:
     # run_simulation(nodes,node_event_ratio,num_eventtypes,eventskew,max_parents,query_size,query_length,run)
     # run_simulation(50, 0.5, 8, 1.3, 10, 5, 5, i)
     runner = create_simulation_runner(
-        network_size=12,
+        network_size=30,
         node_event_ratio=0.5,
         num_event_types=6,
         event_skew=2.0,
         max_parents=4,
         query_size=3,
         query_length=3,
-        num_runs=1,
-        mode=SimulationMode.RANDOM
+        num_runs=2,
+        mode=SimulationMode.FULLY_DETERMINISTIC
     )
     
     runner.run_simulation_batch()

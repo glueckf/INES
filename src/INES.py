@@ -10,7 +10,7 @@ from graph import draw_graph
 from allPairs import populate_allPairs
 from queryworkload import generate_workload
 from selectivity import initialize_selectivities
-from src.kraken.operator_placement_legacy_hook import calculate_integrated_approach, write_results_to_csv, print_kraken
+from kraken.operator_placement_legacy_hook import calculate_integrated_approach, write_results_to_csv, print_kraken
 from write_config_single import generate_config_buffer
 from singleSelectivities import initializeSingleSelectivity
 from helper.parse_network import initialize_globals
@@ -474,7 +474,7 @@ class INES():
             self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
 
-        # integrated_operator_placement_results = calculate_integrated_approach(self, 'test', 0)
+        integrated_operator_placement_results = calculate_integrated_approach(self, 'test', 0)
 
         # Print comprehensive placement results
         # print_kraken(integrated_operator_placement_results)
@@ -502,9 +502,7 @@ class INES():
         # Get the ID from the INES simulation as a foreign key, to later map both
         ines_simulation_id = self.results[0]
 
-
-
-        # write_results_to_csv(integrated_operator_placement_results, ines_simulation_id)
+        write_results_to_csv(integrated_operator_placement_results, ines_simulation_id, self.config)
 
     def _initialize_network_topology(self):
         """Create network topology based on configuration mode."""

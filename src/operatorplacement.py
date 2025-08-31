@@ -7,7 +7,6 @@ import argparse
 from EvaluationPlan import EvaluationPlan
 import numpy as np
 from projections import returnPartitioning, totalRate
-from kraken.core import compute_operator_placement_with_prepp
 
 
 #maxDist = max([max(x) for x in allPairs])
