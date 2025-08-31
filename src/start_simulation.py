@@ -80,21 +80,6 @@ class SimulationRunner:
         # Add simulation configuration parameters to the result
         enhanced_result = result_df.copy()
         
-        # Add configuration parameters as additional columns
-        config_data = {
-            'network_size': self.config.network_size,
-            'node_event_ratio': self.config.node_event_ratio,
-            'num_event_types': self.config.num_event_types,
-            'event_skew': self.config.event_skew,
-            'max_parents': self.config.max_parents,
-            'query_size': self.config.query_size,
-            'query_length': self.config.query_length,
-            'simulation_mode': self.config.mode.value,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        for key, value in config_data.items():
-            enhanced_result[key] = value
         
         # Append to CSV file (create with headers if it doesn't exist)
         if filepath.exists():
@@ -157,8 +142,8 @@ def main() -> None:
         max_parents=4,
         query_size=3,
         query_length=3,
-        num_runs=2,
-        mode=SimulationMode.FULLY_DETERMINISTIC
+        num_runs=10,
+        mode=SimulationMode.RANDOM
     )
     
     runner.run_simulation_batch()
