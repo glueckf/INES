@@ -303,6 +303,58 @@ def calculate_global_eventrates(self):
     return result
 
 
+def calculate_different_placement(eval_plan: list, integrated_results: dict) -> int:
+    """Compare placement differences between eval plan and Kraken placement decisions.
+    
+    This function analyzes the differences between the original placement nodes from
+    the evaluation plan and the placement decisions made by the Kraken placement engine.
+    It counts how many projection placements differ between the two approaches.
+    
+    Args:
+        eval_plan: List containing evaluation plan with projections. The first element
+            contains the projections with their original placement information.
+        integrated_results: Dictionary containing Kraken's integrated placement results.
+            Must include 'integrated_placement_decision_by_projection' key mapping
+            projection names to placement decision objects with 'node' attributes.
+    
+    Returns:
+        The total number of projection node placements that differ between the
+        original eval plan and Kraken's placement decisions.
+        
+    Example:
+        >>> eval_plan = [plan_with_projections]  
+        >>> kraken_results = {'integrated_placement_decision_by_projection': {...}}
+        >>> diff_count = calculate_different_placement(eval_plan, kraken_results)
+        >>> print(f"Found {diff_count} placement differences")
+    """
+    # Extract projections from the first evaluation plan element
+    projections = eval_plan[0].projections
+    
+    # Get Kraken's placement decisions mapped by projection name
+    kraken_placements = integrated_results['integrated_placement_decision_by_projection']
+    
+    # Initialize counter for placement differences
+    placement_difference_count = 0
+
+    # Compare each projection's placement nodes
+    for projection in projections:
+        # Get the projection identifier name
+        projection_name = projection.name.name
+
+        # Original placement nodes from the eval plan
+        original_placement_nodes = projection.name.sinks
+        
+        # Kraken's placement decision for this projection (as single-item list for comparison)
+        kraken_placement_nodes = [kraken_placements[projection_name].node]
+        
+        # Count nodes that are in original placement but not in Kraken's placement
+        for node in original_placement_nodes:
+            if node not in kraken_placement_nodes:
+                placement_difference_count += 1
+
+    return placement_difference_count
+
+
 def update_prepp_results(self, prepp_results):
     print("Debug hook")
 
@@ -483,8 +535,7 @@ class INES():
             self)
         self.h_projFilterDict = populate_projFilterDict(self)
         self.h_projFilterDict = removeFilters(self)
-        self.h_mycombi, self.h_combiDict, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(
-            self)
+        self.h_mycombi, self.h_combiDict, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
 
         integrated_operator_placement_results = calculate_integrated_approach(self, 'test', 0)
@@ -511,6 +562,9 @@ class INES():
 
         # Only take the first 4 results to match the schema
         self.results += prepp_results[0:4]
+
+        different_placements = calculate_different_placement(self.eval_plan, integrated_operator_placement_results)
+        integrated_operator_placement_results['formatted_results']['summary']['placement_difference_count'] = different_placements
 
         # Get the ID from the INES simulation as a foreign key, to later map both
         ines_simulation_id = self.results[0]

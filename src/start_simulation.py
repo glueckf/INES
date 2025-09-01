@@ -132,22 +132,26 @@ def create_simulation_runner(
 
 def main() -> None:
     """Main entry point for simulation execution."""
-    # run_simulation(nodes,node_event_ratio,num_eventtypes,eventskew,max_parents,query_size,query_length,run)
-    # run_simulation(50, 0.5, 8, 1.3, 10, 5, 5, i)
-    runner = create_simulation_runner(
-        network_size=30,
-        node_event_ratio=0.5,
-        num_event_types=6,
-        event_skew=2.0,
-        max_parents=4,
-        query_size=3,
-        query_length=3,
-        num_runs=10,
-        mode=SimulationMode.RANDOM
-    )
+    network_sizes = [10, 30, 50, 100, 200]
     
-    runner.run_simulation_batch()
-    print("[INES] Simulation completed successfully")
+    for network_size in network_sizes:
+        print(f"\n[INES] Starting simulations for network size: {network_size}")
+        runner = create_simulation_runner(
+            network_size=network_size,
+            node_event_ratio=0.5,
+            num_event_types=6,
+            event_skew=2.0,
+            max_parents=5,
+            query_size=5,
+            query_length=5,
+            num_runs=50,
+            mode=SimulationMode.RANDOM
+        )
+        
+        runner.run_simulation_batch()
+        print(f"[INES] Network size {network_size} completed successfully")
+    
+    print("\n[INES] All network size simulations completed successfully")
 
 
 if __name__ == "__main__":

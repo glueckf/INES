@@ -286,6 +286,7 @@ def write_results_to_csv(integrated_placement_decision_by_projection, ines_simul
         'latency_increase',
         'workload_size',
         'nodes_with_placements',
+        'placement_difference_to_ines_count',
         # Configuration parameters (same as INES)
         'network_size',
         'node_event_ratio',
@@ -316,6 +317,7 @@ def write_results_to_csv(integrated_placement_decision_by_projection, ines_simul
 
     # Everything that can be extracted from summary
     total_projections_placed = run_summary['total_projections']
+    placement_difference_to_ines_count = run_summary['placement_difference_count']
 
     # Calculate derived metrics
     cost_reduction_ratio = integrated_placement_cost / central_placement_cost if central_placement_cost > 0 else 0
@@ -361,6 +363,8 @@ def write_results_to_csv(integrated_placement_decision_by_projection, ines_simul
         latency_increase,
         workload_size,
         nodes_with_placements,
+        placement_difference_to_ines_count,
+        # Configuration parameters
         config_params['network_size'],
         config_params['node_event_ratio'],
         config_params['num_event_types'],

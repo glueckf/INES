@@ -554,25 +554,6 @@ def generate_combigen(self):
                 curcombi.update(unfold_combi(self, combi_key, combiDict[combi_key][0]))
                 break
     
-    # CRITICAL FIX: Also process key subqueries that should be in mycombi
-    # These are projections that exist in combiDict and are referenced in combinations
-    # but were never processed because they weren't in the workload
-    important_subqueries = ["SEQ(A, B)", "SEQ(E, F)", "SEQ(A, B, C)"]
-    for subquery_str in important_subqueries:
-        # Check if this subquery exists in combiDict but not in mycombi
-        for combi_key in combiDict.keys():
-            if str(combi_key) == subquery_str:
-                # Check if it's already in curcombi
-                already_exists = False
-                for existing_key in curcombi.keys():
-                    if str(existing_key) == subquery_str:
-                        already_exists = True
-                        break
-                
-                if not already_exists:
-                    curcombi.update(unfold_combi(self, combi_key, combiDict[combi_key][0]))
-                break
-    
     # Update mycombi with the newly processed projections
     mycombi = curcombi
     

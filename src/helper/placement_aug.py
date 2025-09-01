@@ -709,7 +709,8 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter, projFilterDict
 
     # Costs should also include the rates of the evaluated projection
     if projection in projrates:
-        output_rate = projrates[projection][1]
+        output_rate = 1
+        # output_rate = projrates[projection][1]
         extra_costs = output_rate * hops
         costs += extra_costs
     return costs, node, longestPath, myProjection, newInstances, Filters
