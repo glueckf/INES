@@ -178,11 +178,9 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
                 self.h_network_data,
                 allPairs, mycombi,
                 rates,
-                singleSelectivities,
                 projrates,
                 G,
-                network,
-                central_evaluation_plan)
+                network)
 
             integrated_placement_decision_by_projection[projection] = (
                 integrated_optimization_result_for_given_projection)
