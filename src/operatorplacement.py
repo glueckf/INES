@@ -1,3 +1,5 @@
+import uuid
+
 from helper.placement_aug import NEWcomputeCentralCosts, ComputeSingleSinkPlacement, computeMSplacementCosts
 from helper.processCombination_aug import compute_dependencies, getSharedMSinput
 import time
@@ -254,8 +256,6 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
     savings_percentage = (total_savings / ccosts[0] * 100) if ccosts[0] > 0 else 0
     print(f"[SEQUENTIAL] Total Savings: {total_savings:.2f} ({savings_percentage:.1f}%)")
 
-    ID = int(np.random.uniform(0, 10000000))
-
     totaltime = str(round(time.time() - start_time, 2))
 
     print(f"\n[SEQUENTIAL] Execution Summary:")
@@ -264,7 +264,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
     print(f"  Average Cost per Projection: {(costs/len(temp_results_dict)) if temp_results_dict else 0:.2f}")
     print("\n" + "="*60)
 
-    ID = int(np.random.uniform(0, 10000000))
+    ID = uuid.uuid4()
 
     print(f"\n[SEQUENTIAL] Processing Order & Dependencies:")
     print(f"  Processing Order: {[str(p) for p in processingOrder]}")

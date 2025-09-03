@@ -1,3 +1,5 @@
+import uuid
+
 from helper.placement_aug import NEWcomputeCentralCosts, ComputeSingleSinkPlacement, computeMSplacementCosts
 from helper.processCombination_aug import compute_dependencies, getSharedMSinput
 import time
@@ -217,7 +219,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
             if latency > max_latency:
                 max_latency = latency
 
-    kraken_simulation_id = int(np.random.uniform(0, 10000000))
+    kraken_simulation_id = uuid.uuid4()
 
     end_time = time.time()
     totaltime = str(end_time - start_time)[:6]
