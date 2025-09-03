@@ -239,48 +239,30 @@ def create_simulation_runner(
 def main() -> None:
     """Main entry point for simulation execution."""
 
-    # # Network sizes to test
-    # network_sizes = [10, 30, 50, 100, 200]
-    #
-    # for network_size in network_sizes:
-    #     print(f"\n[INES] Starting simulations for network size: {network_size}")
-    #     runner = create_simulation_runner(
-    #         network_size=network_size,
-    #         node_event_ratio=0.5,
-    #         num_event_types=6,
-    #         event_skew=2.0,
-    #         max_parents=5,
-    #         query_size=5,
-    #         query_length=5,
-    #         num_runs=50,
-    #         mode=SimulationMode.RANDOM
-    #     )
-    #
-    #     runner.run_simulation_batch()
-    #     print(f"[INES] Network size {network_size} completed successfully")
-
+    network_sizes = [10, 30, 50, 100, 200]
     query_lengths = [3, 5, 8, 10]
-    network_sizes = [100, 200]
-    total_runs = 100
-    for network_size in network_sizes:
+    runs_per_network_size_and_query_length = 400
+    total_runs = 0
+
+    for size in network_sizes:
         for query_length in query_lengths:
-            print(f"\n[INES] Starting simulations for query length: {query_length}")
             runner = create_simulation_runner(
-                network_size=network_size,
+                network_size=size,
                 node_event_ratio=0.5,
                 num_event_types=6,
                 event_skew=2.0,
                 max_parents=5,
                 query_size=5,
                 query_length=query_length,
-                num_runs=total_runs,
-                mode=SimulationMode.RANDOM
+                num_runs=runs_per_network_size_and_query_length,
+                mode=SimulationMode.RANDOM,
+                max_workers=14,
+                batch_size=20,
+                enable_parallel=True
             )
-
             runner.run_simulation_batch()
-            print(f"[INES] Query length {query_length} completed successfully")
-
-    print("\n[INES] All network size simulations completed successfully")
+            total_runs += runs_per_network_size_and_query_length
+            print(f"[TOTAL] Completed {total_runs} total simulation runs so far.")
 
 
 if __name__ == "__main__":
