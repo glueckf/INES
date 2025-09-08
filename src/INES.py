@@ -11,7 +11,8 @@ from graph import draw_graph
 from allPairs import populate_allPairs
 from queryworkload import generate_workload
 from selectivity import initialize_selectivities
-from kraken.operator_placement_legacy_hook import calculate_integrated_approach, write_results_to_csv, print_kraken
+from kraken.operator_placement_legacy_hook import calculate_integrated_approach, write_results_to_csv, print_kraken, \
+    write_final_results
 from write_config_single import generate_config_buffer
 from singleSelectivities import initializeSingleSelectivity
 from helper.parse_network import initialize_globals
@@ -577,6 +578,7 @@ class INES():
         ines_simulation_id = self.results[0]
 
         write_results_to_csv(integrated_operator_placement_results, ines_simulation_id, self.config)
+        write_final_results(integrated_operator_placement_results, self.results, self.config)
 
     def _initialize_network_topology(self):
         """Create network topology based on configuration mode."""

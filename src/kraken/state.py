@@ -15,7 +15,7 @@ import numpy as np
 from .cost_calculation import get_events_for_projection
 from .logging import get_kraken_logger
 from .node_tracker import get_global_event_placement_tracker
-from ..Node import Node
+from src.Node import Node
 
 logger = get_kraken_logger(__name__)
 

@@ -188,7 +188,7 @@ def create_simulation_runner(
         num_event_types: int = 6,
         event_skew: float = 0.3,
         max_parents: int = 10,
-        query_size: int = 3,
+        workload_size: int = 3,
         query_length: int = 5,
         num_runs: int = 1,
         mode: SimulationMode = SimulationMode.FULLY_DETERMINISTIC,
@@ -205,7 +205,7 @@ def create_simulation_runner(
         num_event_types: Number of different event types
         event_skew: Skewness parameter for event distribution
         max_parents: Maximum number of parent nodes per node
-        query_size: Number of queries in the workload
+        workload_size: Number of queries in the workload
         query_length: Average length of each query
         num_runs: Number of simulation runs to execute
         mode: Simulation mode determining what components are fixed/random
@@ -222,7 +222,7 @@ def create_simulation_runner(
         num_event_types=num_event_types,
         event_skew=event_skew,
         max_parents=max_parents,
-        query_size=query_size,
+        query_size=workload_size,
         query_length=query_length,
         mode=mode
     )
@@ -263,7 +263,6 @@ def main() -> None:
             runner.run_simulation_batch()
             total_runs += runs_per_network_size_and_query_length
             print(f"[TOTAL] Completed {total_runs} total simulation runs so far.")
-
 
 if __name__ == "__main__":
     main()

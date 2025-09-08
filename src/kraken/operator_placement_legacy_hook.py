@@ -22,7 +22,7 @@ logger = get_kraken_logger(__name__)
 
 
 def format_results_for_comparison(
-    results_dict: Dict, execution_info: Dict, workload: list
+        results_dict: Dict, execution_info: Dict, workload: list
 ) -> Dict[str, Any]:
     """
     Format placement results in a clean, machine-readable format for comparison.
@@ -127,6 +127,10 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     # Initialize global placement tracker for this placement session
     reset_global_placement_tracker()  # Start fresh for each placement calculation
     global_placement_tracker = get_global_placement_tracker()
+    
+    # Initialize global event placement tracker with network data
+    from .node_tracker import initialize_global_event_tracker
+    initialize_global_event_tracker(h_network_data=self.h_network_data)
 
     hopLatency = {}
 
@@ -143,10 +147,10 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     integrated_placement_decision_by_projection = {}
 
     for projection in (
-        processingOrder
+            processingOrder
     ):  # parallelize computation for all projections at the same level
         if set(unfolded[projection]) == set(
-            projection.leafs()
+                projection.leafs()
         ):  # initialize hop latency with maximum of children
             hopLatency[projection] = 0
         else:
@@ -181,10 +185,10 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
             Filters += result[4]
 
             if projection.get_original(workload) in workload and partType[0] in list(
-                map(
-                    lambda x: str(x),
-                    projection.get_original(workload).kleene_components(),
-                )
+                    map(
+                        lambda x: str(x),
+                        projection.get_original(workload).kleene_components(),
+                    )
             ):
                 result = ComputeSingleSinkPlacement(
                     projection.get_original(workload), [projection], noFilter
@@ -292,9 +296,9 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
 
 
 def write_results_to_csv(
-    integrated_placement_decision_by_projection,
-    ines_simulation_id,
-    simulation_config=None,
+        integrated_placement_decision_by_projection,
+        ines_simulation_id,
+        simulation_config=None,
 ):
     """
     Append placement results to the kraken_results.csv file for analysis.
@@ -662,7 +666,7 @@ def finalize_placement_results(self, placement_decisions_by_projection):
                     self.costs = new_total_cost
                     self.original_costs = original_decision.costs
                     self.aggregated_additional_cost = (
-                        new_total_cost - original_decision.costs
+                            new_total_cost - original_decision.costs
                     )
 
             finalized_decision = UpdatedDecision(decision, total_cost)
@@ -670,3 +674,147 @@ def finalize_placement_results(self, placement_decisions_by_projection):
         finalized_decisions[projection] = finalized_decision
 
     return finalized_decisions
+
+
+def write_final_results(integrated_operator_placement_results, ines_results, config):
+    print("Hook")
+
+    # Save results to csv file for analysis, but merged with INES results
+    columns_to_copy = [
+        # ID
+        "ines_simulation_id",
+        "kraken_simulation_id",
+
+        # Configuration parameters
+        "network_size",
+        "event_skew",
+        "node_event_ratio",
+        "num_event_types",
+        "max_parents",
+        "workload_size",
+        "query_length",
+        "simulation_mode",
+        "median_selectivity",
+
+        # Metadata
+        "total_projections_placed",
+        "placement_difference_to_ines_count",
+
+        # Computation times
+        "combigen_time_seconds",
+        "ines_placement_time_seconds",
+        "ines_push_pull_time_seconds",
+        "ines_total_time_seconds",
+        "kraken_execution_time_seconds",
+
+        # Placement costs
+        "all_push_central_cost",
+        "inev_cost",
+        "ines_cost",
+        "kraken_cost",
+
+        # Latency
+        "all_push_central_latency",
+        "ines_latency",
+        "kraken_latency"
+    ]
+
+    kraken_metadata = integrated_operator_placement_results["formatted_results"]["metadata"]
+    kraken_summary = integrated_operator_placement_results["formatted_results"]["summary"]
+
+    # Extract IDs
+    ines_simulation_id = ines_results[0]
+    kraken_simulation_id = integrated_operator_placement_results["kraken_simulation_id"]
+
+    # Extract config parameters
+    network_size = config.network_size
+    event_skew = config.event_skew
+    node_event_ratio = config.node_event_ratio
+    num_event_types = config.num_event_types
+    max_parents = config.max_parents
+    workload_size = config.query_size
+    query_length = config.query_length
+    simulation_mode = config.mode.value
+    median_selectivity = ines_results[11]
+
+    # Extract metadata
+    total_projections_placed = kraken_summary.get("successful_placements", 0)
+    placement_difference_to_ines_count = kraken_summary.get("placement_difference_count", 0)
+
+    # Computation times
+    combigen_time_seconds = ines_results[12]
+    ines_placement_time_seconds = ines_results[14]
+    ines_push_pull_time_seconds = ines_results[22]
+    ines_total_time_seconds = float(ines_placement_time_seconds) + float(ines_push_pull_time_seconds)
+    kraken_execution_time_seconds = kraken_metadata.get("execution_time_seconds", 0)
+
+    # Placement costs
+    all_push_central_cost = ines_results[2]
+    inev_cost = ines_results[3]
+    ines_cost = ines_results[21]
+    kraken_cost = kraken_metadata.get("push_pull_plan_cost_sum", 0)
+
+    # Latency
+    all_push_central_latency = ines_results[15]
+    ines_latency = ines_results[23]
+    kraken_latency = kraken_metadata.get("push_pull_plan_latency", 0)
+
+
+    # Compile all data into a single row
+    row_data = {
+        # IDs
+        "ines_simulation_id": ines_simulation_id,
+        "kraken_simulation_id": kraken_simulation_id,
+        # Configuration parameters
+        "network_size": network_size,
+        "event_skew": event_skew,
+        "node_event_ratio": node_event_ratio,
+        "num_event_types": num_event_types,
+        "max_parents": max_parents,
+        "workload_size": workload_size,
+        "query_length": query_length,
+        "simulation_mode": simulation_mode,
+        "median_selectivity": median_selectivity,
+        # Metadata
+        "total_projections_placed": total_projections_placed,
+        "placement_difference_to_ines_count": placement_difference_to_ines_count,
+        # Computation times
+        "combigen_time_seconds": combigen_time_seconds,
+        "ines_placement_time_seconds": ines_placement_time_seconds,
+        "ines_push_pull_time_seconds": ines_push_pull_time_seconds,
+        "ines_total_time_seconds": ines_total_time_seconds,
+        "kraken_execution_time_seconds": kraken_execution_time_seconds,
+        # Placement costs
+        "all_push_central_cost": all_push_central_cost,
+        "inev_cost": inev_cost,
+        "ines_cost": ines_cost,
+        "kraken_cost": kraken_cost,
+        # Latency
+        "all_push_central_latency": all_push_central_latency,
+        "ines_latency": ines_latency,
+        "kraken_latency": kraken_latency,
+    }
+
+    # Ensure result directory exists
+    result_dir = os.path.join(os.path.dirname(__file__), "result")
+    os.makedirs(result_dir, exist_ok=True)
+    
+    csv_file_path = os.path.join(result_dir, "run_results.csv")
+    
+    # Check if file exists to determine if we need to write headers
+    file_exists = os.path.exists(csv_file_path)
+    
+    # Write to CSV file (append mode)
+    with open(csv_file_path, "a", newline="", encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        
+        # Write headers only if file is new
+        if not file_exists:
+            writer.writerow(columns_to_copy)
+        
+        # Write data row using the order defined in columns_to_copy
+        row_values = [row_data[col] for col in columns_to_copy]
+        writer.writerow(row_values)
+    
+    logger.info(f"Appended combined simulation results to {csv_file_path}")
+    logger.info(f"INES ID: {ines_simulation_id}, Kraken ID: {kraken_simulation_id}")
