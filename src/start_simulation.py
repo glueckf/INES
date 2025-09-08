@@ -252,7 +252,7 @@ def main() -> None:
                 num_event_types=6,
                 event_skew=2.0,
                 max_parents=5,
-                query_size=5,
+                workload_size=5,
                 query_length=query_length,
                 num_runs=runs_per_network_size_and_query_length,
                 mode=SimulationMode.RANDOM,
