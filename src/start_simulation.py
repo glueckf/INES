@@ -239,9 +239,9 @@ def create_simulation_runner(
 def main() -> None:
     """Main entry point for simulation execution."""
 
-    network_sizes = [10, 30, 50, 100, 200]
+    network_sizes = [10, 30, 50, 100, 200, 500]
     query_lengths = [3, 5, 8, 10]
-    runs_per_network_size_and_query_length = 400
+    runs_per_network_size_and_query_length = 50
     total_runs = 0
 
     for size in network_sizes:
