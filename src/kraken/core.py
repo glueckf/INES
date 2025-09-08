@@ -14,28 +14,32 @@ from .cost_calculation import get_selection_rate, calculate_costs
 from .initialization import initialize_placement_state, setup_run
 from .candidate_selection import check_resources, get_all_possible_placement_nodes
 from .fallback import get_strategy_recommendation
-from .state import PlacementDecision, PlacementDecisionTracker, check_if_projection_has_placed_subqueries, \
-    update_tracker
+from .state import (
+    PlacementDecision,
+    PlacementDecisionTracker,
+    check_if_projection_has_placed_subqueries,
+    update_tracker,
+)
 
 logger = get_kraken_logger(__name__)
 
 
 def compute_kraken_for_projection(
-        self,
-        projection,
-        combination: list,
-        no_filter: int,
-        proj_filter_dict: dict,
-        event_nodes: list,
-        index_event_nodes: dict,
-        network_data: dict,
-        all_pairs: list,
-        mycombi: dict,
-        rates: dict,
-        projrates: dict,
-        graph: networkx.Graph,
-        network: list,
-        sinks: list[int] = [0]
+    self,
+    projection,
+    combination: list,
+    no_filter: int,
+    proj_filter_dict: dict,
+    event_nodes: list,
+    index_event_nodes: dict,
+    network_data: dict,
+    all_pairs: list,
+    mycombi: dict,
+    rates: dict,
+    projrates: dict,
+    graph: networkx.Graph,
+    network: list,
+    sinks: list[int] = [0],
 ) -> Any:
     """Compute optimal joint operator placement and push-pull communication strategy.
 
@@ -92,7 +96,6 @@ def compute_kraken_for_projection(
 
     """
     try:
-
         # Setup for the run, initializes a deterministic environment
         setup_run()
 
@@ -101,7 +104,7 @@ def compute_kraken_for_projection(
         has_placed_subqueries = check_if_projection_has_placed_subqueries(
             projection=projection,
             mycombi=mycombi,
-            global_tracker=get_global_placement_tracker()
+            global_tracker=get_global_placement_tracker(),
         )
 
         # Placement initialization and state setup.
@@ -110,15 +113,13 @@ def compute_kraken_for_projection(
             proj_filter_dict=proj_filter_dict,
             no_filter=no_filter,
             projection=projection,
-            graph=graph
+            graph=graph,
         )
 
         # Initialize the placement_decision_tracker for the current projection
         # This tracker will hold all placement decisions evaluated for the projection
         # and help in selecting the best one at the end.
-        placement_decision_tracker = PlacementDecisionTracker(
-            projection=projection
-        )
+        placement_decision_tracker = PlacementDecisionTracker(projection=projection)
 
         # Get all possible_placement_nodes for the current projection
         # This returns all nodes where all the projections ETBs are available
@@ -127,7 +128,7 @@ def compute_kraken_for_projection(
             placement_state=placement_state,
             network_data=network_data,
             index_event_nodes=index_event_nodes,
-            event_nodes=event_nodes
+            event_nodes=event_nodes,
         )
 
         # Determines the selection rate for the current projection
@@ -135,7 +136,7 @@ def compute_kraken_for_projection(
         selection_rate_for_projection = get_selection_rate(
             projection=projection,
             combination_dict=self.h_mycombi,
-            selectivities=self.selectivities
+            selectivities=self.selectivities,
         )
 
         # Go through all possible placement nodes and calculate the costs
@@ -159,11 +160,18 @@ def compute_kraken_for_projection(
                 mode=self.config.mode,
                 shortest_path_distances=all_pairs,
                 sink_nodes=sinks,
-                has_placed_subqueries=has_placed_subqueries
+                has_placed_subqueries=has_placed_subqueries,
             )
 
             # Initialize the relevant variables from the results we get back
-            all_push_costs, push_pull_costs, latency, computing_time, transmission_ratio, aquisition_steps = results
+            (
+                all_push_costs,
+                push_pull_costs,
+                latency,
+                computing_time,
+                transmission_ratio,
+                aquisition_steps,
+            ) = results
 
             # Check if the current node has enough resources to place the projection there.
             # This check is done after calculating the costs, since prepp might potentially lower
@@ -172,7 +180,7 @@ def compute_kraken_for_projection(
                 node=node,
                 projection=projection,
                 network=network,
-                combination=combination
+                combination=combination,
             )
 
             # For this node and this projection, given the costs and the ressource availability
@@ -180,11 +188,13 @@ def compute_kraken_for_projection(
             best_strategy = get_strategy_recommendation(
                 all_push_costs=all_push_costs,
                 push_pull_costs=push_pull_costs,
-                has_enough_resources=has_enough_resources
+                has_enough_resources=has_enough_resources,
             )
 
             # Update the costs according to the best strategy
-            final_costs = push_pull_costs if best_strategy == 'push_pull' else all_push_costs
+            final_costs = (
+                push_pull_costs if best_strategy == "push_pull" else all_push_costs
+            )
 
             # Track this placement decision for the current node
             placement_decision = PlacementDecision(
@@ -195,11 +205,11 @@ def compute_kraken_for_projection(
                 push_pull_costs=push_pull_costs,
                 has_sufficient_resources=has_enough_resources,
                 plan_details={
-                    'computing_time': computing_time,
-                    'latency': latency,
-                    'transmission_ratio': transmission_ratio,
-                    'aquisition_steps': aquisition_steps
-                }
+                    "computing_time": computing_time,
+                    "latency": latency,
+                    "transmission_ratio": transmission_ratio,
+                    "aquisition_steps": aquisition_steps,
+                },
             )
 
             placement_decision_tracker.add_decision(placement_decision)
@@ -213,7 +223,7 @@ def compute_kraken_for_projection(
         update_tracker(
             best_decision=best_decision,
             placement_decision_tracker=placement_decision_tracker,
-            projection=projection
+            projection=projection,
         )
 
         # Finally we return the best decision for this projection
