@@ -555,7 +555,14 @@ class INES():
             f"[INES_DEBUG] Calling generate_prePP with is_deterministic={deterministic_flag} (mode={self.config.mode})")
         prepp_results = generate_prePP(self.plan, 'ppmuse', 'e', 1, 0, 1, True, self.allPairs, deterministic_flag)
 
-        __final_prepp_costs = int(update_prepp_results(self, prepp_results)[0])
+        """
+        NOTE: From Finn Glück 08.09.2025:
+        
+        The prepp results need to be updated since they do not consider the costs of sending the events to the cloud.
+        The integrated approach considers these costs, so we need to update the prepp results accordingly.
+        This is a quick fix to ensure that the results are comparable.
+        """
+        prepp_results = update_prepp_results(self, prepp_results)
 
         # __costs_integrated = int(integrated_operator_placement_results['formatted_results']['summary']['total_cost'])
         __sequential_costs = int(prepp_results[0])

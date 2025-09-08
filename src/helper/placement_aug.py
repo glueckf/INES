@@ -710,7 +710,15 @@ def ComputeSingleSinkPlacement(projection, combination, noFilter, projFilterDict
     # Costs should also include the rates of the evaluated projection
     if projection in projrates:
         output_rate = 1
-        # output_rate = projrates[projection][1]
+        """
+        NOTE: From Finn Glück 08.09.2025
+        
+        I added the output rate of the projection to the costs, 
+        as otherwise the placement would always choose the node closest to all inputs, 
+        even if this means that the output rate is very high 
+        and thus the costs for sending the output to the cloud are very high.
+        """
+        output_rate = projrates[projection][1]
         extra_costs = output_rate * hops
         costs += extra_costs
     return costs, node, longestPath, myProjection, newInstances, Filters
