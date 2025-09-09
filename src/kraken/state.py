@@ -88,7 +88,7 @@ class SubgraphBundle:
     all_pairs_sub: List[List[float]]
     relevant_nodes: Set[int]
     placement_node_sub: int
-    sub_network: List["Node"]
+    sub_network: List[Any]
 
 
 @dataclass(frozen=True)

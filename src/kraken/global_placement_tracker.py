@@ -16,7 +16,7 @@ class GlobalPlacementTracker:
     Global tracker that stores placement decisions for all processed projections.
 
     This enables hierarchical query processing where subqueries can reuse
-    previously computed placement decisions.
+    previously computed placement decisions with global parent placement optimization.
     """
 
     def __init__(self):
@@ -24,6 +24,10 @@ class GlobalPlacementTracker:
         self._placement_history: Dict[Any, PlacementDecisionTracker] = {}
         self._projection_mappings: Dict[Any, str] = {}
         self._query_hierarchy: Dict[Any, List[Any]] = {}
+        self._locked_placements: Dict[Any, bool] = {}  # Track locked subprojections
+        self._parent_processing_order: List[
+            Any
+        ] = []  # FIFO order for conflict resolution
 
     def store_placement_decisions(
         self, projection: Any, placement_decisions: PlacementDecisionTracker
@@ -210,6 +214,200 @@ class GlobalPlacementTracker:
             "placement_node": placement_node,
         }
 
+    def is_subprojection_locked(self, subprojection: Any) -> bool:
+        """
+        Check if a subprojection is locked by a previously processed parent.
+
+        Args:
+            subprojection: The subprojection to check
+
+        Returns:
+            True if the subprojection is locked, False otherwise
+        """
+        return self._locked_placements.get(subprojection, False)
+
+    def lock_subprojection_placement(self, subprojection: Any) -> None:
+        """
+        Lock a subprojection to prevent future parent optimizations.
+
+        Args:
+            subprojection: The subprojection to lock
+        """
+        self._locked_placements[subprojection] = True
+
+    def register_parent_processing(self, parent_projection: Any) -> None:
+        """
+        Register a parent projection in the FIFO processing order.
+
+        Args:
+            parent_projection: The parent projection being processed
+        """
+        if parent_projection not in self._parent_processing_order:
+            self._parent_processing_order.append(parent_projection)
+
+    def is_first_parent_for_subprojection(
+        self, parent_projection: Any, subprojection: Any
+    ) -> bool:
+        """
+        Check if this parent is the first to request optimization of a subprojection.
+
+        Args:
+            parent_projection: The parent projection
+            subprojection: The subprojection in question
+
+        Returns:
+            True if this is the first parent, False otherwise
+        """
+        # Check if subprojection is already locked
+        if self.is_subprojection_locked(subprojection):
+            return False
+
+        # Find all parents that use this subprojection
+        parents_using_subprojection = []
+        for parent, subqueries in self._query_hierarchy.items():
+            if subprojection in subqueries:
+                parents_using_subprojection.append(parent)
+
+        if not parents_using_subprojection:
+            return True
+
+        # Return True if this parent was registered first
+        earliest_parent = min(
+            parents_using_subprojection,
+            key=lambda p: self._parent_processing_order.index(p)
+            if p in self._parent_processing_order
+            else float("inf"),
+        )
+        return earliest_parent == parent_projection
+
+    def get_alternative_placements(
+        self,
+        subprojection: Any,
+        parent_node: int,
+        shortest_path_distances: Dict[int, Dict[int, int]],
+        projection_rates: Dict[Any, tuple],
+    ) -> List[Dict[str, Any]]:
+        """
+        Get alternative placement options for a subprojection considering parent context.
+
+        Args:
+            subprojection: The subprojection to get alternatives for
+            parent_node: The node where parent projection will be placed
+            shortest_path_distances: Distance matrix for calculating transfer costs
+            projection_rates: Output rates for projections
+
+        Returns:
+            List of placement alternatives with total costs including transfer to parent
+        """
+        tracker = self.get_placement_decisions(subprojection)
+        if not tracker:
+            return []
+
+        alternatives = []
+        subprojection_rate = projection_rates.get(subprojection, (1.0, 1.0))[
+            1
+        ]  # Output rate
+
+        for decision in tracker.decisions:
+            # Calculate transfer cost from subprojection node to parent node
+            transfer_distance = shortest_path_distances[decision.node][parent_node]
+            transfer_cost = transfer_distance * subprojection_rate
+
+            # Total cost = placement cost + transfer cost
+            total_cost = decision.costs + transfer_cost
+
+            alternatives.append(
+                {
+                    "decision": decision,
+                    "transfer_cost": transfer_cost,
+                    "total_cost": total_cost,
+                    "placement_node": decision.node,
+                    "strategy": decision.strategy,
+                }
+            )
+
+        # Sort by total cost
+        alternatives.sort(key=lambda x: x["total_cost"])
+        return alternatives
+
+    def optimize_subprojection_placement(
+        self,
+        parent_projection: Any,
+        parent_node: int,
+        shortest_path_distances: Dict[int, Dict[int, int]],
+        projection_rates: Dict[Any, tuple],
+    ) -> Dict[Any, Dict[str, Any]]:
+        """
+        Optimize subprojection placements for a parent projection at a specific node.
+
+        Args:
+            parent_projection: The parent projection
+            parent_node: The node where parent will be placed
+            shortest_path_distances: Distance matrix
+            projection_rates: Output rates for projections
+
+        Returns:
+            Dictionary mapping subprojections to their optimal placement details
+        """
+        subqueries = self._query_hierarchy.get(parent_projection, [])
+        optimized_placements = {}
+
+        for subquery in subqueries:
+            # Skip primitive events (they don't have placements)
+            if not hasattr(subquery, "children"):
+                continue
+
+            # Skip locked subprojections
+            if self.is_subprojection_locked(subquery):
+                # Use existing placement - calculate transfer cost for parent costing
+                best_placement = self.get_best_placement(subquery)
+                if best_placement:
+                    subprojection_rate = projection_rates.get(subquery, (1.0, 1.0))[1]
+                    transfer_distance = shortest_path_distances[best_placement.node][
+                        parent_node
+                    ]
+                    transfer_cost = transfer_distance * subprojection_rate
+
+                    optimized_placements[subquery] = {
+                        "original_decision": best_placement,
+                        "transfer_cost": transfer_cost,
+                        "total_cost": best_placement.costs + transfer_cost,
+                        "placement_node": best_placement.node,
+                        "strategy": best_placement.strategy,
+                        "locked": True,
+                        "placement_changed": False,  # No change in placement
+                    }
+                continue
+
+            # Get alternative placements considering parent context
+            alternatives = self.get_alternative_placements(
+                subquery, parent_node, shortest_path_distances, projection_rates
+            )
+
+            if alternatives:
+                # Get current best placement for comparison
+                current_best = self.get_best_placement(subquery)
+                best_alternative = alternatives[0]
+
+                # Check if we're changing the placement
+                placement_changed = (
+                    current_best is None
+                    or current_best.node != best_alternative["placement_node"]
+                )
+
+                optimized_placements[subquery] = {
+                    "original_decision": current_best,
+                    "optimized_decision": best_alternative["decision"],
+                    "transfer_cost": best_alternative["transfer_cost"],
+                    "total_cost": best_alternative["total_cost"],
+                    "placement_node": best_alternative["placement_node"],
+                    "strategy": best_alternative["strategy"],
+                    "locked": False,
+                    "placement_changed": placement_changed,
+                }
+
+        return optimized_placements
+
     def get_summary(self) -> str:
         """
         Get a summary of all stored placement decisions.
@@ -221,20 +419,28 @@ class GlobalPlacementTracker:
         summary.append(f"Total projections tracked: {len(self._placement_history)}")
         summary.append(f"Query hierarchies registered: {len(self._query_hierarchy)}")
         summary.append(f"Virtual mappings created: {len(self._projection_mappings)}")
+        summary.append(f"Locked placements: {len(self._locked_placements)}")
 
         if self._placement_history:
             summary.append("\nStored Placement Decisions:")
             for projection, tracker in self._placement_history.items():
                 best = tracker.get_best_decision()
+                locked = self._locked_placements.get(projection, False)
                 if best:
+                    lock_status = " [LOCKED]" if locked else ""
                     summary.append(
-                        f"  {projection}: Node {best.node}, Strategy {best.strategy}, Cost {best.costs:.2f}"
+                        f"  {projection}: Node {best.node}, Strategy {best.strategy}, Cost {best.costs:.2f}{lock_status}"
                     )
 
         if self._query_hierarchy:
             summary.append("\nQuery Hierarchies:")
             for parent, children in self._query_hierarchy.items():
                 summary.append(f"  {parent}: {children}")
+
+        if self._parent_processing_order:
+            summary.append(
+                f"\nParent Processing Order: {self._parent_processing_order}"
+            )
 
         return "\n".join(summary)
 
@@ -255,7 +461,17 @@ def get_global_placement_tracker() -> GlobalPlacementTracker:
 
 def reset_global_placement_tracker() -> None:
     """
-    Reset the global placement tracker (useful for testing).
+    Reset the global placement tracker (useful for testing and new workloads).
     """
     global global_placement_tracker
     global_placement_tracker = GlobalPlacementTracker()
+
+
+def reset_locking_state() -> None:
+    """
+    Reset only the locking state while preserving placement history.
+    Useful when starting a new workload that should reuse existing placements
+    but allow re-optimization.
+    """
+    global_placement_tracker._locked_placements.clear()
+    global_placement_tracker._parent_processing_order.clear()

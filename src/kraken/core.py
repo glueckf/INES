@@ -99,12 +99,16 @@ def compute_kraken_for_projection(
         # Setup for the run, initializes a deterministic environment
         setup_run()
 
+        # Register this parent projection for FIFO conflict resolution
+        global_tracker = get_global_placement_tracker()
+        global_tracker.register_parent_processing(projection)
+
         # Check if the current projection has any subqueries that are already placed
         # This influences the placement decisions, since we need to respect already placed subqueries.
         has_placed_subqueries = check_if_projection_has_placed_subqueries(
             projection=projection,
             mycombi=mycombi,
-            global_tracker=get_global_placement_tracker(),
+            global_tracker=global_tracker,
         )
 
         # Placement initialization and state setup.
@@ -131,8 +135,25 @@ def compute_kraken_for_projection(
             event_nodes=event_nodes,
         )
 
+        if str(projection) == "SEQ(A, B, C)":
+            logger.debug(
+                f"Possible placement nodes for {projection}: {possible_placement_nodes}"
+            )
+
         # Go through all possible placement nodes and calculate the costs
+        # For each candidate node, we optimize subprojection placements considering parent context
         for node in possible_placement_nodes:
+            # Check if this projection can optimize any of its subprojections for this candidate node
+            optimized_subprojections = {}
+            if has_placed_subqueries:
+                optimized_subprojections = (
+                    global_tracker.optimize_subprojection_placement(
+                        parent_projection=projection,
+                        parent_node=node,
+                        shortest_path_distances=all_pairs,
+                        projection_rates=projrates,
+                    )
+                )
             # Calculate the costs for placing the current projection on this node
             # This function respects already placed subqueries if there are any
             # Also respects already locally available events
@@ -183,14 +204,32 @@ def compute_kraken_for_projection(
             )
 
             # Update the costs according to the best strategy
-            final_costs = (
+            base_costs = (
                 push_pull_costs if best_strategy == "push_pull" else all_push_costs
             )
+
+            # Calculate heuristic adjustment for subprojection transfer costs
+            # This is ONLY used for selection, not stored as actual costs
+            heuristic_adjustment = 0.0
+            if optimized_subprojections:
+                for subquery, optimization in optimized_subprojections.items():
+                    # Add transfer cost as heuristic penalty
+                    transfer_cost = optimization.get("transfer_cost", 0.0)
+                    heuristic_adjustment += transfer_cost
+
+                    # If placement changed, we might get better performance
+                    if optimization.get("placement_changed", False):
+                        logger.debug(
+                            f"Heuristic: subprojection {subquery} transfer cost: {transfer_cost:.2f}"
+                        )
+
+            # Final costs for comparison include heuristic adjustment
+            final_costs_for_comparison = base_costs + heuristic_adjustment
 
             # Track this placement decision for the current node
             placement_decision = PlacementDecision(
                 node=node,
-                costs=final_costs,
+                costs=final_costs_for_comparison,  # Include heuristic for selection
                 strategy=best_strategy,
                 all_push_costs=all_push_costs,
                 push_pull_costs=push_pull_costs,
@@ -200,8 +239,14 @@ def compute_kraken_for_projection(
                     "latency": latency,
                     "transmission_ratio": transmission_ratio,
                     "aquisition_steps": aquisition_steps,
+                    "base_costs": base_costs,  # Store original costs
+                    "heuristic_adjustment": heuristic_adjustment,
                 },
             )
+
+            # Add optimized subprojections information to the decision
+            if optimized_subprojections:
+                placement_decision.optimized_subprojections = optimized_subprojections
 
             placement_decision_tracker.add_decision(placement_decision)
 
@@ -211,6 +256,55 @@ def compute_kraken_for_projection(
 
         # Then we need to update our trackers to reflect this placement decision for the next run.
         # This includes updating where this query is placed, but also updating the events this query brings to the node.
+
+        # Update the best decision to use base costs (remove heuristic adjustment)
+        if best_decision and "base_costs" in best_decision.plan_details:
+            base_costs = best_decision.plan_details["base_costs"]
+            heuristic_adjustment = best_decision.plan_details.get(
+                "heuristic_adjustment", 0.0
+            )
+
+            # Reset costs to base costs (no heuristic)
+            best_decision.costs = base_costs
+
+            logger.debug(
+                f"Selected placement for {projection}: Node {best_decision.node} "
+                f"(base cost: {base_costs:.2f}, heuristic adjustment: {heuristic_adjustment:.2f})"
+            )
+
+        # Apply any subprojection placement changes if this parent can optimize them
+        if has_placed_subqueries and hasattr(best_decision, "optimized_subprojections"):
+            for (
+                subquery,
+                optimization,
+            ) in best_decision.optimized_subprojections.items():
+                if not optimization.get("locked", True) and optimization.get(
+                    "placement_changed", False
+                ):
+                    # This subprojection placement actually changed
+                    # Update the global tracker with the new placement decision
+                    old_tracker = global_tracker.get_placement_decisions(subquery)
+                    if old_tracker and "optimized_decision" in optimization:
+                        # Update the best decision with the new placement decision
+                        old_tracker.best_decision = optimization["optimized_decision"]
+
+                    # Lock this subprojection now that we've optimized it
+                    global_tracker.lock_subprojection_placement(subquery)
+
+                    logger.info(
+                        f"Re-optimized subprojection {subquery} for parent {projection}: "
+                        f"moved to node {optimization['placement_node']} "
+                        f"(placement cost: {optimization['optimized_decision'].costs:.2f})"
+                    )
+                elif not optimization.get("locked", True):
+                    # Subprojection can be optimized but placement didn't change
+                    # Just lock it to prevent future changes
+                    global_tracker.lock_subprojection_placement(subquery)
+                    logger.debug(
+                        f"Locked subprojection {subquery} for parent {projection} "
+                        f"(no placement change needed)"
+                    )
+
         update_tracker(
             best_decision=best_decision,
             placement_decision_tracker=placement_decision_tracker,

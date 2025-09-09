@@ -599,6 +599,7 @@ def _expand_to_primitives(element, combination_dict):
 
     return primitives
 
+
 def process_results_from_prepp(results, query, node, workload):
     projection_as_string = str(query)
     all_push_costs = results[4] if len(results) > 4 else 0
@@ -733,7 +734,7 @@ def calculate_costs(
             )
         )
 
-    # Return final costs and metrics
+    # Return final costs and metrics (no modifications for global optimization)
     return (
         all_push_costs,
         push_pull_costs,
