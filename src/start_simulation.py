@@ -30,11 +30,11 @@ def run_simulation_worker(args):
         print(f"[WORKER] Starting simulation run {run_id + 1}")
         simulation = INES(config)
         result_df = pd.DataFrame([simulation.results], columns=simulation.schema)
-        return (run_id, result_df, True, None)
+        return run_id, result_df, True, None
     except Exception as e:
         error_message = f"Exception in run {run_id}: {str(e)}"
         print(f"[WORKER ERROR] {error_message}")
-        return (run_id, None, False, error_message)
+        return run_id, None, False, error_message
 
 
 @dataclass
@@ -239,30 +239,48 @@ def create_simulation_runner(
 def main() -> None:
     """Main entry point for simulation execution."""
 
-    network_sizes = [10, 30, 50, 100, 200, 500]
-    query_lengths = [3, 5, 8, 10]
-    runs_per_network_size_and_query_length = 50
-    total_runs = 0
+    # network_sizes = [10, 30, 50, 100, 200, 500]
+    # query_lengths = [3, 5, 8, 10]
+    # runs_per_network_size_and_query_length = 50
+    # total_runs = 0
+    #
+    # for size in network_sizes:
+    #     for query_length in query_lengths:
+    #         runner = create_simulation_runner(
+    #             network_size=size,
+    #             node_event_ratio=0.5,
+    #             num_event_types=6,
+    #             event_skew=2.0,
+    #             max_parents=5,
+    #             workload_size=5,
+    #             query_length=query_length,
+    #             num_runs=runs_per_network_size_and_query_length,
+    #             mode=SimulationMode.RANDOM,
+    #             max_workers=14,
+    #             batch_size=20,
+    #             enable_parallel=True
+    #         )
+    #         runner.run_simulation_batch()
+    #         total_runs += runs_per_network_size_and_query_length
+    #         print(f"[TOTAL] Completed {total_runs} total simulation runs so far.")
 
-    for size in network_sizes:
-        for query_length in query_lengths:
-            runner = create_simulation_runner(
-                network_size=size,
-                node_event_ratio=0.5,
-                num_event_types=6,
-                event_skew=2.0,
-                max_parents=5,
-                workload_size=5,
-                query_length=query_length,
-                num_runs=runs_per_network_size_and_query_length,
-                mode=SimulationMode.RANDOM,
-                max_workers=14,
-                batch_size=20,
-                enable_parallel=True
-            )
-            runner.run_simulation_batch()
-            total_runs += runs_per_network_size_and_query_length
-            print(f"[TOTAL] Completed {total_runs} total simulation runs so far.")
+    runner = create_simulation_runner(
+        network_size=12,
+        node_event_ratio=0.5,
+        num_event_types=6,
+        event_skew=0.3,
+        max_parents=10,
+        workload_size=3,
+        query_length=5,
+        num_runs=1,
+        mode=SimulationMode.FULLY_DETERMINISTIC,
+        max_workers=1,
+        batch_size=1,
+        enable_parallel=False
+    )
+
+    runner.run_simulation_batch()
+
 
 if __name__ == "__main__":
     main()

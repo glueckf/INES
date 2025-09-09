@@ -77,19 +77,6 @@ def format_results_for_comparison(
     return formatted_results
 
 
-def save_results_to_json(results: Dict[str, Any], filename: str) -> None:
-    """
-    Save formatted results to a JSON file.
-
-    Args:
-        results: Formatted results dictionary
-        filename: Output filename
-    """
-    with open(filename, "w") as f:
-        json.dump(results, f, indent=2, default=str)
-    logger.info(f"Saved machine-readable results to {filename}")
-
-
 def calculate_integrated_approach(self, file_path: str, max_parents: int):
     workload = self.query_workload
     projFilterDict = self.h_projFilterDict

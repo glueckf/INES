@@ -573,97 +573,6 @@ def _add_normal_muse_graph_entry(
     )
 
 
-def get_selection_rate(projection: Any, combination_dict, selectivities):
-    """
-    Calculate selection rate for a projection based on combination dictionary and selectivities.
-
-    For queries with subqueries like AND(D, AND(A,B)), this function expands the subqueries
-    and creates all possible combinations across the primitive events (e.g., AD, AB, BD).
-
-    Args:
-        projection: The projection to calculate selection rate for
-        combination_dict: Dictionary mapping projections to their event type combinations
-        selectivities: Dictionary mapping event type combinations to their selectivity values
-
-    Returns:
-        float: The calculated selection rate (product of relevant selectivities)
-    """
-
-    # Safety check: ensure projection exists in combination_dict
-    if projection not in combination_dict:
-        logger.warning(f"Projection {projection} not found in combination_dict")
-        return 1.0  # Return neutral value
-
-    combination_for_given_projection = combination_dict[projection]
-
-    # Safety check: ensure combination is not empty
-    if not combination_for_given_projection:
-        logger.warning(f"Empty combination for projection {projection}")
-        return 1.0
-
-    from itertools import combinations
-
-    # Check if combination has subqueries
-    has_subquery = any(
-        elem in combination_dict.keys() for elem in combination_for_given_projection
-    )
-
-    if has_subquery:
-        # Expand all elements to their primitive events
-        expanded_events = []
-        for elem in combination_for_given_projection:
-            if elem in combination_dict:
-                # This is a subquery, recursively expand it
-                sub_events = _expand_to_primitives(elem, combination_dict)
-                expanded_events.extend(sub_events)
-            else:
-                # This is already a primitive event
-                expanded_events.append(str(elem))
-
-        # Remove duplicates while preserving order
-        expanded_events = list(dict.fromkeys(expanded_events))
-        logger.info(f"Expanded {projection} to primitive events: {expanded_events}")
-
-        # Generate all possible combinations of primitive events (2 to n)
-        event_combinations = []
-        for r in range(2, len(expanded_events) + 1):
-            for combo in combinations(expanded_events, r):
-                combo_str = "".join(combo)
-                event_combinations.append(combo_str)
-
-    else:
-        # No subqueries, use original logic
-        event_combinations = []
-        for r in range(2, len(combination_for_given_projection) + 1):
-            for combo in combinations(combination_for_given_projection, r):
-                combo_str = "".join(str(element) for element in combo)
-                event_combinations.append(combo_str)
-
-    # Calculate selection rate as product of relevant selectivities
-    # TODO: Implement a better logic here,
-    #  because we do not need to set a warning everytime since we are only looking at pairwise selectivities
-    res = 1.0
-    for combo_str in event_combinations:
-        if combo_str in selectivities:
-            selectivity_value = selectivities[combo_str]
-            # Safety check: ensure selectivity is a valid number
-            if isinstance(selectivity_value, (int, float)) and selectivity_value > 0:
-                res *= selectivity_value
-                logger.debug(
-                    f"Applied selectivity for {combo_str}: {selectivity_value}"
-                )
-            else:
-                logger.warning(
-                    f"Invalid selectivity value for {combo_str}: {selectivity_value}"
-                )
-        else:
-            if len(combo_str) <= 2:
-                logger.warning(f"Selectivity not found for pair: {combo_str}")
-
-    logger.info(f"Final selection rate for {projection}: {res}")
-    return res
-
-
 def _expand_to_primitives(element, combination_dict):
     """
     Recursively expand a subquery element to its primitive events.
@@ -689,11 +598,6 @@ def _expand_to_primitives(element, combination_dict):
             primitives.append(str(sub_elem))
 
     return primitives
-
-
-def update_selectivity(self, projection, selection_rate):
-    self.selectivities[str(projection)] = selection_rate
-
 
 def process_results_from_prepp(results, query, node, workload):
     projection_as_string = str(query)
@@ -738,7 +642,6 @@ def calculate_costs(
     projection: Any,
     query_workload,
     network,
-    selectivity_rate: float,
     selectivities,
     combination_dict,
     rates,
@@ -762,7 +665,6 @@ def calculate_costs(
         projection: The projection/query being processed
         query_workload: List of queries in the workload
         network: List of network nodes
-        selectivity_rate: Selection rate for the projection
         selectivities: Dictionary of selectivity values
         combination_dict: Dictionary mapping projections to combinations
         rates: Event rate dictionary
@@ -780,6 +682,8 @@ def calculate_costs(
     logger.debug(
         f"Calculating costs for node {placement_node}, projection {projection}"
     )
+
+    selectivity_rate = projection_rates.get(projection, (0.0, 0.0))[0]
 
     # Initial cost calculation
     results = calculate_prepp_with_placement(

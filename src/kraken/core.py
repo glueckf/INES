@@ -10,7 +10,7 @@ from typing import Any
 import networkx
 from .logging import get_kraken_logger
 from .global_placement_tracker import get_global_placement_tracker
-from .cost_calculation import get_selection_rate, calculate_costs
+from .cost_calculation import calculate_costs
 from .initialization import initialize_placement_state, setup_run
 from .candidate_selection import check_resources, get_all_possible_placement_nodes
 from .fallback import get_strategy_recommendation
@@ -131,14 +131,6 @@ def compute_kraken_for_projection(
             event_nodes=event_nodes,
         )
 
-        # Determines the selection rate for the current projection
-        # TODO: Find out if we could delete this and use the projrates directly instead
-        selection_rate_for_projection = get_selection_rate(
-            projection=projection,
-            combination_dict=self.h_mycombi,
-            selectivities=self.selectivities,
-        )
-
         # Go through all possible placement nodes and calculate the costs
         for node in possible_placement_nodes:
             # Calculate the costs for placing the current projection on this node
@@ -151,7 +143,6 @@ def compute_kraken_for_projection(
                 projection=projection,
                 query_workload=self.query_workload,
                 network=network,
-                selectivity_rate=selection_rate_for_projection,
                 selectivities=self.selectivities,
                 combination_dict=self.h_mycombi,
                 rates=rates,
