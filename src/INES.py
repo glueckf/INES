@@ -5,13 +5,12 @@ from dataclasses import dataclass
 import numpy as np
 
 from Node import Node
-from network import generate_eventrates, create_random_tree, generate_events
+from network import generate_eventrates, create_random_tree
 from graph import create_fog_graph
-from graph import draw_graph
 from allPairs import populate_allPairs
 from queryworkload import generate_workload
 from selectivity import initialize_selectivities
-from kraken.operator_placement_legacy_hook import calculate_integrated_approach, write_results_to_csv, print_kraken, \
+from kraken.operator_placement_legacy_hook import calculate_integrated_approach, write_results_to_csv, \
     write_final_results
 from write_config_single import generate_config_buffer
 from singleSelectivities import initializeSingleSelectivity
@@ -20,7 +19,6 @@ from helper.structures import initEventNodes
 from combigen import populate_projFilterDict, removeFilters, generate_combigen
 from helper.structures import getLongest
 from operatorplacement import calculate_operatorPlacement
-from generateEvalPlan import generate_eval_plan
 
 
 class SimulationMode(Enum):
@@ -83,7 +81,6 @@ class SimulationConfig:
 
 
 from prepp import generate_prePP
-import csv
 
 
 def create_hardcoded_tree():
@@ -541,9 +538,6 @@ class INES():
 
         integrated_operator_placement_results = calculate_integrated_approach(self, 'test', 0)
 
-        # Print comprehensive placement results
-        # print_kraken(integrated_operator_placement_results)
-
         (self.eval_plan, self.central_eval_plan, self.experiment_result, self.results) = calculate_operatorPlacement(
             self, 'test', 0)
 
@@ -607,108 +601,3 @@ class INES():
             self.selectivities, self.selectivitiesExperimentData = generate_hardcoded_selectivities()
         else:
             self.selectivities, self.selectivitiesExperimentData = initialize_selectivities(self.primitiveEvents)
-
-    @classmethod
-    def create_legacy(cls, nwSize: int, node_event_ratio: float, num_eventtypes: int,
-                      eventskew: float, max_partens: int, query_size: int, query_length: int,
-                      hardcoded_topology: bool = False, hardcoded_workload: bool = False,
-                      hardcoded_selectivities: bool = False) -> 'INES':
-        """
-        Create INES instance using legacy boolean parameters (for backward compatibility).
-        
-        Usage examples:
-        - Fully random: INES.create_legacy(12, 0.5, 6, 0.3, 10, 3, 5)
-        - Fixed topology: INES.create_legacy(12, 0.5, 6, 0.3, 10, 3, 5, hardcoded_topology=True)
-        - Fixed workload: INES.create_legacy(12, 0.5, 6, 0.3, 10, 3, 5, hardcoded_topology=True, hardcoded_workload=True)  
-        - Fully deterministic: INES.create_legacy(12, 0.5, 6, 0.3, 10, 3, 5, hardcoded_topology=True, hardcoded_workload=True, hardcoded_selectivities=True)
-        """
-        # Convert legacy booleans to SimulationMode
-        if hardcoded_selectivities:
-            mode = SimulationMode.FULLY_DETERMINISTIC
-        elif hardcoded_workload:
-            mode = SimulationMode.FIXED_WORKLOAD
-        elif hardcoded_topology:
-            mode = SimulationMode.FIXED_TOPOLOGY
-        else:
-            mode = SimulationMode.RANDOM
-
-        config = SimulationConfig(
-            network_size=nwSize,
-            node_event_ratio=node_event_ratio,
-            num_event_types=num_eventtypes,
-            event_skew=eventskew,
-            max_parents=max_partens,
-            query_size=query_size,
-            query_length=query_length,
-            mode=mode
-        )
-        return cls(config)
-
-        # This is important to variious files afterwards
-        self.h_network_data, self.h_rates_data, self.h_primEvents, self.h_instances, self.h_nodes = initialize_globals(
-            self.network)
-        # print(f"DATA {self.h_network_data} and NETWORK {self.h_nodes}")
-        self.h_eventNodes, self.h_IndexEventNodes = initEventNodes(self.h_nodes, self.h_network_data)
-        # self.h_treeDict = treeDict(self.h_network_data, self.eList)
-        # #print(f"treeDict{self.h_treeDict}")
-        # self.graph = compressed_graph(self.graph, self.h_treeDict)
-        self.h_projlist, self.h_projrates, self.h_projsPerQuery, self.h_sharedProjectionsDict, self.h_sharedProjectionsList = generate_all_projections(
-            self)
-        self.h_projFilterDict = populate_projFilterDict(self)
-        self.h_projFilterDict = removeFilters(self)
-        self.h_mycombi, self.h_combiDict, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(
-            self)
-        self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
-        self.eval_plan, self.central_eval_plan, self.experiment_result, self.results = calculate_operatorPlacement(self,
-                                                                                                                   'test',
-                                                                                                                   self.max_parents)
-        self.plan = generate_eval_plan(self.network, self.selectivities, self.eval_plan, self.central_eval_plan,
-                                       self.query_workload)
-        deterministic_flag = self.config.is_selectivities_fixed()
-        print(
-            f"[INES_DEBUG] Calling generate_prePP (second call) with is_deterministic={deterministic_flag} (mode={self.config.mode})")
-        self.results += generate_prePP(self.plan, 'ppmuse', 'e', 0, 0, 1, False, self.allPairs, deterministic_flag)
-        # new =False
-        # try:
-        #      f = open("./res/"+str(filename)+".csv")   
-        # except FileNotFoundError:
-        #      new = True           
-        #      with open("./res/"+str(filename)+".csv", "w")as f:
-        #          pass
-
-        # with open("./res/"+str(filename)+".csv", "a") as result:
-        #    writer = csv.writer(result)  
-        #    if new:
-        #        writer.writerow(self.schema)              
-        #    writer.writerow(self.results)
-
-# import traceback
-# import logging
-
-# # Set up logging to capture all errors in a file
-# logging.basicConfig(
-#     filename="error_log.txt",
-#     level=logging.ERROR,
-#     format="%(asctime)s - %(levelname)s - %(message)s"
-# )
-
-# Usage Examples:
-#
-# 1. Fully random simulation:
-#    config = SimulationConfig.create_random()
-#    sim = INES(config)
-#
-# 2. Fixed topology only:
-#    config = SimulationConfig.create_fixed_topology()  
-#    sim = INES(config)
-#
-# 3. Fixed topology and workload:
-#    config = SimulationConfig.create_fixed_workload()
-#    sim = INES(config)
-#
-# 4. Fully deterministic (for reproducible results):
-#    config = SimulationConfig.create_deterministic()
-#    sim = INES(config)
-#
-# 5. Legacy compatibility:
-#    sim = INES.create_legacy(12, 0.5, 6, 0.3, 10, 3, 5, hardcoded_selectivities=True)
