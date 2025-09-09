@@ -502,14 +502,17 @@ def determine_randomized_distribution_push_pull_costs(
 
                 # already_aquired_eventtypes = already_received_eventtypes[current_node]
 
-                if len(exact_push_pull_plan_for_a_projection) == len(used_eventtypes_to_pull) or used_eventtypes_to_pull == [[]]:
+                if len(exact_push_pull_plan_for_a_projection) == len(
+                        used_eventtypes_to_pull) or used_eventtypes_to_pull == [[]]:
                     if used_eventtypes_to_pull == [[]]:
                         # Every Aquisition step is a push aquisition step. We just need to expand the size of the list
                         # to match the exact_push_pull_plan_for_a_projection
                         used_eventtypes_to_pull = [[] for _ in range(len(exact_push_pull_plan_for_a_projection))]
-                        print("[DEBUG] Adjusted used_eventtypes_to_pull to match exact_push_pull_plan_for_a_projection length")
+                        print(
+                            "[DEBUG] Adjusted used_eventtypes_to_pull to match exact_push_pull_plan_for_a_projection length")
                     aquisition_steps[query.query] = {}
                     received_eventtypes = []
+                    latency = 0
                     for i, aquired_eventtype in enumerate(exact_push_pull_plan_for_a_projection):
 
                         pull_request_costs, pull_request_latency = (
@@ -553,6 +556,8 @@ def determine_randomized_distribution_push_pull_costs(
                             for event in eventtypes:
                                 if event not in received_eventtypes:
                                     received_eventtypes.append(event)
+
+                        latency += pull_request_latency + pull_response_latency
                 else:
                     # raise ValueError("Length of push pull plan and events to pull do not match!")
                     # Fail silently and just add an error message to the acquisition steps
@@ -560,8 +565,8 @@ def determine_randomized_distribution_push_pull_costs(
                         'error': 'Length of push pull plan and events to pull do not match!'
                     }
 
-
                 total_exact_costs += exact_costs
+                max_latency += latency
 
     return (
         total_greedy_costs,
@@ -796,6 +801,7 @@ def generate_prePP(
     # print(f"[PREPP_DEBUG] generate_prePP called with is_deterministic={is_deterministic}")
     # Accessing the arguments
     #print(input_buffer.getvalue())
+    global max_latency
     method = method
     algorithm = algorithm
     samples = samples
