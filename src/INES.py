@@ -264,8 +264,6 @@ def generate_hardcoded_selectivities():
         'AF': 0.024810748715466777, 'FA': 0.024810748715466777  # A-F and F-A: ~2.5%
     }
 
-    # Devide selectivities by 10 to make them more realistic
-    # TODO: Discuss correctness of this approach with Ariane
     for key in selectivities:
         selectivities[key] /= 1
 
@@ -318,12 +316,6 @@ def calculate_different_placement(eval_plan: list, integrated_results: dict) -> 
     Returns:
         The total number of projection node placements that differ between the
         original eval plan and Kraken's placement decisions.
-        
-    Example:
-        >>> eval_plan = [plan_with_projections]  
-        >>> kraken_results = {'integrated_placement_decision_by_projection': {...}}
-        >>> diff_count = calculate_different_placement(eval_plan, kraken_results)
-        >>> print(f"Found {diff_count} placement differences")
     """
     # Extract projections from the first evaluation plan element
     projections = eval_plan[0].projections
@@ -389,16 +381,16 @@ def update_prepp_results(self, prepp_results):
     # If a query from the workload is placed on the cloud, we do not need to add any latency.
     # If all queries are placed below the cloud, we need to add the latency from the highest placed node to the cloud.
     max_additional_latency = 0
-    min_distance_to_cloud = float('inf')
-
-    if not any(node == CLOUD_NODE_ID for node in all_sinks_from_workload):
-        # Find closest node to the cloud
-        for node in all_sinks_from_workload:
-            distance_to_cloud = self.allPairs[node][CLOUD_NODE_ID]
-            if distance_to_cloud < min_distance_to_cloud:
-                min_distance_to_cloud = distance_to_cloud
-
-        max_additional_latency = min_distance_to_cloud
+    # min_distance_to_cloud = float('inf')
+    #
+    # if not any(node == CLOUD_NODE_ID for node in all_sinks_from_workload):
+    #     # Find closest node to the cloud
+    #     for node in all_sinks_from_workload:
+    #         distance_to_cloud = self.allPairs[node][CLOUD_NODE_ID]
+    #         if distance_to_cloud < min_distance_to_cloud:
+    #             min_distance_to_cloud = distance_to_cloud
+    #
+    #     max_additional_latency = min_distance_to_cloud
 
     max_push_pull_latency += max_additional_latency
 
