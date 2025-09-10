@@ -663,7 +663,7 @@ def finalize_placement_results(self, placement_decisions_by_projection):
     return finalized_decisions
 
 
-def write_final_results(integrated_operator_placement_results, ines_results, config):
+def write_final_results(integrated_operator_placement_results, ines_results, config, graph_density):
     print("Hook")
 
     # Save results to csv file for analysis, but merged with INES results
@@ -684,6 +684,7 @@ def write_final_results(integrated_operator_placement_results, ines_results, con
         # Metadata
         "total_projections_placed",
         "placement_difference_to_ines_count",
+        "graph_density",
         # Computation times
         "combigen_time_seconds",
         "ines_placement_time_seconds",
@@ -728,6 +729,7 @@ def write_final_results(integrated_operator_placement_results, ines_results, con
     placement_difference_to_ines_count = kraken_summary.get(
         "placement_difference_count", 0
     )
+    graph_density = graph_density
 
     # Computation times
     combigen_time_seconds = ines_results[12]
@@ -767,6 +769,7 @@ def write_final_results(integrated_operator_placement_results, ines_results, con
         # Metadata
         "total_projections_placed": total_projections_placed,
         "placement_difference_to_ines_count": placement_difference_to_ines_count,
+        "graph_density": graph_density,
         # Computation times
         "combigen_time_seconds": combigen_time_seconds,
         "ines_placement_time_seconds": ines_placement_time_seconds,

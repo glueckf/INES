@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -239,32 +240,44 @@ def create_simulation_runner(
 def main() -> None:
     """Main entry point for simulation execution."""
 
+    # Parent factors from p.meran bachelor thesis.
+    OPTIMAL_PARENT_FACTOR = 1.8
+    parent_factors = [0.8, 1.2, 1.8, 2]
+
     workload_sizes = [3, 5, 8, 10]
     query_lengths = [3, 5, 8, 10]
-    network_sizes = [10, 30, 50, 100, 200, 500]
+    network_sizes = [10, 30, 50, 100, 200]
     runs_per_network_size_and_query_length = 50
     total_runs = 0
+    for parent_factor in parent_factors:
+        for workload_size in workload_sizes:
+            for network_size in network_sizes:
+                for query_length in query_lengths:
+                    number_of_levels = math.ceil(math.log2(network_size))
 
-    for workload_size in workload_sizes:
-        for size in network_sizes:
-            for query_length in query_lengths:
-                runner = create_simulation_runner(
-                    network_size=size,
-                    node_event_ratio=0.5,
-                    num_event_types=6,
-                    event_skew=2.0,
-                    max_parents=5,
-                    workload_size=workload_size,
-                    query_length=query_length,
-                    num_runs=runs_per_network_size_and_query_length,
-                    mode=SimulationMode.RANDOM,
-                    max_workers=14,
-                    batch_size=20,
-                    enable_parallel=True
-                )
-                runner.run_simulation_batch()
-                total_runs += runs_per_network_size_and_query_length
-                print(f"[TOTAL] Completed {total_runs} total simulation runs so far.")
+                    # First Experiment
+                    max_parents = int(parent_factor * number_of_levels)
+
+                    # Second Experiment
+                    # max_parents = round(OPTIMAL_PARENT_FACTOR * number_of_levels)
+
+                    runner = create_simulation_runner(
+                        network_size=network_size,
+                        node_event_ratio=0.5,
+                        num_event_types=6,
+                        event_skew=2.0,
+                        max_parents=max_parents,
+                        workload_size=workload_size,
+                        query_length=query_length,
+                        num_runs=runs_per_network_size_and_query_length,
+                        mode=SimulationMode.RANDOM,
+                        max_workers=14,
+                        batch_size=50,
+                        enable_parallel=True
+                    )
+                    runner.run_simulation_batch()
+                    total_runs += runs_per_network_size_and_query_length
+                    print(f"[TOTAL] Completed {total_runs} total simulation runs so far.")
 
     # runner = create_simulation_runner(
     #     network_size=12,

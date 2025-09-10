@@ -2,6 +2,7 @@ import string
 from enum import Enum
 from dataclasses import dataclass
 
+import networkx as nx
 import numpy as np
 
 from Node import Node
@@ -319,10 +320,10 @@ def calculate_different_placement(eval_plan: list, integrated_results: dict) -> 
     """
     # Extract projections from the first evaluation plan element
     projections = eval_plan[0].projections
-    
+
     # Get Kraken's placement decisions mapped by projection name
     kraken_placements = integrated_results['integrated_placement_decision_by_projection']
-    
+
     # Initialize counter for placement differences
     placement_difference_count = 0
 
@@ -333,16 +334,23 @@ def calculate_different_placement(eval_plan: list, integrated_results: dict) -> 
 
         # Original placement nodes from the eval plan
         original_placement_nodes = projection.name.sinks
-        
+
         # Kraken's placement decision for this projection (as single-item list for comparison)
         kraken_placement_nodes = [kraken_placements[projection_name].node]
-        
+
         # Count nodes that are in original placement but not in Kraken's placement
         for node in original_placement_nodes:
             if node not in kraken_placement_nodes:
                 placement_difference_count += 1
 
     return placement_difference_count
+
+
+def calculate_graph_density(graph):
+    """Calculate the density of our topology."""
+    density = nx.density(graph)
+
+    return density
 
 
 def update_prepp_results(self, prepp_results):
@@ -422,6 +430,7 @@ class INES():
     CURRENT_SECTION = ''
     eList = {}
     h_treeDict = {}
+    graph_density = None
 
     "Helper Variables from different Files - namespace issues"
     h_network_data = None
@@ -466,7 +475,6 @@ class INES():
         self.max_parents = config.max_parents
         self.query_size = config.query_size
         self.query_length = config.query_length
-
         # Initialize result schema for experiments
         self.schema = ["ID", "TransmissionRatio", "Transmission", "INEvTransmission", "FilterUsed", "Nodes",
                        "EventSkew", "EventNodeRatio", "WorkloadSize", "NumberProjections", "MinimalSelectivity",
@@ -492,6 +500,8 @@ class INES():
         self._initialize_network_graph()
         self._initialize_query_workload()
         self._initialize_selectivities()
+
+        self.graph_density = calculate_graph_density(self.graph)
 
         global_event_rates = calculate_global_eventrates(self)
         self.primitiveEvents = global_event_rates
@@ -525,7 +535,8 @@ class INES():
             self)
         self.h_projFilterDict = populate_projFilterDict(self)
         self.h_projFilterDict = removeFilters(self)
-        self.h_mycombi, self.h_combiDict, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(self)
+        self.h_mycombi, self.h_combiDict, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(
+            self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
 
         integrated_operator_placement_results = calculate_integrated_approach(self, 'test', 0)
@@ -558,13 +569,14 @@ class INES():
         self.results += prepp_results[0:4]
 
         different_placements = calculate_different_placement(self.eval_plan, integrated_operator_placement_results)
-        integrated_operator_placement_results['formatted_results']['summary']['placement_difference_count'] = different_placements
+        integrated_operator_placement_results['formatted_results']['summary'][
+            'placement_difference_count'] = different_placements
 
         # Get the ID from the INES simulation as a foreign key, to later map both
         ines_simulation_id = self.results[0]
 
         write_results_to_csv(integrated_operator_placement_results, ines_simulation_id, self.config)
-        write_final_results(integrated_operator_placement_results, self.results, self.config)
+        write_final_results(integrated_operator_placement_results, self.results, self.config, self.graph_density)
 
     def _initialize_network_topology(self):
         """Create network topology based on configuration mode."""

@@ -489,6 +489,7 @@ def unfold_combiRec(self, combination, unfoldedDict):
 
 
 def generate_combigen(self):
+    # TODO: Check for processingOrder
     combiDict = self.h_combiDict
     criticalMSTypes= []
     noFilter = 0
