@@ -494,6 +494,7 @@ def determine_randomized_distribution_push_pull_costs(
                         allPairs
                     )
                 )
+                max_latency = max(max_latency, latency)
 
                 # ===========================================
                 # FINAL PREPP RESULT LOGGING
@@ -566,7 +567,6 @@ def determine_randomized_distribution_push_pull_costs(
                     }
 
                 total_exact_costs += exact_costs
-                max_latency += latency
 
     return (
         total_greedy_costs,

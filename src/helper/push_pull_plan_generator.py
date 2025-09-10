@@ -562,10 +562,10 @@ class Initiate():
         available_predicates = []
         used_eventtype_to_pull = []
         used_eventtype = ''
+        latency = 0
         for eventtype_group in plan:
             used_eventtypes = []
             for eventtype in eventtype_group:
-                latency = 0
                 if push:                 
                     number_of_sources = self.determine_correct_number_of_sources(node, eventtype)
                     for source in self.eventtype_to_sources_map[eventtype]:
@@ -581,8 +581,10 @@ class Initiate():
                             
                 else:
                     lowest_costs_for_this_step, used_eventtype,pull_latency = self.determine_optimal_pull_strategy_for_step_in_plan(available_predicates, eventtype, node,allPairs)
+                    local_max_latency = 0
                     for source in self.eventtype_to_sources_map[eventtype]:
-                        latency = max(latency, allPairs[node][source])
+                        local_max_latency = max(local_max_latency, allPairs[node][source])
+                    latency += local_max_latency
                     latency += pull_latency
                     latency += allPairs[node][0]
                     max_latency = latency if latency > max_latency else max_latency
