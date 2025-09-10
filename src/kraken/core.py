@@ -135,11 +135,6 @@ def compute_kraken_for_projection(
             event_nodes=event_nodes,
         )
 
-        if str(projection) == "SEQ(A, B, C)":
-            logger.debug(
-                f"Possible placement nodes for {projection}: {possible_placement_nodes}"
-            )
-
         # Go through all possible placement nodes and calculate the costs
         # For each candidate node, we optimize subprojection placements considering parent context
         for node in possible_placement_nodes:
@@ -154,6 +149,7 @@ def compute_kraken_for_projection(
                         projection_rates=projrates,
                     )
                 )
+
             # Calculate the costs for placing the current projection on this node
             # This function respects already placed subqueries if there are any
             # Also respects already locally available events
