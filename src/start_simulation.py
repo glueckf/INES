@@ -239,47 +239,49 @@ def create_simulation_runner(
 def main() -> None:
     """Main entry point for simulation execution."""
 
-    # network_sizes = [10, 30, 50, 100, 200, 500]
-    # query_lengths = [3, 5, 8, 10]
-    # runs_per_network_size_and_query_length = 50
-    # total_runs = 0
+    workload_sizes = [3, 5, 8, 10]
+    query_lengths = [3, 5, 8, 10]
+    network_sizes = [10, 30, 50, 100, 200, 500]
+    runs_per_network_size_and_query_length = 50
+    total_runs = 0
+
+    for workload_size in workload_sizes:
+        for size in network_sizes:
+            for query_length in query_lengths:
+                runner = create_simulation_runner(
+                    network_size=size,
+                    node_event_ratio=0.5,
+                    num_event_types=6,
+                    event_skew=2.0,
+                    max_parents=5,
+                    workload_size=workload_size,
+                    query_length=query_length,
+                    num_runs=runs_per_network_size_and_query_length,
+                    mode=SimulationMode.RANDOM,
+                    max_workers=14,
+                    batch_size=20,
+                    enable_parallel=True
+                )
+                runner.run_simulation_batch()
+                total_runs += runs_per_network_size_and_query_length
+                print(f"[TOTAL] Completed {total_runs} total simulation runs so far.")
+
+    # runner = create_simulation_runner(
+    #     network_size=12,
+    #     node_event_ratio=0.5,
+    #     num_event_types=6,
+    #     event_skew=0.3,
+    #     max_parents=10,
+    #     workload_size=3,
+    #     query_length=5,
+    #     num_runs=1,
+    #     mode=SimulationMode.FULLY_DETERMINISTIC,
+    #     max_workers=1,
+    #     batch_size=1,
+    #     enable_parallel=False
+    # )
     #
-    # for size in network_sizes:
-    #     for query_length in query_lengths:
-    #         runner = create_simulation_runner(
-    #             network_size=size,
-    #             node_event_ratio=0.5,
-    #             num_event_types=6,
-    #             event_skew=2.0,
-    #             max_parents=5,
-    #             workload_size=5,
-    #             query_length=query_length,
-    #             num_runs=runs_per_network_size_and_query_length,
-    #             mode=SimulationMode.RANDOM,
-    #             max_workers=14,
-    #             batch_size=20,
-    #             enable_parallel=True
-    #         )
-    #         runner.run_simulation_batch()
-    #         total_runs += runs_per_network_size_and_query_length
-    #         print(f"[TOTAL] Completed {total_runs} total simulation runs so far.")
-
-    runner = create_simulation_runner(
-        network_size=12,
-        node_event_ratio=0.5,
-        num_event_types=6,
-        event_skew=0.3,
-        max_parents=10,
-        workload_size=3,
-        query_length=5,
-        num_runs=1,
-        mode=SimulationMode.FULLY_DETERMINISTIC,
-        max_workers=1,
-        batch_size=1,
-        enable_parallel=False
-    )
-
-    runner.run_simulation_batch()
+    # runner.run_simulation_batch()
 
 
 if __name__ == "__main__":
