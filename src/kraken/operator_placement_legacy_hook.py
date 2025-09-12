@@ -87,7 +87,13 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     projrates = self.h_projrates
     EventNodes = self.h_eventNodes
     G = self.graph
-
+    selectivities = self.selectivities
+    mode = self.config.mode
+    EventNodes = self.h_eventNodes
+    IndexEventNodes = self.h_IndexEventNodes
+    unfolded = self.h_mycombi
+    criticalMSTypes = self.h_criticalMSTypes
+    network_data = self.h_network_data
     Filters = []
 
     noFilter = 0  # NO FILTER
@@ -121,17 +127,44 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
 
     hopLatency = {}
 
-    EventNodes = self.h_eventNodes
-    IndexEventNodes = self.h_IndexEventNodes
-
-    unfolded = self.h_mycombi
-    criticalMSTypes = self.h_criticalMSTypes
     sharedDict = getSharedMSinput(self, unfolded, projFilterDict)
     dependencies = compute_dependencies(self, unfolded, criticalMSTypes)
     processingOrder = sorted(dependencies.keys(), key=lambda x: dependencies[x])
     costs = 0
 
     integrated_placement_decision_by_projection = {}
+
+    """ NOTE from FINN GLÜCK: 
+    For some reason in some edge cases projections with really high output rates reach the top of the processing order. 
+    We do not want them in our workload, at least for single node queries, that's why we filter them out here. 
+    The heuristic for the filtering is: 
+    
+    Sum of input rates < projection output rate 
+    
+    Example: 
+    
+    SEQ(A, B) with 'AB' = 0.5, R(A) = 1000, R(B) = 5
+    
+    sum of input rates = R(A) + R(B) = 1005
+    
+    projection output rate = R(A) * R(B) * 'AB' = 1000 * 5 * 0.5 = 2500
+    
+    1005 < 2500 -> filter out
+    """
+    # result = update_processing_order_with_heuristics(
+    #     query_workload=workload,
+    #     combinations=mycombi,
+    #     processing_order=processingOrder,
+    #     proj_filter_dict=projFilterDict,
+    #     rates=rates,
+    #     projection_rates=projrates,
+    # )
+    #
+    # (processingOrder, projrates, projFilterDict, mycombi) = result
+
+    # TODO: This flag currently leaves out MS placement for the integrated approach, as it is not yet implemented
+    #  This should be removed and the line in 184 should be commented in once MS placement is implemented
+    partType = False
 
     for projection in (
         processingOrder
@@ -145,12 +178,10 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
                 [hopLatency[x] for x in unfolded[projection] if x in hopLatency.keys()]
             )
 
-        # TODO: Currntly leave out MS placement for integrated approach, as it is not yet implemented
+        # TODO: This should be commented in, once MS placement is implemented for the integrated approach
         # partType,_,_ = returnPartitioning(self, projection, unfolded[projection], projrates ,criticalMSTypes)
-        partType = False
 
         if partType:
-            # TODO: Should be rewritten to fit the integrated approach
             MSPlacements[projection] = partType
 
             result = computeMSplacementCosts(
@@ -186,14 +217,17 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         else:
             integrated_optimization_result_for_given_projection = (
                 compute_kraken_for_projection(
-                    self,
+                    workload,
+                    selectivities,
+                    mycombi,
+                    mode,
                     projection,
                     unfolded[projection],
                     noFilter,
                     projFilterDict,
                     EventNodes,
                     IndexEventNodes,
-                    self.h_network_data,
+                    network_data,
                     allPairs,
                     mycombi,
                     rates,
@@ -663,7 +697,9 @@ def finalize_placement_results(self, placement_decisions_by_projection):
     return finalized_decisions
 
 
-def write_final_results(integrated_operator_placement_results, ines_results, config, graph_density):
+def write_final_results(
+    integrated_operator_placement_results, ines_results, config, graph_density
+):
     print("Hook")
 
     # Save results to csv file for analysis, but merged with INES results
@@ -684,6 +720,7 @@ def write_final_results(integrated_operator_placement_results, ines_results, con
         # Metadata
         "total_projections_placed",
         "placement_difference_to_ines_count",
+        "placements_at_cloud",
         "graph_density",
         # Computation times
         "combigen_time_seconds",
@@ -729,6 +766,9 @@ def write_final_results(integrated_operator_placement_results, ines_results, con
     placement_difference_to_ines_count = kraken_summary.get(
         "placement_difference_count", 0
     )
+    placements_at_cloud = calculate_placements_at_cloud(
+        integrated_operator_placement_results
+    )
     graph_density = graph_density
 
     # Computation times
@@ -769,6 +809,7 @@ def write_final_results(integrated_operator_placement_results, ines_results, con
         # Metadata
         "total_projections_placed": total_projections_placed,
         "placement_difference_to_ines_count": placement_difference_to_ines_count,
+        "placements_at_cloud": placements_at_cloud,
         "graph_density": graph_density,
         # Computation times
         "combigen_time_seconds": combigen_time_seconds,
@@ -810,3 +851,211 @@ def write_final_results(integrated_operator_placement_results, ines_results, con
 
     logger.info(f"Appended combined simulation results to {csv_file_path}")
     logger.info(f"INES ID: {ines_simulation_id}, Kraken ID: {kraken_simulation_id}")
+
+
+def calculate_placements_at_cloud(integrated_operator_placement_results):
+    """
+    Calculate the number of projections placed at the cloud node (node 0).
+
+    Args:
+        integrated_operator_placement_results: Complete results dict containing all placement data
+
+    Returns:
+        int: Count of projections placed at the cloud node
+    """
+    # Loop through each projection's placement decision and increment count if placed at cloud (node 0)
+    placed_at_cloud = 0
+    placement_decisions = integrated_operator_placement_results.get(
+        "integrated_placement_decision_by_projection", {}
+    )
+    for projection, decision in placement_decisions.items():
+        if hasattr(decision, "node") and decision.node == 0:
+            placed_at_cloud += 1
+
+    return placed_at_cloud
+
+
+def update_processing_order_with_heuristics(
+    query_workload,
+    combinations,
+    processing_order,
+    proj_filter_dict,
+    rates,
+    projection_rates,
+):
+    """
+    Filter out projections with high output rates using heuristic.
+
+    The heuristic filters projections where:
+    Sum of input rates < projection output rate
+
+    This function handles cascading deletions - when a projection is removed,
+    all references to it in other projections are also cleaned up.
+
+    Args:
+        query_workload: Original query workload
+        combinations: Dictionary of projection combinations (unfolded dict)
+        processing_order: List of projections in processing order
+        proj_filter_dict: Dictionary of projection filters
+        rates: Dictionary of event rates
+        projection_rates: Dictionary of projection rates
+
+    Returns:
+        Tuple of updated (processing_order, projection_rates, proj_filter_dict, combinations)
+    """
+    logger = get_kraken_logger(__name__)
+    logger.info("Applying heuristic filter for high output rate projections")
+
+    # Work with copies to avoid modifying while iterating
+    processing_order_copy = processing_order.copy()
+
+    projections_to_remove = set()
+    removed_count = 0
+
+    # First pass: identify projections to remove based on heuristic
+    for query in processing_order_copy:
+        if query not in query_workload:
+            # Get projection output rate
+            output_rate = projection_rates[query][1]
+
+            # Calculate sum of input rates from children
+            all_push_output_rate = 0
+            query_children = combinations.get(query, [])
+
+            for child in query_children:
+                if child in rates:
+                    # Early pruning if single child is already higher
+                    if rates[child] > output_rate:
+                        all_push_output_rate = rates[child] + 1
+                        break
+                    all_push_output_rate += rates[child]
+
+            # Apply heuristic: filter if output_rate > sum of input rates
+            if output_rate > all_push_output_rate:
+                logger.debug(
+                    f"Marking projection for removal {query}: output_rate={output_rate:.2f} > "
+                    f"sum_input_rates={all_push_output_rate:.2f}"
+                )
+                projections_to_remove.add(query)
+                removed_count += 1
+
+    # Second pass: perform cascading removal
+    if projections_to_remove:
+        logger.info(
+            f"Removing {len(projections_to_remove)} projections and handling cascading effects"
+        )
+        _remove_projections_cascading(
+            projections_to_remove,
+            combinations,
+            processing_order,
+            proj_filter_dict,
+            projection_rates,
+            logger,
+        )
+
+    logger.info(f"Filtered {removed_count} projections with high output rates")
+    return processing_order, projection_rates, proj_filter_dict, combinations
+
+
+def _remove_projections_cascading(
+    projections_to_remove,
+    combinations,
+    processing_order,
+    proj_filter_dict,
+    projection_rates,
+    logger,
+):
+    """
+    Remove projections and handle all cascading effects.
+
+    This function:
+    1. Removes the projections from all data structures
+    2. Updates all other projections that reference the removed ones
+    3. Handles the case where removed projections were part of other projections' workflows
+
+    Args:
+        projections_to_remove: Set of projections to remove
+        combinations: Dictionary of projection combinations (modified in place)
+        processing_order: List of projections in processing order (modified in place)
+        proj_filter_dict: Dictionary of projection filters (modified in place)
+        projection_rates: Dictionary of projection rates (modified in place)
+        logger: Logger instance for debugging
+    """
+
+    # Step 1: Remove the identified projections from all data structures
+    for query in projections_to_remove:
+        logger.debug(f"Removing projection {query} from all data structures")
+
+        if query in processing_order:
+            processing_order.remove(query)
+        if query in projection_rates:
+            del projection_rates[query]
+        if query in proj_filter_dict:
+            del proj_filter_dict[query]
+        if query in combinations:
+            del combinations[query]
+
+    # Step 2: Update all remaining projections that reference the removed ones
+    updated_combinations = {}
+
+    for projection, children_list in combinations.items():
+        # Filter out any removed projections from the children list
+        original_children = (
+            children_list.copy() if isinstance(children_list, list) else []
+        )
+        updated_children = []
+
+        for child in original_children:
+            if child not in projections_to_remove:
+                updated_children.append(child)
+            else:
+                logger.debug(
+                    f"Removing reference to {child} from projection {projection}"
+                )
+
+                # If the removed child was a complex projection, we need to replace it
+                # with its own children to maintain the workflow
+                if child in combinations:
+                    removed_child_children = combinations[child]
+                    logger.debug(
+                        f"Replacing removed child {child} with its children: {removed_child_children}"
+                    )
+                    updated_children.extend(removed_child_children)
+
+        # Remove duplicates while preserving order
+        seen = set()
+        final_children = []
+        for child in updated_children:
+            if child not in seen:
+                seen.add(child)
+                final_children.append(child)
+
+        updated_combinations[projection] = final_children
+
+        # Log if changes were made
+        if len(final_children) != len(original_children) or set(final_children) != set(
+            original_children
+        ):
+            logger.debug(
+                f"Updated {projection}: {original_children} -> {final_children}"
+            )
+
+    # Step 3: Update the combinations dictionary
+    combinations.clear()
+    combinations.update(updated_combinations)
+
+    # Step 4: Validate that no orphaned references remain
+    all_referenced_projections = set()
+    for children_list in combinations.values():
+        if isinstance(children_list, list):
+            all_referenced_projections.update(children_list)
+
+    orphaned_references = all_referenced_projections.intersection(projections_to_remove)
+    if orphaned_references:
+        logger.warning(
+            f"Found orphaned references after cleanup: {orphaned_references}"
+        )
+
+    logger.info(
+        f"Successfully removed {len(projections_to_remove)} projections and updated dependencies"
+    )
