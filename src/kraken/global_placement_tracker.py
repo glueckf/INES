@@ -334,7 +334,7 @@ class GlobalPlacementTracker:
         self,
         parent_projection: Any,
         parent_node: int,
-        shortest_path_distances: Dict[int, Dict[int, int]],
+        shortest_path_distances: list,
         projection_rates: Dict[Any, tuple],
     ) -> Dict[Any, Dict[str, Any]]:
         """
