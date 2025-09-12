@@ -25,7 +25,10 @@ logger = get_kraken_logger(__name__)
 
 
 def compute_kraken_for_projection(
-    self,
+    query_workload:list,
+    selectivities: dict,
+    h_mycombi: dict,
+    mode,
     projection,
     combination: list,
     no_filter: int,
@@ -158,14 +161,14 @@ def compute_kraken_for_projection(
             results = calculate_costs(
                 placement_node=node,
                 projection=projection,
-                query_workload=self.query_workload,
+                query_workload=query_workload,
                 network=network,
-                selectivities=self.selectivities,
-                combination_dict=self.h_mycombi,
+                selectivities=selectivities,
+                combination_dict=h_mycombi,
                 rates=rates,
                 projection_rates=projrates,
                 index_event_nodes=index_event_nodes,
-                mode=self.config.mode,
+                mode=mode,
                 shortest_path_distances=all_pairs,
                 sink_nodes=sinks,
                 has_placed_subqueries=has_placed_subqueries,
@@ -178,7 +181,7 @@ def compute_kraken_for_projection(
                 latency,
                 computing_time,
                 transmission_ratio,
-                aquisition_steps,
+                acquisition_steps,
             ) = results
 
             # Check if the current node has enough resources to place the projection there.
@@ -234,7 +237,7 @@ def compute_kraken_for_projection(
                     "computing_time": computing_time,
                     "latency": latency,
                     "transmission_ratio": transmission_ratio,
-                    "aquisition_steps": aquisition_steps,
+                    "acquisition_steps": acquisition_steps,
                     "base_costs": base_costs,  # Store original costs
                     "heuristic_adjustment": heuristic_adjustment,
                 },
