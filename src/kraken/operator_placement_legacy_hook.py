@@ -134,7 +134,8 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
 
     integrated_placement_decision_by_projection = {}
 
-    """ NOTE from FINN GLÜCK: 
+    """ 
+    NOTE from FINN GLÜCK 10.09.2025: 
     For some reason in some edge cases projections with really high output rates reach the top of the processing order. 
     We do not want them in our workload, at least for single node queries, that's why we filter them out here. 
     The heuristic for the filtering is: 
@@ -150,6 +151,14 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     projection output rate = R(A) * R(B) * 'AB' = 1000 * 5 * 0.5 = 2500
     
     1005 < 2500 -> filter out
+    """
+
+    """ 
+    NOTE FROM Finn Glück 12.09.2025: 
+    Actually no subprojections with to high output rates reach the processing order. 
+    Those high rate projections are always part of the workload and can therefore not be filtered out here. 
+    However the problem for INES remains, 
+    as these projections still get placed inside the network and not the cloud where they should be placed.
     """
     # result = update_processing_order_with_heuristics(
     #     query_workload=workload,
@@ -315,163 +324,6 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
 
     return result
 
-
-def write_results_to_csv(
-    integrated_placement_decision_by_projection,
-    ines_simulation_id,
-    simulation_config=None,
-):
-    """
-    Append placement results to the kraken_results.csv file for analysis.
-
-    Args:
-        integrated_placement_decision_by_projection: Dict containing placement decisions by projection
-        ines_simulation_id: Foreign key ID to link with INES simulation data
-        simulation_config: Optional simulation configuration object to include parameters
-    """
-
-    # Ensure result directory exists in kraken folder
-    result_dir = os.path.join(os.path.dirname(__file__), "result")
-    os.makedirs(result_dir, exist_ok=True)
-
-    csv_file_path = os.path.join(result_dir, "kraken_results.csv")
-
-    # Define CSV headers (using consistent names with INES where applicable)
-    headers = [
-        "kraken_simulation_id",
-        "INES_ID",  # INES ID (foreign key) - same as INES
-        "timestamp",
-        "execution_time_seconds",
-        "total_projections_placed",
-        "central_placement_cost",
-        "integrated_placement_cost",
-        "central_latency",
-        "integrated_placement_latency",
-        "cost_reduction_ratio",
-        "latency_increase",
-        "workload_size",
-        "nodes_with_placements",
-        "placement_difference_to_ines_count",
-        # Configuration parameters (same as INES)
-        "network_size",
-        "node_event_ratio",
-        "num_event_types",
-        "event_skew",
-        "max_parents",
-        "query_size",
-        "query_length",
-        "simulation_mode",
-    ]
-
-    # Extract relevant data from results
-    run_metadata = integrated_placement_decision_by_projection["formatted_results"][
-        "metadata"
-    ]
-    run_summary = integrated_placement_decision_by_projection["formatted_results"][
-        "summary"
-    ]
-
-    # Simulation ID
-    kraken_simulation_id = integrated_placement_decision_by_projection[
-        "kraken_simulation_id"
-    ]
-
-    # Everything that can be extracted from metadata
-    timestamp = run_metadata["start_time"]
-    execution_time_seconds = run_metadata["execution_time_seconds"]
-    central_placement_cost = run_metadata["central_cost"]
-    integrated_placement_cost = run_metadata["push_pull_plan_cost_sum"]
-    central_latency = run_metadata["central_hop_latency"]
-    integrated_placement_latency = run_metadata["push_pull_plan_latency"]
-    workload_size = run_metadata["workload_size"]
-    nodes_with_placements = run_metadata["global_tracker_entries"]
-
-    # Everything that can be extracted from summary
-    total_projections_placed = run_summary["total_projections"]
-    placement_difference_to_ines_count = run_summary["placement_difference_count"]
-
-    # Calculate derived metrics
-    cost_reduction_ratio = (
-        integrated_placement_cost / central_placement_cost
-        if central_placement_cost > 0
-        else 0
-    )
-    latency_increase = (
-        (integrated_placement_latency / central_latency) - 1
-        if central_latency > 0
-        else 0
-    )
-
-    # Extract configuration parameters from simulation_config if available
-    config_params = {}
-    if simulation_config:
-        config_params = {
-            "network_size": simulation_config.network_size,
-            "node_event_ratio": simulation_config.node_event_ratio,
-            "num_event_types": simulation_config.num_event_types,
-            "event_skew": simulation_config.event_skew,
-            "max_parents": simulation_config.max_parents,
-            "query_size": simulation_config.query_size,
-            "query_length": simulation_config.query_length,
-            "simulation_mode": simulation_config.mode.value,
-        }
-    else:
-        # Default values if config not provided
-        config_params = {
-            "network_size": None,
-            "node_event_ratio": None,
-            "num_event_types": None,
-            "event_skew": None,
-            "max_parents": None,
-            "query_size": None,
-            "query_length": None,
-            "simulation_mode": None,
-        }
-
-    row_data = [
-        kraken_simulation_id,
-        ines_simulation_id,
-        timestamp,
-        execution_time_seconds,
-        total_projections_placed,
-        central_placement_cost,
-        integrated_placement_cost,
-        central_latency,
-        integrated_placement_latency,
-        cost_reduction_ratio,
-        latency_increase,
-        workload_size,
-        nodes_with_placements,
-        placement_difference_to_ines_count,
-        # Configuration parameters
-        config_params["network_size"],
-        config_params["node_event_ratio"],
-        config_params["num_event_types"],
-        config_params["event_skew"],
-        config_params["max_parents"],
-        config_params["query_size"],
-        config_params["query_length"],
-        config_params["simulation_mode"],
-    ]
-
-    # Check if file exists to determine if we need to write headers
-    file_exists = os.path.exists(csv_file_path)
-
-    # Write to CSV file (append mode)
-    with open(csv_file_path, "a", newline="", encoding="utf-8") as csvfile:
-        writer = csv.writer(csvfile)
-
-        # Write headers only if file is new
-        if not file_exists:
-            writer.writerow(headers)
-
-        # Write data row
-        writer.writerow(row_data)
-
-    logger.info(f" Appended Kraken simulation results to {csv_file_path}")
-    logger.info(
-        f" Kraken Simulation ID: {kraken_simulation_id}, INES Simulation ID: {ines_simulation_id}"
-    )
 
 
 def print_kraken(integrated_operator_placement_results):
@@ -912,6 +764,9 @@ def update_processing_order_with_heuristics(
     projections_to_remove = set()
     removed_count = 0
 
+    # Filter projection rates to only those in the current processing order
+    relevant_projection_rates = {k: v for k, v in projection_rates.items() if k in processing_order_copy}
+    logger.info("Relevant projection rates filtered for processing order")
     # First pass: identify projections to remove based on heuristic
     for query in processing_order_copy:
         if query not in query_workload:
@@ -923,12 +778,13 @@ def update_processing_order_with_heuristics(
             query_children = combinations.get(query, [])
 
             for child in query_children:
-                if child in rates:
-                    # Early pruning if single child is already higher
-                    if rates[child] > output_rate:
-                        all_push_output_rate = rates[child] + 1
-                        break
+                if child in rates: # primitive event
                     all_push_output_rate += rates[child]
+                elif child in projection_rates: # subprojection
+                    all_push_output_rate += projection_rates[child][1]
+                else:
+                    logger.warning(f"Child {child} not found in rates or projection_rates")
+                    all_push_output_rate += 0
 
             # Apply heuristic: filter if output_rate > sum of input rates
             if output_rate > all_push_output_rate:
@@ -952,6 +808,8 @@ def update_processing_order_with_heuristics(
             projection_rates,
             logger,
         )
+    else:
+        logger.info("No projections marked for removal")
 
     logger.info(f"Filtered {removed_count} projections with high output rates")
     return processing_order, projection_rates, proj_filter_dict, combinations

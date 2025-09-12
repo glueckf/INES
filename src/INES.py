@@ -11,8 +11,7 @@ from graph import create_fog_graph
 from allPairs import populate_allPairs
 from queryworkload import generate_workload
 from selectivity import initialize_selectivities
-from kraken.operator_placement_legacy_hook import calculate_integrated_approach, write_results_to_csv, \
-    write_final_results
+from kraken.operator_placement_legacy_hook import calculate_integrated_approach
 from write_config_single import generate_config_buffer
 from singleSelectivities import initializeSingleSelectivity
 from helper.parse_network import initialize_globals
@@ -540,6 +539,9 @@ class INES():
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
 
         integrated_operator_placement_results = calculate_integrated_approach(self, 'test', 0)
+        
+        # Store integrated results for worker access
+        self.integrated_operator_placement_results = integrated_operator_placement_results
 
         (self.eval_plan, self.central_eval_plan, self.experiment_result, self.results) = calculate_operatorPlacement(
             self, 'test', 0)
@@ -575,8 +577,8 @@ class INES():
         # Get the ID from the INES simulation as a foreign key, to later map both
         ines_simulation_id = self.results[0]
 
-        write_results_to_csv(integrated_operator_placement_results, ines_simulation_id, self.config)
-        write_final_results(integrated_operator_placement_results, self.results, self.config, self.graph_density)
+        # I/O operations moved to start_simulation.py for consolidated processing
+        # Results are now available via self.integrated_operator_placement_results
 
     def _initialize_network_topology(self):
         """Create network topology based on configuration mode."""

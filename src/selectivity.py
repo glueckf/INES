@@ -8,6 +8,7 @@ from queryworkload import get_primitive_events
 
 
 def initialize_selectivities(primEvents,x=0.2,y=0.05):
+    """ Calculate selectivities for all projections in projlist within interval [x,y]."""
 
     """"
     Note from Finn Glück 27.08.2024:
@@ -19,6 +20,7 @@ def initialize_selectivities(primEvents,x=0.2,y=0.05):
     Changed random_float range from 0.0 - 0.3 to 0.0 - 0.4 and adjusted conditions from >0.2 to >0.3
     This decreases the chance of a selectivity being set to 1, making high selectivities less freuquent.
     """
+
     primitive_events_rates = primEvents
     primEvents = get_primitive_events(primEvents)
    
@@ -29,6 +31,7 @@ def initialize_selectivities(primEvents,x=0.2,y=0.05):
 
     # Make selectivities smaller based on the biggest rate
     max_rate = np.max(primitive_events_rates)
+
     for i in projlist: 
         #if len(filter_numbers(i)) >1 :                  
             random_float = rd.uniform(0.0,0.4)
