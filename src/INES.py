@@ -1,4 +1,5 @@
 import string
+from typing import Optional
 from enum import Enum
 from dataclasses import dataclass
 
@@ -45,6 +46,9 @@ class SimulationConfig:
 
     # Simulation mode
     mode: SimulationMode = SimulationMode.RANDOM
+
+    # Kraken-specific parameters
+    latency_awareness: Optional[float] = None
 
     def is_topology_fixed(self) -> bool:
         """Check if network topology should be hardcoded."""
@@ -538,7 +542,9 @@ class INES():
             self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
 
-        integrated_operator_placement_results = calculate_integrated_approach(self, 'test', 0)
+        integrated_operator_placement_results = calculate_integrated_approach(
+            self, "test", 0, latency_awareness=self.config.latency_awareness
+        )
         
         # Store integrated results for worker access
         self.integrated_operator_placement_results = integrated_operator_placement_results
