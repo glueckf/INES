@@ -187,6 +187,7 @@ def compute_kraken_for_projection(
             # Check if the current node has enough resources to place the projection there.
             # This check is done after calculating the costs, since prepp might potentially lower
             # the ressource requirements making notes that would otherwise be infeasible feasible
+            # option 2
             has_enough_resources = check_resources(
                 node=node,
                 projection=projection,
@@ -251,6 +252,7 @@ def compute_kraken_for_projection(
 
         # Once we checked every possible placement node for the current projection
         # we get the best decision from the placement_decision_tracker
+        # Option 1
         best_decision = placement_decision_tracker.get_best_decision()
 
         # Then we need to update our trackers to reflect this placement decision for the next run.
