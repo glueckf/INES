@@ -6,7 +6,7 @@ maintaining compatibility with the legacy API while providing a clean
 internal implementation.
 """
 
-from typing import Any
+from typing import Any, Optional
 import networkx
 from .logging import get_kraken_logger
 from .global_placement_tracker import get_global_placement_tracker
@@ -43,6 +43,7 @@ def compute_kraken_for_projection(
     graph: networkx.Graph,
     network: list,
     sinks: list[int] = [0],
+    latency_threshold: Optional[float] = None,
 ) -> Any:
     """Compute optimal joint operator placement and push-pull communication strategy.
 
@@ -187,6 +188,7 @@ def compute_kraken_for_projection(
             # Check if the current node has enough resources to place the projection there.
             # This check is done after calculating the costs, since prepp might potentially lower
             # the ressource requirements making notes that would otherwise be infeasible feasible
+            # option 2
             has_enough_resources = check_resources(
                 node=node,
                 projection=projection,
@@ -201,6 +203,19 @@ def compute_kraken_for_projection(
                 push_pull_costs=push_pull_costs,
                 has_enough_resources=has_enough_resources,
             )
+
+            # If the recommended strategy is push_pull, check if it meets the latency threshold.
+            # If not, fall back to all_push.
+            if (
+                best_strategy == "push_pull"
+                and latency_threshold is not None
+                and latency > latency_threshold
+            ):
+                logger.debug(
+                    f"Node {node} for {projection}: push-pull strategy recommended, but latency ({latency:.2f}) "
+                    f"exceeds threshold ({latency_threshold:.2f}). Falling back to all_push."
+                )
+                best_strategy = "all_push"
 
             # Update the costs according to the best strategy
             base_costs = (
@@ -251,6 +266,7 @@ def compute_kraken_for_projection(
 
         # Once we checked every possible placement node for the current projection
         # we get the best decision from the placement_decision_tracker
+        # Option 1
         best_decision = placement_decision_tracker.get_best_decision()
 
         # Then we need to update our trackers to reflect this placement decision for the next run.

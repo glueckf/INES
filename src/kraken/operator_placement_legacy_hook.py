@@ -15,7 +15,7 @@ from .global_placement_tracker import (
 from .logging import get_kraken_logger
 import csv
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 logger = get_kraken_logger(__name__)
 
@@ -76,7 +76,9 @@ def format_results_for_comparison(
     return formatted_results
 
 
-def calculate_integrated_approach(self, file_path: str, max_parents: int):
+def calculate_integrated_approach(
+    self, file_path: str, max_parents: int, latency_awareness: Optional[float] = None
+):
     workload = self.query_workload
     projFilterDict = self.h_projFilterDict
     IndexEventNodes = self.h_IndexEventNodes
@@ -112,6 +114,18 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         central_computation_routing_dict,
     ) = central_computation_result
     centralHopLatency = max(allPairs[central_computation_node])
+
+    latency_threshold = None
+    if latency_awareness is not None:
+        if centralHopLatency > 0:
+            latency_threshold = latency_awareness * centralHopLatency
+            logger.info(
+                f"Latency awareness enabled. Threshold set to {latency_threshold:.2f} "
+                f"({latency_awareness} * {centralHopLatency})"
+            )
+        else:
+            logger.info("Latency awareness enabled, but centralHopLatency is 0. No threshold set.")
+
     numberHops = sum(allPairs[central_computation_node])
     MSPlacements = {}
     start_time = time.time()
@@ -243,6 +257,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
                     projrates,
                     G,
                     network,
+                    latency_threshold=latency_threshold,
                 )
             )
 
