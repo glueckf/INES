@@ -258,12 +258,9 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     costs_for_evaluation_total_workload = 0
     # Go through each placement decision
     for projection in integrated_placement_decision_by_projection:
-        # Check if projection was in original query workload
-        if projection in self.query_workload:
-            # If so, add costs to the total costs
-            costs_for_evaluation_total_workload += (
-                integrated_placement_decision_by_projection[projection].costs
-            )
+        costs_for_evaluation_total_workload += (
+            integrated_placement_decision_by_projection[projection].costs
+        )
 
     max_latency = 0
 

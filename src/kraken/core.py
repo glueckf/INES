@@ -174,7 +174,7 @@ def compute_kraken_for_projection(
                 has_placed_subqueries=has_placed_subqueries,
             )
 
-            # Initialize the relevant variables from the results we get back
+            # Initialize the relevant variables from the results we got back
             (
                 all_push_costs,
                 push_pull_costs,
@@ -186,7 +186,7 @@ def compute_kraken_for_projection(
 
             # Check if the current node has enough resources to place the projection there.
             # This check is done after calculating the costs, since prepp might potentially lower
-            # the ressource requirements making notes that would otherwise be infeasible feasible
+            # the ressource requirements making nodes that would otherwise be infeasible feasible
             has_enough_resources = check_resources(
                 node=node,
                 projection=projection,
