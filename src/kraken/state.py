@@ -76,6 +76,48 @@ class CostingPolicy:
 
 
 @dataclass(frozen=True)
+class LatencyConstraint:
+    """
+    Latency constraint for placement decisions.
+
+    Defines maximum allowable latency relative to a reference strategy
+    (typically all-push-to-cloud baseline).
+    """
+
+    max_latency_factor: float = 1.5  # e.g., 1.5 means 50% more latency than baseline
+    reference_strategy: str = "all_push_cloud"  # baseline strategy for comparison
+    absolute_max_latency: Optional[float] = None  # hard upper bound if specified
+
+    def __post_init__(self) -> None:
+        """Validate latency constraint parameters."""
+        if self.max_latency_factor <= 0:
+            raise ValueError(
+                f"max_latency_factor must be positive, got {self.max_latency_factor}"
+            )
+        if self.absolute_max_latency is not None and self.absolute_max_latency <= 0:
+            raise ValueError(
+                f"absolute_max_latency must be positive, got {self.absolute_max_latency}"
+            )
+
+    def is_latency_acceptable(self, latency: float, baseline_latency: float) -> bool:
+        """
+        Check if a latency value meets the constraint.
+
+        Args:
+            latency: The latency to check
+            baseline_latency: The baseline reference latency
+
+        Returns:
+            bool: True if latency meets constraint
+        """
+        relative_ok = latency <= baseline_latency * self.max_latency_factor
+        absolute_ok = (
+            self.absolute_max_latency is None or latency <= self.absolute_max_latency
+        )
+        return relative_ok and absolute_ok
+
+
+@dataclass(frozen=True)
 class SubgraphBundle:
     """Bundle containing all subgraph-related data structures."""
 
@@ -116,6 +158,9 @@ class PlacementDecision:
         push_pull_costs: Optional[float] = None,
         has_sufficient_resources: bool = False,
         plan_details: Optional[Dict[str, Any]] = None,
+        latency: Optional[float] = None,
+        all_push_latency: Optional[float] = None,
+        push_pull_latency: Optional[float] = None,
     ):
         """
         Initialize a placement decision.
@@ -128,6 +173,9 @@ class PlacementDecision:
             push_pull_costs: The cost if using push-pull strategy (None if not calculated)
             has_sufficient_resources: Whether the node has sufficient resources for push-pull
             plan_details: Details about the evaluation plan generated
+            latency: The final latency of this placement decision
+            all_push_latency: The latency if using all-push strategy
+            push_pull_latency: The latency if using push-pull strategy
         """
         self.node = node
         self.costs = costs
@@ -136,10 +184,16 @@ class PlacementDecision:
         self.push_pull_costs = push_pull_costs
         self.has_sufficient_resources = has_sufficient_resources
         self.plan_details = plan_details or {}
+        self.latency = latency
+        self.all_push_latency = all_push_latency
+        self.push_pull_latency = push_pull_latency
         self.savings = all_push_costs - costs if costs < all_push_costs else 0.0
 
     def __str__(self) -> str:
-        return f"PlacementDecision(node={self.node}, strategy={self.strategy}, costs={self.costs:.2f}, savings={self.savings:.2f})"
+        latency_str = (
+            f", latency={self.latency:.2f}" if self.latency is not None else ""
+        )
+        return f"PlacementDecision(node={self.node}, strategy={self.strategy}, costs={self.costs:.2f}, savings={self.savings:.2f}{latency_str})"
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -154,6 +208,9 @@ class PlacementDecision:
             "push_pull_costs": self.push_pull_costs,
             "has_sufficient_resources": self.has_sufficient_resources,
             "plan_details": self.plan_details,
+            "latency": self.latency,
+            "all_push_latency": self.all_push_latency,
+            "push_pull_latency": self.push_pull_latency,
             "savings": self.savings,
         }
 
@@ -230,6 +287,40 @@ class PlacementDecisionTracker:
     def export_decisions(self) -> List[Dict[str, Any]]:
         """Export all decisions as a list of dictionaries."""
         return [decision.to_dict() for decision in self.decisions]
+
+
+@dataclass(frozen=True)
+class EventAvailabilityUpdate:
+    """
+    Represents an update to event availability after a placement decision.
+
+    Used for cascade effect tracking.
+    """
+
+    node_id: int
+    events: List[str]
+    projection: Any
+    strategy: str
+
+
+@dataclass(frozen=True)
+class PlacementContext:
+    """
+    Context information for placement computation including latency constraints.
+    """
+
+    network_graph: "nx.Graph"
+    shortest_path_distances: List[List[float]]
+    sink_nodes: List[int]
+    cloud_node: int
+    latency_constraint: Optional[LatencyConstraint] = None
+    baseline_latency: Optional[float] = None
+    current_placements: Dict[Any, PlacementDecision] = None
+
+    def __post_init__(self) -> None:
+        """Initialize mutable fields."""
+        if self.current_placements is None:
+            object.__setattr__(self, "current_placements", {})
 
 
 def check_if_projection_has_placed_subqueries(

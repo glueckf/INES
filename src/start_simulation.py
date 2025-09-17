@@ -766,27 +766,27 @@ def main() -> None:
 
     # Option 1: Single simulation debugging (commented by default)
     # Uncomment for debugging single configurations
-    # run_single_simulation(
-    #     network_size=12,
-    #     mode=SimulationMode.FULLY_DETERMINISTIC,
-    #     enable_parallel=False,
-    #     num_runs=1
-    # )
-
-    # Option 2: Full parameter study (active by default)
-    run_parameter_study(
-        network_sizes=[10, 30, 50, 100, 200],
-        workload_sizes=[3, 5, 8, 10],
-        parent_factors=[0.8, 1.2, 1.8, 2.0],
-        query_lengths=[3, 5, 8, 10],
-        runs_per_combination=50,
-        node_event_ratio=0.5,
-        num_event_types=6,
-        event_skew=2.0,
-        mode=SimulationMode.RANDOM,
+    run_single_simulation(
+        network_size=12,
+        mode=SimulationMode.FULLY_DETERMINISTIC,
         enable_parallel=False,
-        max_workers=14
+        num_runs=1
     )
+
+    # # Option 2: Full parameter study (active by default)
+    # run_parameter_study(
+    #     network_sizes=[10, 30, 50, 100, 200],
+    #     workload_sizes=[3, 5, 8, 10],
+    #     parent_factors=[0.8, 1.2, 1.8, 2.0],
+    #     query_lengths=[3, 5, 8, 10],
+    #     runs_per_combination=50,
+    #     node_event_ratio=0.5,
+    #     num_event_types=6,
+    #     event_skew=2.0,
+    #     mode=SimulationMode.RANDOM,
+    #     enable_parallel=False,
+    #     max_workers=14
+    # )
 
 
 # def main_original() -> None:

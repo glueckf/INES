@@ -17,6 +17,8 @@ from .fallback import get_strategy_recommendation
 from .state import (
     PlacementDecision,
     PlacementDecisionTracker,
+    LatencyConstraint,
+    PlacementContext,
     check_if_projection_has_placed_subqueries,
     update_tracker,
 )
@@ -25,7 +27,7 @@ logger = get_kraken_logger(__name__)
 
 
 def compute_kraken_for_projection(
-    query_workload:list,
+    query_workload: list,
     selectivities: dict,
     h_mycombi: dict,
     mode,
@@ -317,4 +319,353 @@ def compute_kraken_for_projection(
 
     except Exception as e:
         logger.error(f"Error in compute_kraken_for_projection: {e}")
+        raise
+
+
+def compute_kraken_for_projection_with_latency_constraint(
+    query_workload: list,
+    selectivities: dict,
+    h_mycombi: dict,
+    mode,
+    projection,
+    combination: list,
+    no_filter: int,
+    proj_filter_dict: dict,
+    event_nodes: list,
+    index_event_nodes: dict,
+    network_data: dict,
+    all_pairs: list,
+    mycombi: dict,
+    rates: dict,
+    projrates: dict,
+    graph: networkx.Graph,
+    network: list,
+    sinks: list[int] = [0],
+    latency_constraint: LatencyConstraint = None,
+) -> Any:
+    """
+    Compute optimal placement with latency constraint awareness.
+
+    This is an extended version of compute_kraken_for_projection that supports
+    latency constraints. It maintains full backward compatibility when called
+    without latency constraints.
+
+    Args:
+        query_workload: Complete query workload
+        selectivities: Global selectivities for each projection
+        h_mycombi: Dictionary containing all combinations for each projection
+        mode: Simulation mode
+        projection: The current projection to be placed
+        combination: List of subprojections for the current projection
+        no_filter: Binary flag indicating filter presence
+        proj_filter_dict: Dictionary containing subprojections and filters
+        event_nodes: Matrix of ETB emissions by nodes
+        index_event_nodes: Mapping of primitive events to ETB indices
+        network_data: Node-to-primitive-events mapping
+        all_pairs: Precomputed shortest path distances
+        mycombi: Dictionary containing all combinations
+        rates: Global output rates for each primitive event
+        projrates: Output rates and selectivities for each projection
+        graph: NetworkX graph representation of network topology
+        network: List of all node objects
+        sinks: List of sink nodes (defaults to [0])
+        latency_constraint: Optional latency constraint for placement
+
+    Returns:
+        PlacementDecision: Optimal placement decision considering latency constraints
+
+    Raises:
+        Exception: If placement computation fails
+    """
+    try:
+        # If no latency constraint, fall back to standard algorithm
+        if latency_constraint is None:
+            return compute_kraken_for_projection(
+                query_workload=query_workload,
+                selectivities=selectivities,
+                h_mycombi=h_mycombi,
+                mode=mode,
+                projection=projection,
+                combination=combination,
+                no_filter=no_filter,
+                proj_filter_dict=proj_filter_dict,
+                event_nodes=event_nodes,
+                index_event_nodes=index_event_nodes,
+                network_data=network_data,
+                all_pairs=all_pairs,
+                mycombi=mycombi,
+                rates=rates,
+                projrates=projrates,
+                graph=graph,
+                network=network,
+                sinks=sinks,
+            )
+
+        logger.info(
+            f"Computing latency-aware placement for {projection} "
+            f"(max_latency_factor={latency_constraint.max_latency_factor})"
+        )
+
+        # Setup for the run
+        setup_run()
+
+        # Register this parent projection for FIFO conflict resolution
+        global_tracker = get_global_placement_tracker()
+        global_tracker.register_parent_processing(projection)
+
+        # Check if the current projection has any subqueries that are already placed
+        has_placed_subqueries = check_if_projection_has_placed_subqueries(
+            projection=projection,
+            mycombi=mycombi,
+            global_tracker=global_tracker,
+        )
+
+        # Placement initialization and state setup
+        placement_state = initialize_placement_state(
+            combination=combination,
+            proj_filter_dict=proj_filter_dict,
+            no_filter=no_filter,
+            projection=projection,
+            graph=graph,
+        )
+
+        # Create placement context and compute baseline if needed
+        cloud_node = sinks[0] if sinks else 0  # Assume first sink is cloud
+
+        # Compute baseline latency for the constraint
+        baseline_latency = None
+        if latency_constraint:
+            from .latency_aware import calculate_all_push_cloud_baseline
+
+            _, baseline_latency = calculate_all_push_cloud_baseline(
+                projection=projection,
+                query_workload=query_workload,
+                cloud_node=cloud_node,
+                combination_dict=h_mycombi,
+                rates=rates,
+                projection_rates=projrates,
+                selectivities=selectivities,
+                index_event_nodes=index_event_nodes,
+                shortest_path_distances=all_pairs,
+                sink_nodes=sinks,
+                network=network,
+                mode=mode,
+            )
+
+            logger.info(f"Baseline latency for {projection}: {baseline_latency:.2f}")
+
+        context = PlacementContext(
+            network_graph=graph,
+            shortest_path_distances=all_pairs,
+            sink_nodes=sinks,
+            cloud_node=cloud_node,
+            latency_constraint=latency_constraint,
+            baseline_latency=baseline_latency,
+        )
+
+        # Use latency-aware placement algorithm
+        from .latency_aware import compute_latency_aware_placement_for_projection
+
+        best_decision = compute_latency_aware_placement_for_projection(
+            projection=projection,
+            query_workload=query_workload,
+            context=context,
+            selectivities=selectivities,
+            combination_dict=h_mycombi,
+            rates=rates,
+            projection_rates=projrates,
+            index_event_nodes=index_event_nodes,
+            network_data=network_data,
+            event_nodes=event_nodes,
+            network=network,
+            mode=mode,
+            has_placed_subqueries=has_placed_subqueries,
+            placement_state=placement_state,
+        )
+
+        if not best_decision:
+            logger.warning(f"No valid latency-aware placement found for {projection}")
+            # Fall back to standard algorithm without latency constraint
+            logger.info("Falling back to standard placement algorithm")
+            return compute_kraken_for_projection(
+                query_workload=query_workload,
+                selectivities=selectivities,
+                h_mycombi=h_mycombi,
+                mode=mode,
+                projection=projection,
+                combination=combination,
+                no_filter=no_filter,
+                proj_filter_dict=proj_filter_dict,
+                event_nodes=event_nodes,
+                index_event_nodes=index_event_nodes,
+                network_data=network_data,
+                all_pairs=all_pairs,
+                mycombi=mycombi,
+                rates=rates,
+                projrates=projrates,
+                graph=graph,
+                network=network,
+                sinks=sinks,
+            )
+
+        # Create a placement decision tracker for compatibility
+        placement_decision_tracker = PlacementDecisionTracker(projection=projection)
+        placement_decision_tracker.add_decision(best_decision)
+
+        # Update trackers
+        update_tracker(
+            best_decision=best_decision,
+            placement_decision_tracker=placement_decision_tracker,
+            projection=projection,
+        )
+
+        logger.info(
+            f"Latency-aware placement for {projection}: "
+            f"node {best_decision.node}, strategy {best_decision.strategy}, "
+            f"cost {best_decision.costs:.2f}, latency {best_decision.latency:.2f}"
+        )
+
+        return best_decision
+
+    except Exception as e:
+        logger.error(
+            f"Error in compute_kraken_for_projection_with_latency_constraint: {e}"
+        )
+        raise
+
+
+def compute_kraken_workload_with_latency_constraints(
+    query_workload: list,
+    projections_in_order: list,
+    selectivities: dict,
+    h_mycombi: dict,
+    mode,
+    event_nodes: list,
+    index_event_nodes: dict,
+    network_data: dict,
+    all_pairs: list,
+    mycombi: dict,
+    rates: dict,
+    projrates: dict,
+    graph: networkx.Graph,
+    network: list,
+    sinks: list[int] = [0],
+    latency_constraint: LatencyConstraint = None,
+    max_iterations: int = 3,
+) -> dict:
+    """
+    Compute latency-aware placement for entire workload with cascade optimization.
+
+    This function orchestrates the complete latency-aware KRAKEN algorithm,
+    including baseline calculation, iterative optimization, and cascade effect
+    handling for optimal workload placement.
+
+    Args:
+        query_workload: Complete query workload
+        projections_in_order: List of projections in processing order
+        selectivities: Global selectivities for each projection
+        h_mycombi: Dictionary containing all combinations for each projection
+        mode: Simulation mode
+        event_nodes: Matrix of ETB emissions by nodes
+        index_event_nodes: Mapping of primitive events to ETB indices
+        network_data: Node-to-primitive-events mapping
+        all_pairs: Precomputed shortest path distances
+        mycombi: Dictionary containing all combinations
+        rates: Global output rates for each primitive event
+        projrates: Output rates and selectivities for each projection
+        graph: NetworkX graph representation of network topology
+        network: List of all node objects
+        sinks: List of sink nodes (defaults to [0])
+        latency_constraint: Optional latency constraint for placement
+        max_iterations: Maximum iterations for cascade optimization
+
+    Returns:
+        dict: Dictionary mapping projections to their placement decisions
+
+    Raises:
+        Exception: If workload placement computation fails
+    """
+    try:
+        # If no latency constraint, process each projection individually
+        if latency_constraint is None:
+            logger.info("Processing workload without latency constraints")
+            placements = {}
+
+            for projection in projections_in_order:
+                # Get combination for this projection
+                combination = h_mycombi.get(projection, [])
+
+                placement = compute_kraken_for_projection(
+                    query_workload=query_workload,
+                    selectivities=selectivities,
+                    h_mycombi=h_mycombi,
+                    mode=mode,
+                    projection=projection,
+                    combination=combination,
+                    no_filter=0,  # TODO: Get actual filter info
+                    proj_filter_dict={},  # TODO: Get actual filter dict
+                    event_nodes=event_nodes,
+                    index_event_nodes=index_event_nodes,
+                    network_data=network_data,
+                    all_pairs=all_pairs,
+                    mycombi=mycombi,
+                    rates=rates,
+                    projrates=projrates,
+                    graph=graph,
+                    network=network,
+                    sinks=sinks,
+                )
+
+                if placement:
+                    placements[projection] = placement
+
+            return placements
+
+        logger.info(
+            f"Starting latency-aware workload placement for {len(projections_in_order)} projections "
+            f"(constraint factor={latency_constraint.max_latency_factor}, max_iterations={max_iterations})"
+        )
+
+        # Setup for the run
+        setup_run()
+
+        # Create placement context
+        cloud_node = sinks[0] if sinks else 0
+        context = PlacementContext(
+            network_graph=graph,
+            shortest_path_distances=all_pairs,
+            sink_nodes=sinks,
+            cloud_node=cloud_node,
+            latency_constraint=latency_constraint,
+            baseline_latency=None,  # Will be computed by the algorithm
+        )
+
+        # Use the latency-aware workload placement algorithm
+        from .latency_aware import compute_latency_aware_workload_placement
+
+        placements = compute_latency_aware_workload_placement(
+            query_workload=query_workload,
+            projections_in_order=projections_in_order,
+            context=context,
+            selectivities=selectivities,
+            combination_dict=h_mycombi,
+            rates=rates,
+            projection_rates=projrates,
+            index_event_nodes=index_event_nodes,
+            network_data=network_data,
+            event_nodes=event_nodes,
+            network=network,
+            mode=mode,
+            max_iterations=max_iterations,
+        )
+
+        logger.info(
+            f"Latency-aware workload placement completed: "
+            f"{len(placements)}/{len(projections_in_order)} projections placed"
+        )
+
+        return placements
+
+    except Exception as e:
+        logger.error(f"Error in compute_kraken_workload_with_latency_constraints: {e}")
         raise

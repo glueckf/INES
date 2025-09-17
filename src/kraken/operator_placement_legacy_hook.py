@@ -224,6 +224,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
                 costs += additional
 
         else:
+            # Comment out original KRAKEN computation and use latency-aware version
             integrated_optimization_result_for_given_projection = (
                 compute_kraken_for_projection(
                     workload,
@@ -245,6 +246,35 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
                     network,
                 )
             )
+
+            # # Use latency-aware KRAKEN with constraint factor of 1.0
+            # from .state import LatencyConstraint
+            # from .core import compute_kraken_for_projection_with_latency_constraint
+            #
+            # latency_constraint = LatencyConstraint(max_latency_factor=1.2)
+            #
+            # integrated_optimization_result_for_given_projection = (
+            #     compute_kraken_for_projection_with_latency_constraint(
+            #         query_workload=workload,
+            #         selectivities=selectivities,
+            #         h_mycombi=mycombi,
+            #         mode=mode,
+            #         projection=projection,
+            #         combination=unfolded[projection],
+            #         no_filter=noFilter,
+            #         proj_filter_dict=projFilterDict,
+            #         event_nodes=EventNodes,
+            #         index_event_nodes=IndexEventNodes,
+            #         network_data=network_data,
+            #         all_pairs=allPairs,
+            #         mycombi=mycombi,
+            #         rates=rates,
+            #         projrates=projrates,
+            #         graph=G,
+            #         network=network,
+            #         latency_constraint=latency_constraint,
+            #     )
+            # )
 
             integrated_placement_decision_by_projection[projection] = (
                 integrated_optimization_result_for_given_projection
@@ -323,7 +353,6 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     }
 
     return result
-
 
 
 def print_kraken(integrated_operator_placement_results):
@@ -765,7 +794,9 @@ def update_processing_order_with_heuristics(
     removed_count = 0
 
     # Filter projection rates to only those in the current processing order
-    relevant_projection_rates = {k: v for k, v in projection_rates.items() if k in processing_order_copy}
+    # relevant_projection_rates = {
+    #     k: v for k, v in projection_rates.items() if k in processing_order_copy
+    # }
     logger.info("Relevant projection rates filtered for processing order")
     # First pass: identify projections to remove based on heuristic
     for query in processing_order_copy:
@@ -778,12 +809,14 @@ def update_processing_order_with_heuristics(
             query_children = combinations.get(query, [])
 
             for child in query_children:
-                if child in rates: # primitive event
+                if child in rates:  # primitive event
                     all_push_output_rate += rates[child]
-                elif child in projection_rates: # subprojection
+                elif child in projection_rates:  # subprojection
                     all_push_output_rate += projection_rates[child][1]
                 else:
-                    logger.warning(f"Child {child} not found in rates or projection_rates")
+                    logger.warning(
+                        f"Child {child} not found in rates or projection_rates"
+                    )
                     all_push_output_rate += 0
 
             # Apply heuristic: filter if output_rate > sum of input rates
