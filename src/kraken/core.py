@@ -145,6 +145,7 @@ def compute_kraken_for_projection(
             from .state import get_kraken_timing_tracker
             timing_tracker = get_kraken_timing_tracker()
             timing_tracker.increment_placement_evaluations()
+
             # Check if this projection can optimize any of its subprojections for this candidate node
             optimized_subprojections = {}
             if has_placed_subqueries:

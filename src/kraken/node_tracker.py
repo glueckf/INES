@@ -18,6 +18,10 @@ class EventMetadata:
     acquisition_type: str = "generated"
     acquisition_steps: Optional[Dict[int, Dict[str, List[str]]]] = None
 
+    def get_query_id(self) -> Optional[str]:
+        """Get the query ID associated with this event metadata."""
+        return self.query_id
+
 
 class EventPlacementTracker:
     """Tracks event placement and availability across distributed nodes.

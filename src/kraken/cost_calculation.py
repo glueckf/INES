@@ -5,11 +5,10 @@ This module handles the cost calculation logic for both placement
 strategies, coordinating with adapters for legacy function calls.
 """
 
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Set
 import re
 import time
 import hashlib
-from functools import lru_cache
 from .adapters import run_prepp
 from .logging import get_kraken_logger
 from .node_tracker import get_global_event_placement_tracker
@@ -50,7 +49,9 @@ def _create_prepp_cache_key(
     sel_str = str(sel_items)
 
     # Combine all deterministic inputs
-    key_data = f"{placement_node}|{proj_str}|{selectivity_rate}|{sel_str}|{is_deterministic}"
+    key_data = (
+        f"{placement_node}|{proj_str}|{selectivity_rate}|{sel_str}|{is_deterministic}"
+    )
 
     # Use hash to keep key size manageable
     return hashlib.md5(key_data.encode()).hexdigest()
@@ -65,7 +66,7 @@ def _get_prepp_cache_stats() -> Dict[str, int]:
         "misses": _cache_misses,
         "total": total,
         "hit_rate_percent": hit_rate,
-        "cache_size": len(_prepp_cache)
+        "cache_size": len(_prepp_cache),
     }
 
 
@@ -193,12 +194,18 @@ def calculate_prepp_with_placement(
 
     if is_deterministic:
         cache_key = _create_prepp_cache_key(
-            placement_node, projection, selectivity_rate, selectivities, is_deterministic
+            placement_node,
+            projection,
+            selectivity_rate,
+            selectivities,
+            is_deterministic,
         )
 
         if cache_key in _prepp_cache:
             _cache_hits += 1
-            logger.debug(f"PrePP cache hit for node {placement_node} (key: {cache_key[:8]}...)")
+            logger.debug(
+                f"PrePP cache hit for node {placement_node} (key: {cache_key[:8]}...)"
+            )
             return _prepp_cache[cache_key]
         else:
             _cache_misses += 1
@@ -227,6 +234,7 @@ def calculate_prepp_with_placement(
 
     # Track prepp execution time
     from .state import get_kraken_timing_tracker
+
     timing_tracker = get_kraken_timing_tracker()
     prepp_start_time = time.time()
 
@@ -246,7 +254,9 @@ def calculate_prepp_with_placement(
     prepp_duration = prepp_end_time - prepp_start_time
     timing_tracker.add_prepp_time(prepp_duration)
 
-    logger.debug(f"PrePP computation took {prepp_duration:.3f}s for node {placement_node}")
+    logger.debug(
+        f"PrePP computation took {prepp_duration:.3f}s for node {placement_node}"
+    )
 
     # process results
     if results and len(results) >= 5:
@@ -257,7 +267,9 @@ def calculate_prepp_with_placement(
         # Cache results for future use (only for deterministic mode)
         if is_deterministic and cache_key is not None:
             _prepp_cache[cache_key] = processed_results
-            logger.debug(f"Cached PrePP result for node {placement_node} (key: {cache_key[:8]}...)")
+            logger.debug(
+                f"Cached PrePP result for node {placement_node} (key: {cache_key[:8]}...)"
+            )
 
         return processed_results
     else:
@@ -889,13 +901,20 @@ def handle_locally_available_events(
     Returns:
         Tuple: (adjusted_all_push_costs, adjusted_push_pull_costs, latency, transmission_ratio)
     """
+    global_event_placement_tracker = _get_global_event_placement_tracker()
     available_events = set(
-        _get_global_event_placement_tracker().get_events_at_node(placement_node)
+        global_event_placement_tracker.get_events_at_node(placement_node)
     )
     needed_events = get_events_for_projection(projection)
 
     if available_events & needed_events:  # If there's intersection
-        return handle_intersection(results, available_events, needed_events, logger)
+        return handle_intersection(
+            placement_node,
+            results,
+            available_events,
+            needed_events,
+            global_event_placement_tracker,
+        )
     else:
         return (
             results["all_push_costs"],
@@ -905,8 +924,144 @@ def handle_locally_available_events(
         )
 
 
+def _extract_primitive_events_from_step(events_to_pull: List[Any]) -> Set[str]:
+    """
+    Extract all primitive events from a list of events or subqueries in an acquisition step.
+
+    Args:
+        events_to_pull: List of events or subqueries to extract primitive events from
+
+    Returns:
+        Set of primitive event names
+    """
+    all_primitive_events = set()
+    for event_or_subquery in events_to_pull:
+        if isinstance(event_or_subquery, str):
+            primitive_events = determine_all_primitive_events_of_projection(
+                event_or_subquery
+            )
+        else:
+            primitive_events = determine_all_primitive_events_of_projection(
+                str(event_or_subquery)
+            )
+        all_primitive_events.update(primitive_events)
+    return all_primitive_events
+
+
+def _calculate_event_cost_adjustment(
+    event: str,
+    step_pull_request_details: Dict[str, Any],
+    step_total_cost: float,
+    fraction_available: float,
+) -> float:
+    """
+    Calculate the cost adjustment for a specific event.
+
+    Args:
+        event: The event name
+        step_pull_request_details: Pull request details from the step
+        step_total_cost: Total cost of the step
+        fraction_available: Fraction of events available in this step
+
+    Returns:
+        Cost adjustment value for this event
+    """
+    cost_adjustment = step_pull_request_details.get(event, {}).get(
+        "cost_with_selectivity", 0
+    )
+    if cost_adjustment == 0:
+        cost_adjustment = step_total_cost * fraction_available
+    return cost_adjustment
+
+
+def _update_step_metadata(
+    step_details: Dict[str, Any],
+    events_we_can_skip: Set[str],
+    node: int,
+    global_event_placement_tracker: Any,
+) -> None:
+    """
+    Update step details with metadata about acquired events.
+
+    Args:
+        step_details: Step details dictionary to update
+        events_we_can_skip: Set of events that can be skipped
+        node: Node ID
+        global_event_placement_tracker: Tracker for event placement metadata
+    """
+    step_details["already_at_node"] = list(events_we_can_skip)
+    step_details["acquired_by_query"] = {}
+
+    for event in events_we_can_skip:
+        metadata = global_event_placement_tracker.get_event_metadata(
+            node_id=node, event=event
+        )
+        if metadata:
+            step_details["acquired_by_query"][event] = metadata.get_query_id()
+
+
+def _process_acquisition_step(
+    step_details: Dict[str, Any],
+    events_already_available: Set[str],
+    node: int,
+    global_event_placement_tracker: Any,
+) -> Tuple[float, float]:
+    """
+    Process a single acquisition step and calculate cost/latency adjustments.
+
+    Args:
+        step_details: Details of the acquisition step
+        events_already_available: Set of events already available at the node
+        node: Node ID
+        global_event_placement_tracker: Tracker for event placement metadata
+
+    Returns:
+        Tuple of (cost_adjustment, latency_adjustment)
+    """
+    events_to_pull = step_details.get("events_to_pull", [])
+    step_total_cost = step_details.get("total_step_costs", 0.0)
+    step_total_latency = step_details.get("total_latency", 0.0)
+    step_cost_details = step_details.get("detailed_cost_contribution", {})
+    step_pull_request_details = step_cost_details.get("pull_response", {})
+
+    # Extract primitive events from this step
+    all_primitive_events_in_step = _extract_primitive_events_from_step(events_to_pull)
+
+    # Find events we can skip (intersection of needed and available)
+    events_we_can_skip = all_primitive_events_in_step & events_already_available
+
+    if not events_we_can_skip:
+        return 0.0, 0.0
+
+    # Update step metadata
+    _update_step_metadata(
+        step_details, events_we_can_skip, node, global_event_placement_tracker
+    )
+
+    # Check if all events in step are available (complete step skip)
+    if all_primitive_events_in_step <= events_already_available:
+        return step_total_cost, step_total_latency
+
+    # Partial adjustment - calculate individual event costs
+    fraction_available = len(events_we_can_skip) / len(all_primitive_events_in_step)
+    total_cost_adjustment = 0.0
+
+    for event in events_we_can_skip:
+        event_cost = _calculate_event_cost_adjustment(
+            event, step_pull_request_details, step_total_cost, fraction_available
+        )
+        total_cost_adjustment += event_cost
+
+    # For partial steps, we don't adjust latency (keep original latency)
+    return total_cost_adjustment, 0.0
+
+
 def handle_intersection(
-    results, available_events, needed_events, logger
+    node: int,
+    results: Dict[str, Any],
+    available_events: Set[str],
+    needed_events: Set[str],
+    global_event_placement_tracker: Any,
 ) -> Tuple[float, float, float, float]:
     """
     Handle cost adjustments when some events are already available at the placement node.
@@ -916,13 +1071,14 @@ def handle_intersection(
     and complex events (SEQ(A, B), AND(C, D)) by extracting the primitive components.
 
     Args:
+        node: Node ID where placement is being considered
         results: Cost calculation results dictionary
         available_events: Set of events available at the node
         needed_events: Set of events needed for the projection
-        logger: Logger instance
+        global_event_placement_tracker: Tracker for event placement metadata
 
     Returns:
-        Tuple: (adjusted_all_push_costs, adjusted_push_pull_costs, latency, transmission_ratio)
+        Tuple: (adjusted_all_push_costs, adjusted_push_pull_costs, adjusted_latency, transmission_ratio)
     """
     # Extract current costs from results
     current_all_push_costs = results["all_push_costs"]
@@ -934,58 +1090,32 @@ def handle_intersection(
     # Find events that are both available and needed (intersection)
     events_already_available = available_events & needed_events
 
-    # Track total cost adjustments
+    if not events_already_available:
+        # No intersection, return original values
+        return (
+            current_all_push_costs,
+            current_push_pull_costs,
+            current_latency,
+            current_transmission_ratio,
+        )
+
+    # Process each acquisition step
     total_cost_adjustment = 0.0
+    total_latency_adjustment = 0.0
 
-    # Go through each acquisition step and check if we can skip it
-    for step_index, step_details in current_acquisition_steps.items():
-        events_to_pull_in_this_step = step_details.get("events_to_pull", [])
-        step_total_cost = step_details.get("total_step_costs", 0.0)
-
-        # Extract primitive events from each event in this step
-        all_primitive_events_in_step = set()
-        for event_or_subquery in events_to_pull_in_this_step:
-            if isinstance(event_or_subquery, str):
-                # Handle string representations like 'SEQ(A, B)' or simple events like 'A'
-                primitive_events = determine_all_primitive_events_of_projection(
-                    event_or_subquery
-                )
-                all_primitive_events_in_step.update(primitive_events)
-            else:
-                # Handle object representations - try to get string representation
-                primitive_events = determine_all_primitive_events_of_projection(
-                    str(event_or_subquery)
-                )
-                all_primitive_events_in_step.update(primitive_events)
-
-        # Check if any of the primitive events in this step are already available
-        events_we_can_skip = all_primitive_events_in_step & events_already_available
-
-        if events_we_can_skip:
-            # If all primitive events in this step are already available, skip entire step cost
-            if (
-                all_primitive_events_in_step <= events_already_available
-            ):  # All events in step are available
-                total_cost_adjustment += step_total_cost
-            else:
-                # Partial adjustment - some primitive events in step are available
-                fraction_available = len(events_we_can_skip) / len(
-                    all_primitive_events_in_step
-                )
-                partial_adjustment = step_total_cost * fraction_available
-                total_cost_adjustment += partial_adjustment
+    for step_details in current_acquisition_steps.values():
+        cost_adj, latency_adj = _process_acquisition_step(
+            step_details, events_already_available, node, global_event_placement_tracker
+        )
+        total_cost_adjustment += cost_adj
+        total_latency_adjustment += latency_adj
 
     # Apply cost adjustments
-    adjusted_push_pull_costs = current_push_pull_costs - total_cost_adjustment
+    adjusted_push_pull_costs = max(0.0, current_push_pull_costs - total_cost_adjustment)
+    adjusted_all_push_costs = max(0.0, current_all_push_costs - total_cost_adjustment)
+    adjusted_latency = max(0.0, current_latency - total_latency_adjustment)
 
-    # TODO: Fix all-push cost adjustment logic because it should not be reduced only by push pull change
-    adjusted_all_push_costs = current_all_push_costs - total_cost_adjustment
-
-    # Ensure costs don't go negative
-    adjusted_push_pull_costs = max(0.0, adjusted_push_pull_costs)
-    adjusted_all_push_costs = max(0.0, adjusted_all_push_costs)
-
-    # Recalculate transmission ratio if needed
+    # Recalculate transmission ratio
     if adjusted_all_push_costs > 0:
         adjusted_transmission_ratio = adjusted_push_pull_costs / adjusted_all_push_costs
     else:
@@ -994,7 +1124,7 @@ def handle_intersection(
     return (
         adjusted_all_push_costs,
         adjusted_push_pull_costs,
-        current_latency,
+        adjusted_latency,
         adjusted_transmission_ratio,
     )
 
