@@ -354,17 +354,30 @@ def calculate_graph_density(graph):
 
 
 def update_prepp_results(self, prepp_results):
-    print("Debug hook")
+    """
+    Update prepp results to include cloud transmission costs and latency calculation.
 
+    Args:
+        prepp_results: Results from generate_prePP containing:
+            [0] exact_cost (total costs)
+            [1] pushPullTime (calculation time)
+            [2] maxPushPullLatency (correct latency value)
+            [3] endTransmissionRatio
+            [4] total_cost
+            [5] node_received_eventtypes
+            [6] acquisition_steps
+
+    Returns:
+        Tuple of (updated_costs, calculation_time, latency, final_transmission_ratio)
+    """
     CLOUD_NODE_ID = 0
 
     query_workload = self.query_workload
-
     prepp_eval_plan = self.eval_plan[0].projections
 
     total_costs = prepp_results[0]
     calculation_time = prepp_results[1]
-    max_push_pull_latency = prepp_results[2]
+    max_push_pull_latency = prepp_results[2]  # This IS the correct latency from generate_prePP
     transmission_ratio = prepp_results[3]
     total_push_costs = prepp_results[4]
 
@@ -385,9 +398,10 @@ def update_prepp_results(self, prepp_results):
 
     final_transmission_ratio = total_costs / total_push_costs if total_push_costs > 0 else 0
 
-    # For the latency it is a little tricky.
-    # If a query from the workload is placed on the cloud, we do not need to add any latency.
-    # If all queries are placed below the cloud, we need to add the latency from the highest placed node to the cloud.
+    # For the latency calculation:
+    # The max_push_pull_latency correctly reflects the actual network hop latency
+    # from generate_prePP's maxPushPullLatency at prepp_results[2].
+    # Additional cloud transmission latency is currently disabled (commented out below).
     max_additional_latency = 0
     # min_distance_to_cloud = float('inf')
     #
