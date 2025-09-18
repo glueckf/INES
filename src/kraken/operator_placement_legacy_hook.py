@@ -140,43 +140,6 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
 
     integrated_placement_decision_by_projection = {}
 
-    """ 
-    NOTE from FINN GLÜCK 10.09.2025: 
-    For some reason in some edge cases projections with really high output rates reach the top of the processing order. 
-    We do not want them in our workload, at least for single node queries, that's why we filter them out here. 
-    The heuristic for the filtering is: 
-    
-    Sum of input rates < projection output rate 
-    
-    Example: 
-    
-    SEQ(A, B) with 'AB' = 0.5, R(A) = 1000, R(B) = 5
-    
-    sum of input rates = R(A) + R(B) = 1005
-    
-    projection output rate = R(A) * R(B) * 'AB' = 1000 * 5 * 0.5 = 2500
-    
-    1005 < 2500 -> filter out
-    """
-
-    """ 
-    NOTE FROM Finn Glück 12.09.2025: 
-    Actually no subprojections with to high output rates reach the processing order. 
-    Those high rate projections are always part of the workload and can therefore not be filtered out here. 
-    However the problem for INES remains, 
-    as these projections still get placed inside the network and not the cloud where they should be placed.
-    """
-    # result = update_processing_order_with_heuristics(
-    #     query_workload=workload,
-    #     combinations=mycombi,
-    #     processing_order=processingOrder,
-    #     proj_filter_dict=projFilterDict,
-    #     rates=rates,
-    #     projection_rates=projrates,
-    # )
-    #
-    # (processingOrder, projrates, projFilterDict, mycombi) = result
-
     # TODO: This flag currently leaves out MS placement for the integrated approach, as it is not yet implemented
     #  This should be removed and the line in 184 should be commented in once MS placement is implemented
     partType = False

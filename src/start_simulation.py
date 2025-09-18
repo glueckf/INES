@@ -213,8 +213,6 @@ def write_final_results(
     print(f"[I/O] INES ID: {ines_simulation_id}, Kraken ID: {kraken_simulation_id}")
 
 
-
-
 @dataclass
 class SimulationJob:
     """Represents a single simulation job with all necessary data."""
@@ -626,9 +624,10 @@ def main() -> None:
         num_event_types=6,
         event_skew=2.0,
         mode=SimulationMode.RANDOM,
-        enable_parallel=True,
+        enable_parallel=False,
         max_workers=14
     )
+
 
 if __name__ == "__main__":
     main()
