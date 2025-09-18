@@ -516,7 +516,7 @@ def determine_randomized_distribution_push_pull_costs(
                     latency = 0
                     for i, aquired_eventtype in enumerate(exact_push_pull_plan_for_a_projection):
 
-                        pull_request_costs, pull_request_latency = (
+                        pull_request_costs, pull_request_latency, pull_request_detailed_costs = (
                             push_pull_plan_generator_exact.determine_costs_for_pull_request(
                                 eventtypes_in_pull_request=used_eventtypes_to_pull[i],
                                 eventtypes_to_acquire=aquired_eventtype,
@@ -529,7 +529,7 @@ def determine_randomized_distribution_push_pull_costs(
                                 aquisition_steps=aquisition_steps
                             ))
 
-                        pull_response_costs, pull_response_latency = (
+                        pull_response_costs, pull_response_latency, pull_response_detailed_costs = (
                             push_pull_plan_generator_exact.determine_costs_for_pull_response(
                                 eventtypes_in_pull_request=used_eventtypes_to_pull[i],
                                 eventtypes_to_acquire=aquired_eventtype,
@@ -548,7 +548,13 @@ def determine_randomized_distribution_push_pull_costs(
                             'pull_response_costs': pull_response_costs,
                             'pull_response_latency': pull_response_latency,
                             'total_step_costs': pull_request_costs + pull_response_costs,
-                            'total_latency': pull_request_latency + pull_response_latency
+                            'total_latency': pull_request_latency + pull_response_latency,
+                            'already_at_node': None,
+                            'acquired_by_query': None,
+                            'detailed_cost_contribution': {
+                                'pull_request': pull_request_detailed_costs,
+                                'pull_response': pull_response_detailed_costs
+                            }
                         }
 
                         for eventtype in aquired_eventtype:
