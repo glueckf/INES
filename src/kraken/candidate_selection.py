@@ -22,138 +22,72 @@ def check_possible_placement_nodes_for_input(
     routing_dict: Dict[int, Dict[int, Dict[str, Any]]],
 ) -> List[int]:
     """
-    Check which non-leaf nodes are suitable for placing a projection based on common ancestor requirements.
-
-    This function identifies fog/cloud nodes (non-leaf nodes that don't produce events) where the projection
-    could be placed by checking if the node can be a common ancestor for all required ETB sources.
-    No resource checks are performed - only topological placement feasibility is considered.
-
-    # TODO: Here we could also consider to do some prefiltering or add some heuristic to reduce the search space.
-
-    Args:
-        projection: The projection object for which placement is being computed
-        combination: The combination of event types to consider for the placement
-        network_data: Dictionary mapping nodes to the event types they produce
-        network: List of network node objects
-        index_event_nodes: Indexed dictionary mapping event types to their respective ETBs
-        event_nodes: Matrix mapping event types to nodes
-        routing_dict: Dictionary containing routing information with common ancestors
-
-    Returns:
-        list: List of non-leaf node indices where the projection can be placed
+    Faster version:
+    - Precompute the primitive events for this combination once.
+    - Build the union of all source nodes for all ETBs of those events.
+    - For each non-leaf node, check subset: required_sources ⊆ ancestor_sources[node].
     """
-    logger.debug(f"Analyzing placement options for: {projection}")
-    logger.debug(f"Combination context: {combination}")
 
-    # Get non-leaf nodes (nodes that don't produce events - fog/cloud nodes)
-    non_leaf = [node for node, neighbors in network_data.items() if not neighbors]
-    logger.debug(
-        f"Available fog/cloud nodes: {len(non_leaf)} nodes - {non_leaf[:5]}{'...' if len(non_leaf) > 5 else ''}"
-    )
-
-    suitable_nodes = []
-
-    # Check each non-leaf node for placement feasibility
-    for destination in non_leaf:
-        logger.debug(f"Evaluating node {destination}...")
-
-        skip_destination = False  # Flag to determine if we should skip this destination
-
-        # Check all event types in the combination
-        for eventtype in combination:
-            if skip_destination:
-                break
-
-            logger.debug(f"Processing event type: {eventtype}")
-
-            # Handle Tree objects by getting their leaf events instead of treating them as single entities
-            if hasattr(eventtype, "children") and hasattr(eventtype, "leafs"):
-                # This is a Tree object (AND, SEQ, etc.), get its leaf events
-                leaf_events = eventtype.leafs()
-                logger.debug(f"Tree object {eventtype} has leaf events: {leaf_events}")
-                for leaf_event in leaf_events:
-                    if skip_destination:
-                        break
-                    logger.debug(f"Processing leaf event: {leaf_event}")
-                    # Check all ETBs for this leaf event type
-                    for etb in index_event_nodes[leaf_event]:
-                        if skip_destination:
-                            break
-
-                        logger.debug(f"Analyzing ETB: {etb}")
-                        possible_sources = getNodes(etb, event_nodes, index_event_nodes)
-                        logger.debug(
-                            f"Available sources: {len(possible_sources)} - {possible_sources[:3]}{'...' if len(possible_sources) > 3 else ''}"
-                        )
-
-                        # Check each source for this ETB
-                        for source in possible_sources:
-                            # Use the routing_dict to get the common ancestor
-                            common_ancestor = routing_dict[destination][source][
-                                "common_ancestor"
-                            ]
-                            logger.debug(
-                                f"Source {source} -> Destination {destination}, Common ancestor: {common_ancestor}"
-                            )
-
-                            if common_ancestor != destination:
-                                logger.debug(
-                                    f"SKIP: Node {destination} cannot be common ancestor for source {source}"
-                                )
-                                skip_destination = True
-                                break
-
-                        if skip_destination:
-                            break  # Break out of the etb loop
-
-                    if skip_destination:
-                        break  # Break out of the leaf_events loop
+    # --- helpers (local to avoid global pollution) ---
+    def _flatten_events(comb: List[Any]) -> List[str]:
+        """Extract primitive event names from combination entries (trees or primitive)."""
+        out = []
+        for ev in comb:
+            if hasattr(ev, "children") and hasattr(ev, "leafs"):
+                out.extend(ev.leafs())
             else:
-                # This is a primitive event type (string)
-                eventtype_key = eventtype
-                logger.debug(f"Processing primitive event: {eventtype_key}")
+                out.append(ev)
+        return out
 
-                # Check all ETBs for this event type
-                for etb in index_event_nodes[eventtype_key]:
-                    if skip_destination:
-                        break
+    # Cache ETB->sources within this call (getNodes is usually hot)
+    etb_sources_cache: Dict[Any, List[int]] = {}
 
-                    logger.debug(f"Analyzing ETB: {etb}")
-                    possible_sources = getNodes(etb, event_nodes, index_event_nodes)
-                    logger.debug(
-                        f"Available sources: {len(possible_sources)} - {possible_sources[:3]}{'...' if len(possible_sources) > 3 else ''}"
-                    )
+    def _get_etb_sources(etb: Any) -> List[int]:
+        srcs = etb_sources_cache.get(etb)
+        if srcs is None:
+            # getNodes(etb, ...) is assumed to return a list of source node ids
+            srcs = getNodes(etb, event_nodes, index_event_nodes)
+            etb_sources_cache[etb] = srcs
+        return srcs
 
-                    # Check each source for this ETB
-                    for source in possible_sources:
-                        # Use the routing_dict to get the common ancestor
-                        common_ancestor = routing_dict[destination][source][
-                            "common_ancestor"
-                        ]
-                        logger.debug(
-                            f"Source {source} -> Destination {destination}, Common ancestor: {common_ancestor}"
-                        )
+    # --- start ---
+    logger.debug("Analyzing placement options for: %s", projection)
+    # non-leaf = fog/cloud nodes (produce no events)
+    non_leaf = [node for node, produced in network_data.items() if not produced]
 
-                        if common_ancestor != destination:
-                            logger.debug(
-                                f"SKIP: Node {destination} cannot be common ancestor for source {source}"
-                            )
-                            skip_destination = True
-                            break
+    # 1) Primitive events needed for this projection (dedup once)
+    required_events = set(_flatten_events(combination))
 
-                    if skip_destination:
-                        break  # Break out of the etb loop
+    # 2) Union of all source nodes for all ETBs of those events (build once)
+    required_sources: set[int] = set()
+    for ev in required_events:
+        for etb in index_event_nodes.get(ev, ()):
+            required_sources.update(_get_etb_sources(etb))
 
-            if skip_destination:
-                break  # Break out of the eventtype loop
+    # Fast bail-out: if nothing is required, any non-leaf is suitable
+    if not required_sources:
+        logger.info("Result: %d suitable nodes found: %s", len(non_leaf), non_leaf)
+        return non_leaf
 
-        if not skip_destination:
-            suitable_nodes.append(destination)
-            logger.debug(f"Node {destination}: SUITABLE - Can serve as common ancestor")
-        else:
-            logger.debug(f"Node {destination}: SKIPPED - Cannot be common ancestor")
+    # 3) For each candidate destination, precompute its ancestor source set
+    #    (i.e., all sources for which destination is the common ancestor)
+    #    Then test subset: required_sources ⊆ ancestor_sources[node]
+    suitable_nodes: List[int] = []
+    for dest in non_leaf:
+        rd_dest = routing_dict.get(dest, {})
+        # Build ancestor set lazily for this destination
+        # NOTE: this is O(degree(dest)) and done once per dest
+        ancestor_sources = {
+            s for s, info in rd_dest.items() if info.get("common_ancestor") == dest
+        }
 
-    logger.info(f"Result: {len(suitable_nodes)} suitable nodes found: {suitable_nodes}")
+        # subset check (O(len(required_sources)) set ops in C)
+        if required_sources.issubset(ancestor_sources):
+            suitable_nodes.append(dest)
+
+    logger.info(
+        "Result: %d suitable nodes found: %s", len(suitable_nodes), suitable_nodes
+    )
     return suitable_nodes
 
 

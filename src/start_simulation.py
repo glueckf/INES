@@ -45,6 +45,19 @@ def write_final_results(
         "ines_push_pull_time_seconds",
         "ines_total_time_seconds",
         "kraken_execution_time_seconds",
+        "kraken_execution_time_placement",
+        "kraken_execution_time_push_pull",
+        # Algorithm metrics
+        "prepp_call_count",
+        "placement_evaluations_count",
+        # Network topology metrics
+        "network_clustering_coefficient",
+        "network_centralization",
+        "avg_node_degree",
+        # Query complexity metrics
+        "query_complexity_score",
+        "highest_query_output_rate",
+        "projection_dependency_length",
         # Placement costs
         "all_push_central_cost",
         "inev_cost",
@@ -77,7 +90,7 @@ def write_final_results(
     # Extract metadata
     total_projections_placed = kraken_summary.get("successful_placements", 0)
     placement_difference_to_ines_count = kraken_summary.get("placement_difference_count", 0)
-    placements_at_cloud = _calculate_placements_at_cloud(integrated_operator_placement_results)
+    placements_at_cloud = kraken_metadata.get("placements_at_cloud", 0)
     graph_density_value = graph_density
 
     # Computation times
@@ -85,7 +98,23 @@ def write_final_results(
     ines_placement_time_seconds = ines_results[14]
     ines_push_pull_time_seconds = ines_results[22]
     ines_total_time_seconds = float(ines_placement_time_seconds) + float(ines_push_pull_time_seconds)
-    kraken_execution_time_seconds = kraken_metadata.get("execution_time_seconds", 0)
+    kraken_execution_time_seconds = kraken_metadata.get("kraken_execution_time_seconds", 0)
+    kraken_execution_time_placement = kraken_metadata.get("kraken_execution_time_placement", 0)
+    kraken_execution_time_push_pull = kraken_metadata.get("kraken_execution_time_push_pull", 0)
+
+    # Algorithm metrics
+    prepp_call_count = kraken_metadata.get("prepp_call_count", 0)
+    placement_evaluations_count = kraken_metadata.get("placement_evaluations_count", 0)
+
+    # Network topology metrics
+    network_clustering_coefficient = kraken_metadata.get("network_clustering_coefficient", 0.0)
+    network_centralization = kraken_metadata.get("network_centralization", 0.0)
+    avg_node_degree = kraken_metadata.get("avg_node_degree", 0.0)
+
+    # Query complexity metrics
+    query_complexity_score = kraken_metadata.get("query_complexity_score", 0.0)
+    highest_query_output_rate = kraken_metadata.get("highest_query_output_rate")
+    projection_dependency_length = kraken_metadata.get("projection_dependency_length", 0)
 
     # Placement costs
     all_push_central_cost = ines_results[2]
@@ -124,6 +153,19 @@ def write_final_results(
         "ines_push_pull_time_seconds": ines_push_pull_time_seconds,
         "ines_total_time_seconds": ines_total_time_seconds,
         "kraken_execution_time_seconds": kraken_execution_time_seconds,
+        "kraken_execution_time_placement": kraken_execution_time_placement,
+        "kraken_execution_time_push_pull": kraken_execution_time_push_pull,
+        # Algorithm metrics
+        "prepp_call_count": prepp_call_count,
+        "placement_evaluations_count": placement_evaluations_count,
+        # Network topology metrics
+        "network_clustering_coefficient": network_clustering_coefficient,
+        "network_centralization": network_centralization,
+        "avg_node_degree": avg_node_degree,
+        # Query complexity metrics
+        "query_complexity_score": query_complexity_score,
+        "highest_query_output_rate": highest_query_output_rate,
+        "projection_dependency_length": projection_dependency_length,
         # Placement costs
         "all_push_central_cost": all_push_central_cost,
         "inev_cost": inev_cost,
@@ -159,19 +201,6 @@ def write_final_results(
     print(f"[I/O] INES ID: {ines_simulation_id}, Kraken ID: {kraken_simulation_id}")
 
 
-def _calculate_placements_at_cloud(integrated_operator_placement_results: Dict[str, Any]) -> int:
-    """
-    Calculate the number of projections placed at the cloud node (node 0).
-    Helper function moved from operator_placement_legacy_hook.py.
-    """
-    placed_at_cloud = 0
-    placement_decisions = integrated_operator_placement_results.get(
-        "integrated_placement_decision_by_projection", {}
-    )
-    for projection, decision in placement_decisions.items():
-        if hasattr(decision, "node") and decision.node == 0:
-            placed_at_cloud += 1
-    return placed_at_cloud
 
 
 @dataclass
@@ -561,27 +590,27 @@ def main() -> None:
 
     # Option 1: Single simulation debugging (commented by default)
     # Uncomment for debugging single configurations
-    # run_single_simulation(
-    #     network_size=12,
-    #     mode=SimulationMode.FULLY_DETERMINISTIC,
-    #     enable_parallel=False,
-    #     num_runs=1
-    # )
-
-    # Option 2: Full parameter study (active by default)
-    run_parameter_study(
-        network_sizes=[10, 30, 50, 100, 200],
-        workload_sizes=[3, 5, 8, 10],
-        parent_factors=[0.8, 1.2, 1.8, 2.0],
-        query_lengths=[3, 5, 8, 10],
-        runs_per_combination=2,
-        node_event_ratio=0.5,
-        num_event_types=6,
-        event_skew=2.0,
-        mode=SimulationMode.RANDOM,
-        enable_parallel=True,
-        max_workers=14
+    run_single_simulation(
+        network_size=12,
+        mode=SimulationMode.FULLY_DETERMINISTIC,
+        enable_parallel=False,
+        num_runs=1
     )
+
+    # # Option 2: Full parameter study (active by default)
+    # run_parameter_study(
+    #     network_sizes=[10, 30, 50, 100, 200],
+    #     workload_sizes=[3, 5, 8, 10],
+    #     parent_factors=[0.8, 1.2, 1.8, 2.0],
+    #     query_lengths=[3, 5, 8, 10],
+    #     runs_per_combination=2,
+    #     node_event_ratio=0.5,
+    #     num_event_types=6,
+    #     event_skew=2.0,
+    #     mode=SimulationMode.RANDOM,
+    #     enable_parallel=True,
+    #     max_workers=14
+    # )
 
 if __name__ == "__main__":
     main()

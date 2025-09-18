@@ -8,6 +8,8 @@ and context objects.
 
 from dataclasses import dataclass
 from typing import Dict, List, Set, Tuple, Any, Optional
+import time
+import threading
 
 import networkx as nx
 import numpy as np
@@ -249,20 +251,15 @@ def check_if_projection_has_placed_subqueries(
     Raises:
         ValueError: If projection not found in mycombi or invalid structure
     """
-    if projection in mycombi:
+    try:
         subqueries = mycombi[projection]
-        global_tracker.register_query_hierarchy(projection, subqueries)
+    except KeyError as e:
+        raise ValueError("Projection not found in mycombi or invalid structure") from e
 
-        # Check if any subqueries have existing placements
-        for subquery in subqueries:
-            has_children = hasattr(subquery, "children")
-            has_placement = global_tracker.has_placement_for(subquery)
-            if has_children and has_placement:
-                return True
+    global_tracker.register_query_hierarchy(projection, subqueries)
 
-        return False
-    else:
-        raise ValueError("Projection not found in mycombi or invalid structure")
+    placed = global_tracker.placed_subqueries_set()  # O(1) membership
+    return any((hasattr(sq, "children") and (sq in placed)) for sq in subqueries)
 
 
 def update_tracker(best_decision, placement_decision_tracker, projection) -> None:
@@ -298,3 +295,87 @@ def update_tracker(best_decision, placement_decision_tracker, projection) -> Non
         acquisition_type=best_decision.strategy,
         acquisition_steps=best_decision.plan_details.get("aquisition_steps", []),
     )
+
+
+class KrakenTimingTracker:
+    """
+    Thread-safe timing tracker for Kraken placement engine operations.
+
+    Tracks detailed timing information for placement calculations and prepp operations
+    to provide granular performance metrics.
+    """
+
+    def __init__(self):
+        """Initialize the timing tracker with thread-safe counters."""
+        self._lock = threading.Lock()
+        self.reset()
+
+    def reset(self) -> None:
+        """Reset all timing counters to zero."""
+        with self._lock:
+            self.total_prepp_time = 0.0
+            self.prepp_call_count = 0
+            self.placement_start_time = None
+            self.total_placement_time = 0.0
+            self.placement_evaluations_count = 0
+
+    def start_placement_timing(self) -> None:
+        """Start timing the overall placement computation."""
+        with self._lock:
+            self.placement_start_time = time.time()
+
+    def add_prepp_time(self, duration: float) -> None:
+        """
+        Add time spent in prepp computation.
+
+        Args:
+            duration: Time in seconds spent in prepp computation
+        """
+        with self._lock:
+            self.total_prepp_time += duration
+            self.prepp_call_count += 1
+
+    def increment_placement_evaluations(self) -> None:
+        """Increment the count of placement evaluations (nodes considered for placement)."""
+        with self._lock:
+            self.placement_evaluations_count += 1
+
+    def finalize_placement_timing(self) -> Tuple[float, float, float, int, int]:
+        """
+        Finalize placement timing and calculate metrics.
+
+        Returns:
+            Tuple of (total_time, placement_only_time, prepp_total_time, prepp_call_count, placement_evaluations_count)
+        """
+        with self._lock:
+            if self.placement_start_time is None:
+                logger.warning("Placement timing was not started properly")
+                return 0.0, 0.0, 0.0, 0, 0
+
+            end_time = time.time()
+            total_time = end_time - self.placement_start_time
+            placement_only_time = total_time - self.total_prepp_time
+
+            logger.debug(
+                f"Timing breakdown: total={total_time:.3f}s, "
+                f"placement_only={placement_only_time:.3f}s, "
+                f"prepp_total={self.total_prepp_time:.3f}s, "
+                f"prepp_calls={self.prepp_call_count}, "
+                f"evaluations={self.placement_evaluations_count}"
+            )
+
+            return total_time, placement_only_time, self.total_prepp_time, self.prepp_call_count, self.placement_evaluations_count
+
+
+# Global timing tracker instance
+_timing_tracker = KrakenTimingTracker()
+
+
+def get_kraken_timing_tracker() -> KrakenTimingTracker:
+    """Get the global Kraken timing tracker instance."""
+    return _timing_tracker
+
+
+def reset_kraken_timing_tracker() -> None:
+    """Reset the global timing tracker for a new placement computation."""
+    _timing_tracker.reset()

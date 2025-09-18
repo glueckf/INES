@@ -13,6 +13,7 @@ from .global_placement_tracker import (
     reset_global_placement_tracker,
 )
 from .logging import get_kraken_logger
+from .state import get_kraken_timing_tracker, reset_kraken_timing_tracker
 import csv
 import os
 from typing import Dict, Any
@@ -115,6 +116,11 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     numberHops = sum(allPairs[central_computation_node])
     MSPlacements = {}
     start_time = time.time()
+
+    # Initialize timing tracker for detailed metrics
+    reset_kraken_timing_tracker()
+    timing_tracker = get_kraken_timing_tracker()
+    timing_tracker.start_placement_timing()
 
     # Initialize global placement tracker for this placement session
     reset_global_placement_tracker()  # Start fresh for each placement calculation
@@ -255,38 +261,109 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         placement_decisions_by_projection=integrated_placement_decision_by_projection,
     )
 
-    costs_for_evaluation_total_workload = 0
-    # Go through each placement decision
-    for projection in integrated_placement_decision_by_projection:
-        costs_for_evaluation_total_workload += (
-            integrated_placement_decision_by_projection[projection].costs
+    decisions = integrated_placement_decision_by_projection
+
+    # 1) Total costs: single C-level pass
+    costs_for_evaluation_total_workload = sum(d.costs for d in decisions.values())
+
+    # 2) Precompute latency per projection once
+    latency_of = {p: d.plan_details.get("latency", 0) for p, d in decisions.items()}
+
+    # 3) Consider only workload roots that actually have decisions
+    roots = [p for p in self.query_workload if p in decisions]
+
+    # 4) Set for O(1) membership when filtering unfolded subprojections
+    processing_set = set(processingOrder)
+
+    # 5) Max latency over roots: root latency + latencies of unfolded children in processingOrder
+    #    Use set(...) on unfolded[root] to dedupe like your original code
+    get_unfolded = unfolded.get
+    max_latency = (
+        max(
+            (
+                latency_of.get(root, 0)
+                + sum(
+                    latency_of.get(sub, 0)
+                    for sub in (set(get_unfolded(root, ())) & processing_set)
+                )
+            )
+            for root in roots
         )
-
-    max_latency = 0
-
-    for projection in integrated_placement_decision_by_projection:
-        # Check if projection was in original query workload
-        if projection in self.query_workload:
-            relevant_projection_set = [projection]
-            unfolded_projection = unfolded[projection]
-            set_unfolded = set(unfolded_projection)
-
-            for x in set_unfolded:
-                if x in processingOrder:
-                    relevant_projection_set.append(x)
-            latency = 0
-            for projection in relevant_projection_set:
-                latency += integrated_placement_decision_by_projection[
-                    projection
-                ].plan_details.get("latency", 0)
-
-            if latency > max_latency:
-                max_latency = latency
+        if roots
+        else 0
+    )
 
     kraken_simulation_id = uuid.uuid4()
 
     end_time = time.time()
     totaltime = str(end_time - start_time)[:6]
+
+    # Calculate detailed timing metrics
+    (
+        kraken_execution_time_seconds,
+        kraken_execution_time_placement,
+        kraken_execution_time_push_pull,
+        prepp_call_count,
+        placement_evaluations_count,
+    ) = timing_tracker.finalize_placement_timing()
+
+    logger.info(
+        f"Timing breakdown - Total: {kraken_execution_time_seconds:.3f}s, "
+        f"Placement only: {kraken_execution_time_placement:.3f}s, "
+        f"PrePP total: {kraken_execution_time_push_pull:.3f}s"
+    )
+
+    # Calculate algorithm-specific metrics
+    placements_at_cloud = len([
+        decision for decision in integrated_placement_decision_by_projection.values()
+        if hasattr(decision, "node") and decision.node == 0
+    ])
+
+    # Calculate network topology metrics
+    try:
+        import networkx as nx
+        # Calculate network metrics
+        network_clustering_coefficient = nx.average_clustering(G)
+        avg_node_degree = sum(dict(G.degree()).values()) / len(G.nodes()) if len(G.nodes()) > 0 else 0
+
+        # Network centralization (based on degree centrality)
+        degree_centralities = list(nx.degree_centrality(G).values())
+        if degree_centralities and len(G.nodes()) > 2:
+            max_centrality = max(degree_centralities)
+            centrality_sum = sum(max_centrality - c for c in degree_centralities)
+            max_possible_sum = (len(G.nodes()) - 1) * (len(G.nodes()) - 2)
+            network_centralization = centrality_sum / max_possible_sum if max_possible_sum > 0 else 0
+        else:
+            network_centralization = 0.0
+
+    except Exception as e:
+        logger.warning(f"Failed to calculate network topology metrics: {e}")
+        network_clustering_coefficient = 0.0
+        avg_node_degree = 0.0
+        network_centralization = 0.0
+
+    # Calculate query complexity metrics
+    try:
+        # Query complexity score based on workload size, dependency depth, and projections count
+        total_projections = len(dependencies)
+        dependency_depths = list(dependencies.values())
+        max_dependency_length = max(dependency_depths) if dependency_depths else 0
+
+        # Query complexity score (normalized metric combining multiple factors)
+        query_complexity_score = (
+            len(workload) * 0.3 +  # Workload size influence
+            total_projections * 0.3 +  # Total projections influence
+            max_dependency_length * 0.4  # Dependency complexity influence
+        )
+
+        # Highest query output rate (maximum projection rate in processing order)
+        highest_query_output_rate = max((projrates[proj][1] for proj in processingOrder), default=0.0) if projrates else 0.0
+
+    except Exception as e:
+        logger.warning(f"Failed to calculate query complexity metrics: {e}")
+        query_complexity_score = 0.0
+        highest_query_output_rate = 0.0
+        max_dependency_length = 0
 
     # Prepare execution metadata
     execution_info = {
@@ -294,6 +371,11 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         "file_path": filename,
         "max_parents": number_parents,
         "execution_time_seconds": float(totaltime),
+        "kraken_execution_time_seconds": kraken_execution_time_seconds,
+        "kraken_execution_time_placement": kraken_execution_time_placement,
+        "kraken_execution_time_push_pull": kraken_execution_time_push_pull,
+        "prepp_call_count": prepp_call_count,
+        "placement_evaluations_count": placement_evaluations_count,
         "start_time": start_time,
         "end_time": end_time,
         "total_execution_time_seconds": end_time - start_time,
@@ -303,6 +385,13 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         "central_hop_latency": centralHopLatency,
         "number_hops": numberHops,
         "workload_size": len(workload),
+        "placements_at_cloud": placements_at_cloud,
+        "network_clustering_coefficient": network_clustering_coefficient,
+        "network_centralization": network_centralization,
+        "avg_node_degree": avg_node_degree,
+        "query_complexity_score": query_complexity_score,
+        "highest_query_output_rate": highest_query_output_rate,
+        "projection_dependency_length": max_dependency_length,
         "global_tracker_entries": len(global_placement_tracker._placement_history)
         if global_placement_tracker
         else 0,
@@ -325,274 +414,61 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
 def finalize_placement_results(self, placement_decisions_by_projection):
     """
     Aggregate placement costs by recursively following acquisition steps and adding subprojection costs.
-
-    For each workload query, we need to find all subprojections that were acquired in the acquisition steps
-    and add their placement costs to get the total cost for placing the workload query.
-
-    Args:
-        self: The simulation context containing workload and unfolded projections
-        placement_decisions_by_projection: Dict mapping projections to their PlacementDecision objects
-
-    Returns:
-        Dict: Updated placement decisions with aggregated costs for workload queries
     """
-    # Create a mapping from string representation to projection objects for lookup
-    projection_str_to_obj = {}
-    for proj in placement_decisions_by_projection.keys():
-        projection_str_to_obj[str(proj)] = proj
+    from collections import defaultdict
+    import copy
 
-    def calculate_total_cost_recursive(projection, visited=None):
-        """
-        Recursively calculate the total cost for a projection including all subprojection costs.
+    # 1) Map "string name" -> projection object once
+    proj_by_str = {str(p): p for p in placement_decisions_by_projection}
 
-        Args:
-            projection: The projection object to calculate costs for
-            visited: Set to track visited projections to avoid infinite recursion
+    # 2) Build adjacency: projection -> list of subprojections (keep multiplicity)
+    deps = defaultdict(list)
+    for proj, decision in placement_decisions_by_projection.items():
+        steps = getattr(decision, "plan_details", {}).get("aquisition_steps", {}) or {}
+        for step in steps.values():
+            for ev in step.get("events_to_pull", ()):
+                sub = proj_by_str.get(ev)
+                if sub is not None:
+                    deps[proj].append(sub)
 
-        Returns:
-            float: Total aggregated cost including all subprojections
-        """
-        if visited is None:
-            visited = set()
+    # 3) DFS with memoization (O(N+E)); handle cycles like original (add 0 on cycle)
+    memo = {}
+    visiting = set()
+    get_dec = placement_decisions_by_projection.get
 
-        projection_str = str(projection)
-
-        # Avoid infinite recursion
-        if projection_str in visited:
+    def total_cost(proj):
+        if proj in memo:
+            return memo[proj]
+        if (
+            proj in visiting
+        ):  # cycle guard → count nothing, like your visited-check + 0.0
             return 0.0
+        visiting.add(proj)
 
-        visited.add(projection_str)
+        dec = get_dec(proj)
+        base = dec.costs if dec is not None else 0.0
+        acc = base
+        for child in deps.get(proj, ()):
+            acc += total_cost(child)
 
-        # Get the placement decision for this projection
-        if projection not in placement_decisions_by_projection:
-            return 0.0
+        visiting.remove(proj)
+        memo[proj] = acc
+        return acc
 
-        decision = placement_decisions_by_projection[projection]
-        base_cost = decision.costs
-        total_cost = base_cost
+    # 4) Build finalized dict; copy only when cost changes
+    finalized = {}
+    for proj, dec in placement_decisions_by_projection.items():
+        tc = total_cost(proj)
+        if tc == dec.costs:
+            finalized[proj] = dec
+        else:
+            nd = copy.copy(dec)  # shallow copy preserves type/attrs
+            nd.original_costs = dec.costs
+            nd.aggregated_additional_cost = tc - dec.costs
+            nd.costs = tc
+            finalized[proj] = nd
 
-        # Check if this projection has acquisition steps
-        acquisition_steps = decision.plan_details.get("aquisition_steps", {})
-
-        if not acquisition_steps:
-            return total_cost
-
-        # Go through each acquisition step
-        for step_idx, step_details in acquisition_steps.items():
-            events_to_pull = step_details.get("events_to_pull", [])
-
-            # Check each event being pulled in this step
-            for event in events_to_pull:
-                # Check if this event is a subprojection (not a primitive event)
-                if event in projection_str_to_obj:
-                    subprojection = projection_str_to_obj[event]
-
-                    # Recursively calculate the cost of the subprojection
-                    subprojection_cost = calculate_total_cost_recursive(
-                        subprojection, visited.copy()
-                    )
-                    total_cost += subprojection_cost
-
-        return total_cost
-
-    # Create updated placement decisions with aggregated costs
-    finalized_decisions = {}
-
-    # Process each projection
-    for projection, decision in placement_decisions_by_projection.items():
-        # Calculate the total aggregated cost
-        total_cost = calculate_total_cost_recursive(projection)
-
-        # Create a new decision object with updated costs
-        # We'll create a copy of the original decision and update the costs
-        finalized_decision = decision  # Start with original decision
-
-        # Update the costs if aggregation found additional costs
-        if total_cost != decision.costs:
-            # Create a new decision object with updated cost
-            class UpdatedDecision:
-                def __init__(self, original_decision, new_total_cost):
-                    # Copy all attributes from original decision
-                    self.node = original_decision.node
-                    self.strategy = original_decision.strategy
-                    self.all_push_costs = original_decision.all_push_costs
-                    self.push_pull_costs = original_decision.push_pull_costs
-                    self.has_sufficient_resources = (
-                        original_decision.has_sufficient_resources
-                    )
-                    self.plan_details = original_decision.plan_details
-                    self.savings = original_decision.savings
-
-                    # Update the total cost with aggregated cost
-                    self.costs = new_total_cost
-                    self.original_costs = original_decision.costs
-                    self.aggregated_additional_cost = (
-                        new_total_cost - original_decision.costs
-                    )
-
-            finalized_decision = UpdatedDecision(decision, total_cost)
-
-        finalized_decisions[projection] = finalized_decision
-
-    return finalized_decisions
-
-
-def write_final_results(
-    integrated_operator_placement_results, ines_results, config, graph_density
-):
-    print("Hook")
-
-    # Save results to csv file for analysis, but merged with INES results
-    columns_to_copy = [
-        # ID
-        "ines_simulation_id",
-        "kraken_simulation_id",
-        # Configuration parameters
-        "network_size",
-        "event_skew",
-        "node_event_ratio",
-        "num_event_types",
-        "max_parents",
-        "workload_size",
-        "query_length",
-        "simulation_mode",
-        "median_selectivity",
-        # Metadata
-        "total_projections_placed",
-        "placement_difference_to_ines_count",
-        "placements_at_cloud",
-        "graph_density",
-        # Computation times
-        "combigen_time_seconds",
-        "ines_placement_time_seconds",
-        "ines_push_pull_time_seconds",
-        "ines_total_time_seconds",
-        "kraken_execution_time_seconds",
-        # Placement costs
-        "all_push_central_cost",
-        "inev_cost",
-        "ines_cost",
-        "kraken_cost",
-        # Latency
-        "all_push_central_latency",
-        "ines_latency",
-        "kraken_latency",
-    ]
-
-    kraken_metadata = integrated_operator_placement_results["formatted_results"][
-        "metadata"
-    ]
-    kraken_summary = integrated_operator_placement_results["formatted_results"][
-        "summary"
-    ]
-
-    # Extract IDs
-    ines_simulation_id = ines_results[0]
-    kraken_simulation_id = integrated_operator_placement_results["kraken_simulation_id"]
-
-    # Extract config parameters
-    network_size = config.network_size
-    event_skew = config.event_skew
-    node_event_ratio = config.node_event_ratio
-    num_event_types = config.num_event_types
-    max_parents = config.max_parents
-    workload_size = config.query_size
-    query_length = config.query_length
-    simulation_mode = config.mode.value
-    median_selectivity = ines_results[11]
-
-    # Extract metadata
-    total_projections_placed = kraken_summary.get("successful_placements", 0)
-    placement_difference_to_ines_count = kraken_summary.get(
-        "placement_difference_count", 0
-    )
-    placements_at_cloud = calculate_placements_at_cloud(
-        integrated_operator_placement_results
-    )
-    graph_density = graph_density
-
-    # Computation times
-    combigen_time_seconds = ines_results[12]
-    ines_placement_time_seconds = ines_results[14]
-    ines_push_pull_time_seconds = ines_results[22]
-    ines_total_time_seconds = float(ines_placement_time_seconds) + float(
-        ines_push_pull_time_seconds
-    )
-    kraken_execution_time_seconds = kraken_metadata.get("execution_time_seconds", 0)
-
-    # Placement costs
-    all_push_central_cost = ines_results[2]
-    inev_cost = ines_results[3]
-    ines_cost = ines_results[21]
-    kraken_cost = kraken_metadata.get("push_pull_plan_cost_sum", 0)
-
-    # Latency
-    all_push_central_latency = ines_results[15]
-    ines_latency = ines_results[23]
-    kraken_latency = kraken_metadata.get("push_pull_plan_latency", 0)
-
-    # Compile all data into a single row
-    row_data = {
-        # IDs
-        "ines_simulation_id": ines_simulation_id,
-        "kraken_simulation_id": kraken_simulation_id,
-        # Configuration parameters
-        "network_size": network_size,
-        "event_skew": event_skew,
-        "node_event_ratio": node_event_ratio,
-        "num_event_types": num_event_types,
-        "max_parents": max_parents,
-        "workload_size": workload_size,
-        "query_length": query_length,
-        "simulation_mode": simulation_mode,
-        "median_selectivity": median_selectivity,
-        # Metadata
-        "total_projections_placed": total_projections_placed,
-        "placement_difference_to_ines_count": placement_difference_to_ines_count,
-        "placements_at_cloud": placements_at_cloud,
-        "graph_density": graph_density,
-        # Computation times
-        "combigen_time_seconds": combigen_time_seconds,
-        "ines_placement_time_seconds": ines_placement_time_seconds,
-        "ines_push_pull_time_seconds": ines_push_pull_time_seconds,
-        "ines_total_time_seconds": ines_total_time_seconds,
-        "kraken_execution_time_seconds": kraken_execution_time_seconds,
-        # Placement costs
-        "all_push_central_cost": all_push_central_cost,
-        "inev_cost": inev_cost,
-        "ines_cost": ines_cost,
-        "kraken_cost": kraken_cost,
-        # Latency
-        "all_push_central_latency": all_push_central_latency,
-        "ines_latency": ines_latency,
-        "kraken_latency": kraken_latency,
-    }
-
-    # Ensure result directory exists
-    result_dir = os.path.join(os.path.dirname(__file__), "result")
-    os.makedirs(result_dir, exist_ok=True)
-
-    csv_file_path = os.path.join(result_dir, "run_results.csv")
-
-    # Check if file exists to determine if we need to write headers
-    file_exists = os.path.exists(csv_file_path)
-
-    # Write to CSV file (append mode)
-    with open(csv_file_path, "a", newline="", encoding="utf-8") as csvfile:
-        writer = csv.writer(csvfile)
-
-        # Write headers only if file is new
-        if not file_exists:
-            writer.writerow(columns_to_copy)
-
-        # Write data row using the order defined in columns_to_copy
-        row_values = [row_data[col] for col in columns_to_copy]
-        writer.writerow(row_values)
-
-    logger.info(f"Appended combined simulation results to {csv_file_path}")
-    logger.info(f"INES ID: {ines_simulation_id}, Kraken ID: {kraken_simulation_id}")
-
-
+    return finalized
 def calculate_placements_at_cloud(integrated_operator_placement_results):
     """
     Calculate the number of projections placed at the cloud node (node 0).

@@ -138,6 +138,15 @@ class GlobalPlacementTracker:
         """
         return projection in self._placement_history
 
+    def placed_subqueries_set(self) -> set:
+        """
+        Get a set of all placed subqueries for O(1) membership testing.
+
+        Returns:
+            Set of all projections that have placement decisions
+        """
+        return set(self._placement_history.keys())
+
     def update_network_structures_for_subquery(
         self,
         subquery: Any,

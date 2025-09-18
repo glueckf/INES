@@ -25,7 +25,7 @@ logger = get_kraken_logger(__name__)
 
 
 def compute_kraken_for_projection(
-    query_workload:list,
+    query_workload: list,
     selectivities: dict,
     h_mycombi: dict,
     mode,
@@ -141,6 +141,10 @@ def compute_kraken_for_projection(
         # Go through all possible placement nodes and calculate the costs
         # For each candidate node, we optimize subprojection placements considering parent context
         for node in possible_placement_nodes:
+            # Track that we're evaluating a placement option
+            from .state import get_kraken_timing_tracker
+            timing_tracker = get_kraken_timing_tracker()
+            timing_tracker.increment_placement_evaluations()
             # Check if this projection can optimize any of its subprojections for this candidate node
             optimized_subprojections = {}
             if has_placed_subqueries:

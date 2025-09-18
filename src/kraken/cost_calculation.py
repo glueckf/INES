@@ -7,6 +7,7 @@ strategies, coordinating with adapters for legacy function calls.
 
 from typing import Dict, List, Any, Tuple
 import re
+import time
 from .adapters import run_prepp
 from .logging import get_kraken_logger
 from .node_tracker import get_global_event_placement_tracker
@@ -166,6 +167,11 @@ def calculate_prepp_with_placement(
     config_mode = mode.value
     is_deterministic = config_mode == SimulationMode.FULLY_DETERMINISTIC
 
+    # Track prepp execution time
+    from .state import get_kraken_timing_tracker
+    timing_tracker = get_kraken_timing_tracker()
+    prepp_start_time = time.time()
+
     results = run_prepp(
         input_buffer=input_buffer,
         method=method,
@@ -177,6 +183,12 @@ def calculate_prepp_with_placement(
         all_pairs=shortest_path_distances,
         is_deterministic=is_deterministic,
     )
+
+    prepp_end_time = time.time()
+    prepp_duration = prepp_end_time - prepp_start_time
+    timing_tracker.add_prepp_time(prepp_duration)
+
+    logger.debug(f"PrePP computation took {prepp_duration:.3f}s for node {placement_node}")
 
     # process results
     if results and len(results) >= 5:
@@ -318,28 +330,51 @@ def _initialize_evaluation_dict(network):
 
 def _extract_projection_filters(projection):
     """Extract filters from projection if available."""
-    filters = {}
-    if hasattr(projection, "Filters"):
-        for filter_tuple in projection.Filters:
-            if len(filter_tuple) >= 2:
-                filters[filter_tuple[0]] = filter_tuple[1]
-    return filters
+    flt = getattr(projection, "Filters", None)
+    if not flt:
+        return {}
+    if isinstance(flt, dict):
+        # Return as-is (or dict(flt) if you need a copy)
+        return flt
+    try:
+        # Fast path in C if every item is a pair (k, v)
+        return dict(flt)
+    except (TypeError, ValueError):
+        # Fall back to safe parsing below
+        pass
+
+    # Robust fallback (handles items longer than 2, etc.)
+    out = {}
+    for t in flt:
+        if len(t) >= 2:
+            out[t[0]] = t[1]
+    return out
+
+
+_sentinel = object()
 
 
 def _extract_combination_keys(projection, mycombi):
     """Extract combination keys from projection."""
-    if projection in mycombi:
-        list_of_subprojection = list(mycombi.get(projection))
-        return list_of_subprojection
-    else:
-        if hasattr(projection, "combination") and hasattr(
-            projection.combination, "keys"
-        ):
-            return list(map(str, projection.combination.keys()))
-        elif hasattr(projection, "children"):
-            return list(map(str, projection.children))
-        else:
-            return [str(projection)]
+    # 1) Single lookup in mycombi (handles falsy values correctly via sentinel)
+    val = mycombi.get(projection, _sentinel)
+    if val is not _sentinel:
+        return list(val)  # ensure list, like original
+
+    # 2) Try combination.keys() if present
+    comb = getattr(projection, "combination", None)
+    if comb is not None:
+        keys = getattr(comb, "keys", None)
+        if keys is not None:
+            return [str(k) for k in keys()]
+
+    # 3) Fallback to children if present
+    children = getattr(projection, "children", None)
+    if children is not None:
+        return [str(c) for c in children]
+
+    # 4) Last resort: the projection itself
+    return [str(projection)]
 
 
 def _extract_projection_sinks(projection, default_node):
@@ -601,30 +636,39 @@ def _expand_to_primitives(element, combination_dict):
 
 
 def process_results_from_prepp(results, query, node, workload):
-    projection_as_string = str(query)
-    all_push_costs = results[4] if len(results) > 4 else 0
+    qkey = str(query)
 
-    computing_time = results[1] if len(results) > 1 else 0
+    # EAFP indexing with cheap fallbacks
+    try:
+        all_push_costs = results[4]
+    except IndexError:
+        all_push_costs = 0
 
-    total_plan_costs = 0
+    try:
+        computing_time = results[1]
+    except IndexError:
+        computing_time = 0
 
-    total_plan_latency = 0
+    try:
+        steps_by_proj = results[6]
+    except IndexError:
+        steps_by_proj = None
 
-    if projection_as_string in results[6] if len(results) > 6 else []:
-        aquisition_steps = results[6][projection_as_string]
-
-        for step in aquisition_steps:
-            aquisition_step = aquisition_steps[step]
-            aquisition_step_costs = aquisition_step.get("total_step_costs", 0)
-            aquisition_step_latency = aquisition_step.get("total_latency", 0)
-            total_plan_costs += aquisition_step_costs
-            total_plan_latency += aquisition_step_latency
-
-        transmission_ratio = (
-            (total_plan_costs / all_push_costs) if all_push_costs > 0 else 0
-        )
-    else:
+    if not steps_by_proj or qkey not in steps_by_proj:
         raise ValueError("No acquisition steps found in prePP results")
+
+    steps = steps_by_proj[qkey]  # expected: dict[str, dict]
+    vals = steps.values()  # iterate values directly
+
+    # Single pass accumulation (fewer Python-level operations)
+    total_plan_costs = 0
+    total_plan_latency = 0
+    for s in vals:
+        # dict.get avoids KeyError and stays fast
+        total_plan_costs += s.get("total_step_costs", 0)
+        total_plan_latency += s.get("total_latency", 0)
+
+    transmission_ratio = (total_plan_costs / all_push_costs) if all_push_costs else 0.0
 
     return {
         "node_for_placement": node,
@@ -634,7 +678,7 @@ def process_results_from_prepp(results, query, node, workload):
         "latency": total_plan_latency,
         "computing_time": computing_time,
         "transmission_ratio": transmission_ratio,
-        "aquisition_steps": aquisition_steps,
+        "aquisition_steps": steps,  # same key as before
     }
 
 
@@ -911,32 +955,55 @@ def determine_all_primitive_events_of_projection(projection) -> List[str]:
         return list(given_predicates)
 
 
+# Do the import once at module load (cheaper than inside the function each call)
+try:
+    from helper.Tree import PrimEvent as _PrimEvent
+except ImportError:
+    _PrimEvent = None
+
+
 def get_events_for_projection(projection):
     """
-    Recursively extract all primitive events from a projection.
-
-    Args:
-        projection: Tree node (SEQ, AND, or PrimEvent)
-
-    Returns:
-        set: Set of primitive event types (strings) contained in the projection
+    Iterative DFS; returns set[str] of primitive event types.
+    Uses leafs() fast-path if available.
     """
-    from helper.Tree import PrimEvent
+    # Fast path: many of your nodes seem to implement .leafs()
+    leafs = getattr(projection, "leafs", None)
+    if callable(leafs):
+        # Assumes leafs() returns iterable of primitive event names
+        return set(leafs())
 
-    events = set()
+    result = set()
+    add = result.add  # bind once
+    stack = [projection]
 
-    # Handle primitive events directly
-    if isinstance(projection, PrimEvent):
-        return {projection.evtype}
+    PrimEvent = _PrimEvent  # local binding is faster in tight loops
+    if PrimEvent is None:
+        # Fallback if import failed
+        PrimEvent = type(None)  # dummy type that won't match anything
 
-    # Handle composite projections (SEQ, AND, etc.)
-    if hasattr(projection, "children") and projection.children:
-        for child in projection.children:
+    while stack:
+        node = stack.pop()
+
+        # Primitive leaf
+        if isinstance(node, PrimEvent):
+            add(node.evtype)
+            continue
+
+        # Composite: push children (if any)
+        children = getattr(node, "children", None)
+        if not children:
+            # If some implementations store evtype on non-PrimEvent leaves
+            ev = getattr(node, "evtype", None)
+            if ev is not None:
+                add(ev)
+            continue
+
+        # Add children; collect primitive ones immediately
+        for child in children:
             if isinstance(child, PrimEvent):
-                events.add(child.evtype)
+                add(child.evtype)
             else:
-                # We have a subquery - call recursively and merge the sets
-                child_events = get_events_for_projection(child)
-                events.update(child_events)
+                stack.append(child)
 
-    return events
+    return result
