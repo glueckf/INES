@@ -8,6 +8,8 @@ strategies, coordinating with adapters for legacy function calls.
 from typing import Dict, List, Any, Tuple
 import re
 import time
+import hashlib
+from functools import lru_cache
 from .adapters import run_prepp
 from .logging import get_kraken_logger
 from .node_tracker import get_global_event_placement_tracker
@@ -25,6 +27,46 @@ except ImportError:
 
 
 logger = get_kraken_logger(__name__)
+
+# PrePP result cache for identical computations
+_prepp_cache: Dict[str, Any] = {}
+_cache_hits = 0
+_cache_misses = 0
+
+
+def _create_prepp_cache_key(
+    placement_node: int,
+    projection: Any,
+    selectivity_rate: float,
+    selectivities: Dict,
+    is_deterministic: bool,
+) -> str:
+    """Create a deterministic cache key for prepp computation."""
+    # Use stable string representation for projection
+    proj_str = str(projection)
+
+    # Create deterministic representation of selectivities
+    sel_items = sorted(selectivities.items()) if selectivities else []
+    sel_str = str(sel_items)
+
+    # Combine all deterministic inputs
+    key_data = f"{placement_node}|{proj_str}|{selectivity_rate}|{sel_str}|{is_deterministic}"
+
+    # Use hash to keep key size manageable
+    return hashlib.md5(key_data.encode()).hexdigest()
+
+
+def _get_prepp_cache_stats() -> Dict[str, int]:
+    """Get cache performance statistics."""
+    total = _cache_hits + _cache_misses
+    hit_rate = (_cache_hits / total * 100) if total > 0 else 0
+    return {
+        "hits": _cache_hits,
+        "misses": _cache_misses,
+        "total": total,
+        "hit_rate_percent": hit_rate,
+        "cache_size": len(_prepp_cache)
+    }
 
 
 # Initialize global trackers lazily to avoid initialization issues
@@ -141,6 +183,26 @@ def calculate_prepp_with_placement(
     shortest_path_distances,
     has_placed_subqueries: bool = False,
 ):
+    # Check if we should use deterministic behavior
+    config_mode = mode.value
+    is_deterministic = config_mode == SimulationMode.FULLY_DETERMINISTIC
+
+    # Try cache first for deterministic computations
+    cache_key = None
+    global _cache_hits, _cache_misses
+
+    if is_deterministic:
+        cache_key = _create_prepp_cache_key(
+            placement_node, projection, selectivity_rate, selectivities, is_deterministic
+        )
+
+        if cache_key in _prepp_cache:
+            _cache_hits += 1
+            logger.debug(f"PrePP cache hit for node {placement_node} (key: {cache_key[:8]}...)")
+            return _prepp_cache[cache_key]
+        else:
+            _cache_misses += 1
+
     input_buffer = initiate_buffer(
         placement_node,
         projection,
@@ -162,10 +224,6 @@ def calculate_prepp_with_placement(
     # Select method and algorithm type for prePP
     method = "ppmuse"
     algorithm = "e"
-
-    # Check if we should use deterministic behavior
-    config_mode = mode.value
-    is_deterministic = config_mode == SimulationMode.FULLY_DETERMINISTIC
 
     # Track prepp execution time
     from .state import get_kraken_timing_tracker
@@ -192,9 +250,16 @@ def calculate_prepp_with_placement(
 
     # process results
     if results and len(results) >= 5:
-        return process_results_from_prepp(
+        processed_results = process_results_from_prepp(
             results, query=projection, node=placement_node, workload=query_workload
         )
+
+        # Cache results for future use (only for deterministic mode)
+        if is_deterministic and cache_key is not None:
+            _prepp_cache[cache_key] = processed_results
+            logger.debug(f"Cached PrePP result for node {placement_node} (key: {cache_key[:8]}...)")
+
+        return processed_results
     else:
         logger.warning("No valid prePP results returned, using fallback")
         raise ValueError("Invalid prePP results")
@@ -409,6 +474,11 @@ def _generate_plan_content(
     """Generate the actual plan content string."""
     lines = []
 
+    # Create O(1) lookup dictionary for network nodes to avoid O(n) index() calls
+    network_lookup = {}
+    for i, node in enumerate(network):
+        network_lookup[node] = i
+
     # Convert Node objects to node IDs
     def extract_node_ids(node_list):
         if node_list is None:
@@ -427,13 +497,10 @@ def _generate_plan_content(
             elif isinstance(item, int):
                 ids.append(item)
             else:
-                # Try to get index from network list
-                try:
-                    if item in network:
-                        ids.append(network.index(item))
-                    else:
-                        ids.append(str(item))
-                except ValueError:
+                # Use O(1) lookup instead of O(n) network.index()
+                if item in network_lookup:
+                    ids.append(network_lookup[item])
+                else:
                     ids.append(str(item))
         return ids if ids else None
 

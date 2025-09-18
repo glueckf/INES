@@ -37,6 +37,7 @@ class SimulationConfig:
     event_skew: float = 0.3
     node_event_ratio: float = 0.5
     max_parents: int = 10
+    parent_factor: float = 1.8
     num_event_types: int = 6
 
     # Query parameters

@@ -24,6 +24,7 @@ class GlobalPlacementTracker:
         self._placement_history: Dict[Any, PlacementDecisionTracker] = {}
         self._projection_mappings: Dict[Any, str] = {}
         self._query_hierarchy: Dict[Any, List[Any]] = {}
+        self._subquery_to_parents: Dict[Any, set] = {}  # Reverse mapping for O(1) lookup
         self._locked_placements: Dict[Any, bool] = {}  # Track locked subprojections
         self._parent_processing_order: List[
             Any
@@ -81,6 +82,12 @@ class GlobalPlacementTracker:
             subqueries: List of subqueries (e.g., ['D', AND(A, B)])
         """
         self._query_hierarchy[parent_query] = subqueries
+
+        # Update reverse mapping for O(1) subquery parent lookups
+        for subquery in subqueries:
+            if subquery not in self._subquery_to_parents:
+                self._subquery_to_parents[subquery] = set()
+            self._subquery_to_parents[subquery].add(parent_query)
 
     def get_query_hierarchy(self, query: Any) -> Optional[List[Any]]:
         """
@@ -271,11 +278,8 @@ class GlobalPlacementTracker:
         if self.is_subprojection_locked(subprojection):
             return False
 
-        # Find all parents that use this subprojection
-        parents_using_subprojection = []
-        for parent, subqueries in self._query_hierarchy.items():
-            if subprojection in subqueries:
-                parents_using_subprojection.append(parent)
+        # Find all parents that use this subprojection using O(1) lookup
+        parents_using_subprojection = list(self._subquery_to_parents.get(subprojection, set()))
 
         if not parents_using_subprojection:
             return True
@@ -484,3 +488,4 @@ def reset_locking_state() -> None:
     """
     global_placement_tracker._locked_placements.clear()
     global_placement_tracker._parent_processing_order.clear()
+    global_placement_tracker._subquery_to_parents.clear()

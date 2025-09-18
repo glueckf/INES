@@ -307,10 +307,20 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         placement_evaluations_count,
     ) = timing_tracker.finalize_placement_timing()
 
+    # Get PrePP cache statistics
+    from .cost_calculation import _get_prepp_cache_stats
+    cache_stats = _get_prepp_cache_stats()
+
     logger.info(
         f"Timing breakdown - Total: {kraken_execution_time_seconds:.3f}s, "
         f"Placement only: {kraken_execution_time_placement:.3f}s, "
         f"PrePP total: {kraken_execution_time_push_pull:.3f}s"
+    )
+    logger.info(
+        f"PrePP cache stats - Hits: {cache_stats['hits']}, "
+        f"Misses: {cache_stats['misses']}, "
+        f"Hit rate: {cache_stats['hit_rate_percent']:.1f}%, "
+        f"Cache size: {cache_stats['cache_size']}"
     )
 
     # Calculate algorithm-specific metrics
@@ -376,6 +386,9 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         "kraken_execution_time_push_pull": kraken_execution_time_push_pull,
         "prepp_call_count": prepp_call_count,
         "placement_evaluations_count": placement_evaluations_count,
+        "prepp_cache_hits": cache_stats['hits'],
+        "prepp_cache_misses": cache_stats['misses'],
+        "prepp_cache_hit_rate": cache_stats['hit_rate_percent'],
         "start_time": start_time,
         "end_time": end_time,
         "total_execution_time_seconds": end_time - start_time,

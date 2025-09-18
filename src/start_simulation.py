@@ -30,6 +30,7 @@ def write_final_results(
         "node_event_ratio",
         "num_event_types",
         "max_parents",
+        "parent_factor",
         "workload_size",
         "query_length",
         "simulation_mode",
@@ -50,6 +51,9 @@ def write_final_results(
         # Algorithm metrics
         "prepp_call_count",
         "placement_evaluations_count",
+        "prepp_cache_hits",
+        "prepp_cache_misses",
+        "prepp_cache_hit_rate",
         # Network topology metrics
         "network_clustering_coefficient",
         "network_centralization",
@@ -82,6 +86,7 @@ def write_final_results(
     node_event_ratio = config.node_event_ratio
     num_event_types = config.num_event_types
     max_parents = config.max_parents
+    parent_factor = config.parent_factor
     workload_size = config.query_size
     query_length = config.query_length
     simulation_mode = config.mode.value
@@ -105,6 +110,9 @@ def write_final_results(
     # Algorithm metrics
     prepp_call_count = kraken_metadata.get("prepp_call_count", 0)
     placement_evaluations_count = kraken_metadata.get("placement_evaluations_count", 0)
+    prepp_cache_hits = kraken_metadata.get("prepp_cache_hits", 0)
+    prepp_cache_misses = kraken_metadata.get("prepp_cache_misses", 0)
+    prepp_cache_hit_rate = kraken_metadata.get("prepp_cache_hit_rate", 0.0)
 
     # Network topology metrics
     network_clustering_coefficient = kraken_metadata.get("network_clustering_coefficient", 0.0)
@@ -138,6 +146,7 @@ def write_final_results(
         "node_event_ratio": node_event_ratio,
         "num_event_types": num_event_types,
         "max_parents": max_parents,
+        "parent_factor": parent_factor,
         "workload_size": workload_size,
         "query_length": query_length,
         "simulation_mode": simulation_mode,
@@ -158,6 +167,9 @@ def write_final_results(
         # Algorithm metrics
         "prepp_call_count": prepp_call_count,
         "placement_evaluations_count": placement_evaluations_count,
+        "prepp_cache_hits": prepp_cache_hits,
+        "prepp_cache_misses": prepp_cache_misses,
+        "prepp_cache_hit_rate": prepp_cache_hit_rate,
         # Network topology metrics
         "network_clustering_coefficient": network_clustering_coefficient,
         "network_centralization": network_centralization,
@@ -445,9 +457,13 @@ def run_single_simulation(
         enable_parallel: Whether to enable parallel processing
         max_workers: Maximum number of parallel workers (auto-detected if None)
     """
+    # Calculate parent_factor from max_parents for consistency with parameter study
+    import math
+    parent_factor = max_parents / math.ceil(math.log2(network_size)) if network_size > 1 else 1.0
+
     print(f"[SINGLE] Starting single simulation configuration with {num_runs} runs")
     print(f"[CONFIG] Network size: {network_size}, Workload: {workload_size}, Query length: {query_length}")
-    print(f"[CONFIG] Mode: {mode.value}, Max parents: {max_parents}")
+    print(f"[CONFIG] Mode: {mode.value}, Max parents: {max_parents}, Parent factor: {parent_factor:.2f}")
 
     # Force single worker for debugging when parallel is disabled
     if not enable_parallel:
@@ -460,6 +476,7 @@ def run_single_simulation(
         num_event_types=num_event_types,
         event_skew=event_skew,
         max_parents=max_parents,
+        parent_factor=parent_factor,
         query_size=workload_size,
         query_length=query_length,
         mode=mode
@@ -548,6 +565,7 @@ def run_parameter_study(
                         num_event_types=num_event_types,
                         event_skew=event_skew,
                         max_parents=max_parents,
+                        parent_factor=parent_factor,
                         query_size=workload_size,
                         query_length=query_length,
                         mode=mode
@@ -588,29 +606,29 @@ def main() -> None:
     Choose between single simulation debugging or full parameter study.
     """
 
-    # Option 1: Single simulation debugging (commented by default)
-    # Uncomment for debugging single configurations
-    run_single_simulation(
-        network_size=12,
-        mode=SimulationMode.FULLY_DETERMINISTIC,
-        enable_parallel=False,
-        num_runs=1
-    )
-
-    # # Option 2: Full parameter study (active by default)
-    # run_parameter_study(
-    #     network_sizes=[10, 30, 50, 100, 200],
-    #     workload_sizes=[3, 5, 8, 10],
-    #     parent_factors=[0.8, 1.2, 1.8, 2.0],
-    #     query_lengths=[3, 5, 8, 10],
-    #     runs_per_combination=2,
-    #     node_event_ratio=0.5,
-    #     num_event_types=6,
-    #     event_skew=2.0,
-    #     mode=SimulationMode.RANDOM,
-    #     enable_parallel=True,
-    #     max_workers=14
+    # # Option 1: Single simulation debugging (commented by default)
+    # # Uncomment for debugging single configurations
+    # run_single_simulation(
+    #     network_size=12,
+    #     mode=SimulationMode.FULLY_DETERMINISTIC,
+    #     enable_parallel=False,
+    #     num_runs=1
     # )
+
+    # Option 2: Full parameter study (active by default)
+    run_parameter_study(
+        network_sizes=[10, 30, 50, 100, 200],
+        workload_sizes=[3, 5, 8, 10],
+        parent_factors=[0.8, 1.2, 1.8, 2.0],
+        query_lengths=[3, 5, 8, 10],
+        runs_per_combination=10,
+        node_event_ratio=0.5,
+        num_event_types=6,
+        event_skew=2.0,
+        mode=SimulationMode.RANDOM,
+        enable_parallel=True,
+        max_workers=14
+    )
 
 if __name__ == "__main__":
     main()
