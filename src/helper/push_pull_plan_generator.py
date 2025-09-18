@@ -911,7 +911,7 @@ class Initiate():
 
         if len(eventtypes_in_pull_request) == 0:
             # We have a push acquisition step, we need to return 0 costs here
-            return 0.0, 0.0
+            return 0.0, 0.0, {}
         else:
             # We have a pull acquisition step, we need to calculate the costs here
             # First we need the size of the pull request.
@@ -933,27 +933,71 @@ class Initiate():
                     if combined_selectivity_key in self.single_selectivity_of_eventtype_within_projection:
                         selectivity *= self.single_selectivity_of_eventtype_within_projection[combined_selectivity_key]
 
+            # Track detailed cost contribution for pull request
+            detailed_request_contribution = {}
             size_of_pull_request = 0.0
+
             for eventtype in eventtypes_in_pull_request:
                 if eventtype in eventtype_to_sources_map:
                     number_of_sources = len(eventtype_to_sources_map[eventtype])
                     single_source_rate = all_eventtype_output_rates[eventtype]
                     global_rate = single_source_rate * number_of_sources
-                    size_of_pull_request += global_rate * selectivity
+                    event_contribution = global_rate * selectivity
+                    size_of_pull_request += event_contribution
+
+                    detailed_request_contribution[str(eventtype)] = {
+                        'source_count': number_of_sources,
+                        'base_rate': single_source_rate,
+                        'global_rate': global_rate,
+                        'selectivity_applied': selectivity,
+                        'contribution_to_request': event_contribution
+                    }
 
             total_hops = 0.0
+            # Track detailed cost contribution for target events
+            detailed_target_contribution = {}
 
             # We take the maximum latency measured in hops from any source to the current node
             latency = 0
             for source in eventtypes_to_acquire:
                 if source in eventtype_to_sources_map:
+                    event_hops = 0.0
+                    event_latency = 0
+                    event_sources = []
+
                     for source_node in eventtype_to_sources_map[source]:
                         distance_from_source_to_current_node = allPairs[source_node][current_node]
                         if distance_from_source_to_current_node > latency:
                             latency = distance_from_source_to_current_node
+                        if distance_from_source_to_current_node > event_latency:
+                            event_latency = distance_from_source_to_current_node
 
+                        event_hops += distance_from_source_to_current_node
                         total_hops += distance_from_source_to_current_node
-            return total_hops * size_of_pull_request, latency
+
+                        event_sources.append({
+                            'source_node': source_node,
+                            'distance': distance_from_source_to_current_node
+                        })
+
+                    detailed_target_contribution[str(source)] = {
+                        'total_hops': event_hops,
+                        'latency': event_latency,
+                        'sources': event_sources
+                    }
+
+            final_cost = total_hops * size_of_pull_request
+
+            # Combine detailed contributions
+            detailed_pull_request_costs = {
+                'pull_request_events': detailed_request_contribution,
+                'target_events': detailed_target_contribution,
+                'total_request_size': size_of_pull_request,
+                'total_hops': total_hops,
+                'final_cost': final_cost
+            }
+
+            return final_cost, latency, detailed_pull_request_costs
 
 
     def determine_costs_for_pull_response(
@@ -966,7 +1010,7 @@ class Initiate():
                 allPairs,
                 current_node
         ):
-        
+
 
         # Calculate selectivity for combined event types (e.g., if eventtypes_in_pull_request = ['B'] and eventtypes_to_acquire = ['A'],
         # then the relevant selectivity would be for 'A|AB')
@@ -987,17 +1031,47 @@ class Initiate():
                         if pair_key in self.single_selectivity_of_eventtype_within_projection:
                             selectivity *= self.single_selectivity_of_eventtype_within_projection[pair_key]
 
-        # Get the global output rate for all event types to acquire
+        # Track detailed cost contribution per event
+        detailed_cost_contribution = {}
         global_output_rate = 0
-
         latency = 0
+
         for eventtype in eventtypes_to_acquire:
+            event_cost = 0.0
+            event_latency = 0
+            event_sources = []
+
             for source in eventtype_to_sources_map[eventtype]:
                 distance_from_source_to_current_node = allPairs[source][current_node]
                 if distance_from_source_to_current_node > latency:
                     latency = distance_from_source_to_current_node
-                single_source_rate = all_eventtype_output_rates[eventtype]
-                global_output_rate += single_source_rate * distance_from_source_to_current_node
+                if distance_from_source_to_current_node > event_latency:
+                    event_latency = distance_from_source_to_current_node
 
-        return global_output_rate * selectivity, latency
+                single_source_rate = all_eventtype_output_rates[eventtype]
+                source_cost = single_source_rate * distance_from_source_to_current_node
+                event_cost += source_cost
+                global_output_rate += source_cost
+
+                event_sources.append({
+                    'source_node': source,
+                    'distance': distance_from_source_to_current_node,
+                    'base_rate': single_source_rate,
+                    'raw_cost': source_cost
+                })
+
+            # Apply selectivity to event cost
+            event_cost_with_selectivity = event_cost * selectivity
+
+            detailed_cost_contribution[str(eventtype)] = {
+                'raw_cost': event_cost,
+                'cost_with_selectivity': event_cost_with_selectivity,
+                'selectivity_applied': selectivity,
+                'latency': event_latency,
+                'sources': event_sources
+            }
+
+        total_cost_with_selectivity = global_output_rate * selectivity
+
+        return total_cost_with_selectivity, latency, detailed_cost_contribution
 
