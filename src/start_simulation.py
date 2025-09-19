@@ -816,7 +816,7 @@ def main() -> None:
         num_event_types=6,
         event_skew=2.0,
         mode=SimulationMode.RANDOM,
-        enable_parallel=False,
+        enable_parallel=True,
         max_workers=14,
     )
 
