@@ -377,9 +377,10 @@ def update_prepp_results(self, prepp_results):
 
     total_costs = prepp_results[0]
     calculation_time = prepp_results[1]
-    max_push_pull_latency = prepp_results[2]  # This IS the correct latency from generate_prePP
-    transmission_ratio = prepp_results[3]
+    max_push_pull_latency_tuple = prepp_results[2]  # This is now a tuple (node, latency) from generate_prePP
+    max_push_pull_latency = max_push_pull_latency_tuple[1] if isinstance(max_push_pull_latency_tuple, tuple) else max_push_pull_latency_tuple  # Extract latency for backwards compatibility
     total_push_costs = prepp_results[4]
+    acquisition_steps = prepp_results[6]
 
     # We need to add the costs of sending the events to the cloud to the prepp results
 
@@ -398,25 +399,12 @@ def update_prepp_results(self, prepp_results):
 
     final_transmission_ratio = total_costs / total_push_costs if total_push_costs > 0 else 0
 
-    # For the latency calculation:
-    # The max_push_pull_latency correctly reflects the actual network hop latency
-    # from generate_prePP's maxPushPullLatency at prepp_results[2].
-    # Additional cloud transmission latency is currently disabled (commented out below).
-    max_additional_latency = 0
-    # min_distance_to_cloud = float('inf')
-    #
-    # if not any(node == CLOUD_NODE_ID for node in all_sinks_from_workload):
-    #     # Find closest node to the cloud
-    #     for node in all_sinks_from_workload:
-    #         distance_to_cloud = self.allPairs[node][CLOUD_NODE_ID]
-    #         if distance_to_cloud < min_distance_to_cloud:
-    #             min_distance_to_cloud = distance_to_cloud
-    #
-    #     max_additional_latency = min_distance_to_cloud
-
-    max_push_pull_latency += max_additional_latency
-
-    return total_costs, calculation_time, max_push_pull_latency, final_transmission_ratio
+    # Now we need to update our latency calculation to include the hops to the cloud
+    # Herefore I've modified the max_push_pull_latency to be a tuple (node, latency)
+    # Then node represents the node, where the highest latency was "measured"
+    if max_push_pull_latency_tuple and isinstance(max_push_pull_latency_tuple, tuple):
+        max_push_pull_latency += self.allPairs[max_push_pull_latency_tuple[0]][CLOUD_NODE_ID]
+    return total_costs, calculation_time, max_push_pull_latency, final_transmission_ratio, acquisition_steps
 
 
 class INES():
@@ -565,6 +553,7 @@ class INES():
         from generateEvalPlan import generate_eval_plan
         self.plan = generate_eval_plan(self.network, self.selectivities, self.eval_plan, self.central_eval_plan,
                                        self.query_workload)
+        self.plan_content = self.plan.getvalue()
         deterministic_flag = self.config.is_selectivities_fixed()
         print(
             f"[INES_DEBUG] Calling generate_prePP with is_deterministic={deterministic_flag} (mode={self.config.mode})")
@@ -578,6 +567,7 @@ class INES():
         This is a quick fix to ensure that the results are comparable.
         """
         prepp_results = update_prepp_results(self, prepp_results)
+        self.prepp_results_for_debugging = prepp_results
 
         # __costs_integrated = int(integrated_operator_placement_results['formatted_results']['summary']['total_cost'])
         __sequential_costs = int(prepp_results[0])

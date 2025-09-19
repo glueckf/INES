@@ -456,7 +456,7 @@ def determine_randomized_distribution_push_pull_costs(
     for query in queries:
         for current_node in query.node_placement:
             already_received_eventtypes[current_node] = []
-    max_latency = 0
+    max_latency = (None, 0)  # (node, latency)
     # print(f"[DEBUG] Processing {len(queries)} queries")
     # sort queries by size:
     queries = sorted(queries, key=lambda q: len(determine_all_primitive_events_of_projection(q.query)))
@@ -494,7 +494,8 @@ def determine_randomized_distribution_push_pull_costs(
                         allPairs
                     )
                 )
-                max_latency = max(max_latency, latency)
+                if latency > max_latency[1]:
+                    max_latency = (current_node, latency)
 
                 # ===========================================
                 # FINAL PREPP RESULT LOGGING
