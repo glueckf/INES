@@ -14,11 +14,112 @@ from .global_placement_tracker import (
 )
 from .logging import get_kraken_logger
 from .state import get_kraken_timing_tracker, reset_kraken_timing_tracker
-import csv
-import os
 from typing import Dict, Any
 
 logger = get_kraken_logger(__name__)
+
+
+def _analyze_placement_metrics(
+    placement_decisions: Dict[Any, Any],
+    query_workload: list,
+    processing_order: list,
+    unfolded_projections: Dict[Any, Any],
+) -> Dict[str, Any]:
+    """
+    Analyze placement decisions and calculate comprehensive metrics.
+
+    This function computes various metrics from placement decisions including
+    total costs, latency mappings, and maximum workload latency.
+
+    Args:
+        placement_decisions: Dictionary mapping projections to their placement decisions
+        query_workload: List of root queries in the workload
+        processing_order: Ordered list of projections by dependency depth
+        unfolded_projections: Dictionary mapping projections to their components
+
+    Returns:
+        Dictionary containing:
+        - total_costs: Sum of all placement costs
+        - latency_mapping: Dictionary mapping projections to latencies
+        - workload_roots: List of workload roots with placement decisions
+        - max_workload_latency: Maximum latency across all workload roots
+        - processing_set: Set of projections in processing order
+    """
+    # Calculate total costs across all placement decisions
+    total_costs = sum(decision.costs for decision in placement_decisions.values())
+
+    # Create latency mapping from placement decisions
+    latency_mapping = {
+        projection: decision.plan_details.get("latency", 0)
+        for projection, decision in placement_decisions.items()
+    }
+
+    # Find workload roots that have actual placement decisions
+    workload_roots = [
+        projection for projection in query_workload if projection in placement_decisions
+    ]
+
+    # Create processing set for efficient membership checking
+    processing_set = set(processing_order)
+
+    # Calculate maximum latency across workload roots
+    max_workload_latency = _calculate_maximum_latency_for_roots(
+        roots=workload_roots,
+        latency_mapping=latency_mapping,
+        unfolded_projections=unfolded_projections,
+        processing_set=processing_set,
+    )
+
+    return {
+        "total_costs": total_costs,
+        "max_workload_latency": max_workload_latency,
+    }
+
+
+def _calculate_maximum_latency_for_roots(
+    roots: list,
+    latency_mapping: Dict[Any, float],
+    unfolded_projections: Dict[Any, Any],
+    processing_set: set,
+) -> float:
+    """
+    Calculate the maximum latency across all workload root projections.
+
+    This function computes the maximum latency by considering both root projection
+    latencies and the latencies of their unfolded subprojections that are being processed.
+
+    Args:
+        roots: List of root projections in the workload
+        latency_mapping: Dictionary mapping projections to their latencies
+        unfolded_projections: Dictionary mapping projections to their components
+        processing_set: Set of projections currently being processed
+
+    Returns:
+        Maximum latency value across all root projections
+    """
+    if not roots:
+        return 0.0
+
+    def _calculate_root_total_latency(root_projection):
+        """Calculate total latency for a single root projection."""
+        # Get direct latency for the root projection
+        root_latency = latency_mapping.get(root_projection, 0)
+
+        # Get unfolded subprojections for this root
+        unfolded_subprojs = unfolded_projections.get(root_projection, ())
+
+        # Find subprojections that are in the processing set
+        relevant_subprojs = set(unfolded_subprojs) & processing_set
+
+        # Sum latencies of relevant subprojections
+        subproj_latency_sum = sum(
+            latency_mapping.get(subproj, 0) for subproj in relevant_subprojs
+        )
+
+        return root_latency + subproj_latency_sum
+
+    # Find maximum latency across all root projections
+    return max(_calculate_root_total_latency(root) for root in roots)
 
 
 def format_results_for_comparison(
@@ -224,37 +325,17 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         placement_decisions_by_projection=integrated_placement_decision_by_projection,
     )
 
-    decisions = integrated_placement_decision_by_projection
-
-    # 1) Total costs: single C-level pass
-    costs_for_evaluation_total_workload = sum(d.costs for d in decisions.values())
-
-    # 2) Precompute latency per projection once
-    latency_of = {p: d.plan_details.get("latency", 0) for p, d in decisions.items()}
-
-    # 3) Consider only workload roots that actually have decisions
-    roots = [p for p in self.query_workload if p in decisions]
-
-    # 4) Set for O(1) membership when filtering unfolded subprojections
-    processing_set = set(processingOrder)
-
-    # 5) Max latency over roots: root latency + latencies of unfolded children in processingOrder
-    #    Use set(...) on unfolded[root] to dedupe like your original code
-    get_unfolded = unfolded.get
-    max_latency = (
-        max(
-            (
-                latency_of.get(root, 0)
-                + sum(
-                    latency_of.get(sub, 0)
-                    for sub in (set(get_unfolded(root, ())) & processing_set)
-                )
-            )
-            for root in roots
-        )
-        if roots
-        else 0
+    # Analyze placement decisions and calculate comprehensive metrics
+    placement_metrics = _analyze_placement_metrics(
+        placement_decisions=integrated_placement_decision_by_projection,
+        query_workload=self.query_workload,
+        processing_order=processingOrder,
+        unfolded_projections=unfolded,
     )
+
+    # Extract metrics for backward compatibility and clarity
+    costs_for_evaluation_total_workload = placement_metrics["total_costs"]
+    max_latency = placement_metrics["max_workload_latency"]
 
     kraken_simulation_id = uuid.uuid4()
 
@@ -272,6 +353,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
 
     # Get PrePP cache statistics
     from .cost_calculation import _get_prepp_cache_stats
+
     cache_stats = _get_prepp_cache_stats()
 
     logger.info(
@@ -287,17 +369,23 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     )
 
     # Calculate algorithm-specific metrics
-    placements_at_cloud = len([
-        decision for decision in integrated_placement_decision_by_projection.values()
-        if hasattr(decision, "node") and decision.node == 0
-    ])
+    placements_at_cloud = len(
+        [
+            decision
+            for decision in integrated_placement_decision_by_projection.values()
+            if hasattr(decision, "node") and decision.node == 0
+        ]
+    )
 
     # Calculate network topology metrics
     try:
         import networkx as nx
+
         # Calculate network metrics
         network_clustering_coefficient = nx.average_clustering(G)
-        avg_node_degree = sum(dict(G.degree()).values()) / len(G.nodes()) if len(G.nodes()) > 0 else 0
+        avg_node_degree = (
+            sum(dict(G.degree()).values()) / len(G.nodes()) if len(G.nodes()) > 0 else 0
+        )
 
         # Network centralization (based on degree centrality)
         degree_centralities = list(nx.degree_centrality(G).values())
@@ -305,7 +393,9 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
             max_centrality = max(degree_centralities)
             centrality_sum = sum(max_centrality - c for c in degree_centralities)
             max_possible_sum = (len(G.nodes()) - 1) * (len(G.nodes()) - 2)
-            network_centralization = centrality_sum / max_possible_sum if max_possible_sum > 0 else 0
+            network_centralization = (
+                centrality_sum / max_possible_sum if max_possible_sum > 0 else 0
+            )
         else:
             network_centralization = 0.0
 
@@ -324,13 +414,17 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
 
         # Query complexity score (normalized metric combining multiple factors)
         query_complexity_score = (
-            len(workload) * 0.3 +  # Workload size influence
-            total_projections * 0.3 +  # Total projections influence
-            max_dependency_length * 0.4  # Dependency complexity influence
+            len(workload) * 0.3  # Workload size influence
+            + total_projections * 0.3  # Total projections influence
+            + max_dependency_length * 0.4  # Dependency complexity influence
         )
 
         # Highest query output rate (maximum projection rate in processing order)
-        highest_query_output_rate = max((projrates[proj][1] for proj in processingOrder), default=0.0) if projrates else 0.0
+        highest_query_output_rate = (
+            max((projrates[proj][1] for proj in processingOrder), default=0.0)
+            if projrates
+            else 0.0
+        )
 
     except Exception as e:
         logger.warning(f"Failed to calculate query complexity metrics: {e}")
@@ -349,9 +443,9 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         "kraken_execution_time_push_pull": kraken_execution_time_push_pull,
         "prepp_call_count": prepp_call_count,
         "placement_evaluations_count": placement_evaluations_count,
-        "prepp_cache_hits": cache_stats['hits'],
-        "prepp_cache_misses": cache_stats['misses'],
-        "prepp_cache_hit_rate": cache_stats['hit_rate_percent'],
+        "prepp_cache_hits": cache_stats["hits"],
+        "prepp_cache_misses": cache_stats["misses"],
+        "prepp_cache_hit_rate": cache_stats["hit_rate_percent"],
         "start_time": start_time,
         "end_time": end_time,
         "total_execution_time_seconds": end_time - start_time,
@@ -445,6 +539,8 @@ def finalize_placement_results(self, placement_decisions_by_projection):
             finalized[proj] = nd
 
     return finalized
+
+
 def calculate_placements_at_cloud(integrated_operator_placement_results):
     """
     Calculate the number of projections placed at the cloud node (node 0).
