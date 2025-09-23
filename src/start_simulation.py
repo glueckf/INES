@@ -7,10 +7,47 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing
 import time
 import logging
+import threading
 
 from INES import INES, SimulationConfig, SimulationMode
 
 logger = logging.getLogger(__name__)
+
+
+# Global worker state for persistent initialization
+_worker_state = {}
+_worker_lock = threading.Lock()
+
+
+def _initialize_worker() -> None:
+    """
+    Initialize worker process with expensive one-time setup.
+    This runs once per worker process and caches expensive operations.
+    """
+    global _worker_state
+    with _worker_lock:
+        if "initialized" not in _worker_state:
+            logger.info("[WORKER_INIT] Initializing worker process")
+
+            # Pre-import heavy modules to avoid repeated imports
+            try:
+                import networkx as nx
+                import numpy as np
+                from INES import INES, calculate_graph_density
+
+                _worker_state.update({
+                    "initialized": True,
+                    "networkx": nx,
+                    "numpy": np,
+                    "INES": INES,
+                    "calculate_graph_density": calculate_graph_density,
+                    "job_count": 0,
+                })
+
+                logger.info("[WORKER_INIT] Worker initialization completed")
+            except ImportError as e:
+                logger.error(f"[WORKER_INIT] Failed to import modules: {e}")
+                raise
 
 
 def _log_detailed_placement_decisions(
@@ -118,6 +155,371 @@ def _log_detailed_placement_decisions(
         )
 
 
+class OptimizedCSVWriter:
+    """
+    Thread-safe CSV writer with batched operations for better I/O performance.
+    """
+
+    def __init__(self, csv_file_path: str, batch_size: int = 20):
+        self.csv_file_path = csv_file_path
+        self.batch_size = batch_size
+        self.lock = threading.Lock()
+        self.write_count = 0
+        self.batch_buffer = []
+
+        # Ensure result directory exists
+        os.makedirs(os.path.dirname(csv_file_path), exist_ok=True)
+
+        # Write headers if file doesn't exist
+        self._ensure_headers()
+
+    def _ensure_headers(self) -> None:
+        """Ensure CSV file has proper headers."""
+        if not os.path.exists(self.csv_file_path):
+            columns_to_copy = [
+                # ID
+                "ines_simulation_id",
+                "kraken_simulation_id",
+                # Configuration parameters
+                "network_size",
+                "event_skew",
+                "node_event_ratio",
+                "num_event_types",
+                "max_parents",
+                "parent_factor",
+                "workload_size",
+                "query_length",
+                "simulation_mode",
+                "median_selectivity",
+                # Metadata
+                "total_projections_placed",
+                "placement_difference_to_ines_count",
+                "placements_at_cloud",
+                "graph_density",
+                # Computation times
+                "combigen_time_seconds",
+                "ines_placement_time_seconds",
+                "ines_push_pull_time_seconds",
+                "ines_total_time_seconds",
+                "kraken_execution_time_seconds",
+                "kraken_execution_time_placement",
+                "kraken_execution_time_push_pull",
+                # Algorithm metrics
+                "prepp_call_count",
+                "placement_evaluations_count",
+                "prepp_cache_hits",
+                "prepp_cache_misses",
+                "prepp_cache_hit_rate",
+                # Network topology metrics
+                "network_clustering_coefficient",
+                "network_centralization",
+                "avg_node_degree",
+                # Query complexity metrics
+                "query_complexity_score",
+                "highest_query_output_rate",
+                "projection_dependency_length",
+                # Placement costs
+                "all_push_central_cost",
+                "inev_cost",
+                "ines_cost",
+                "kraken_cost",
+                # Latency
+                "all_push_central_latency",
+                "ines_latency",
+                "kraken_latency",
+            ]
+
+            with open(self.csv_file_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(columns_to_copy)
+
+    def write_result(
+        self,
+        integrated_operator_placement_results: Dict[str, Any],
+        ines_results: List[Any],
+        config: SimulationConfig,
+        graph_density: float,
+        ines_object: Any,
+    ) -> None:
+        """Write a single result with batching for better performance."""
+        with self.lock:
+            # Prepare the row data
+            row_data = self._prepare_row_data(
+                integrated_operator_placement_results,
+                ines_results,
+                config,
+                graph_density,
+                ines_object,
+            )
+
+            self.batch_buffer.append(row_data)
+
+            # Flush if buffer is full
+            if len(self.batch_buffer) >= self.batch_size:
+                self._flush_buffer()
+
+    def flush(self) -> None:
+        """Flush any remaining buffered data."""
+        with self.lock:
+            if self.batch_buffer:
+                self._flush_buffer()
+
+    def _flush_buffer(self) -> None:
+        """Internal method to write buffered data to CSV."""
+        if not self.batch_buffer:
+            return
+
+        with open(self.csv_file_path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            for row_data in self.batch_buffer:
+                writer.writerow(row_data)
+
+        self.write_count += len(self.batch_buffer)
+        logger.debug(
+            f"[CSV_WRITER] Wrote batch of {len(self.batch_buffer)} results "
+            f"(total: {self.write_count})"
+        )
+        self.batch_buffer.clear()
+
+    def _prepare_row_data(
+        self,
+        integrated_operator_placement_results: Dict[str, Any],
+        ines_results: List[Any],
+        config: SimulationConfig,
+        graph_density: float,
+        ines_object: Any,
+    ) -> List[Any]:
+        """Prepare row data for CSV writing."""
+        columns_to_copy = [
+            # ID
+            "ines_simulation_id",
+            "kraken_simulation_id",
+            # Configuration parameters
+            "network_size",
+            "event_skew",
+            "node_event_ratio",
+            "num_event_types",
+            "max_parents",
+            "parent_factor",
+            "workload_size",
+            "query_length",
+            "simulation_mode",
+            "median_selectivity",
+            # Metadata
+            "total_projections_placed",
+            "placement_difference_to_ines_count",
+            "placements_at_cloud",
+            "graph_density",
+            # Computation times
+            "combigen_time_seconds",
+            "ines_placement_time_seconds",
+            "ines_push_pull_time_seconds",
+            "ines_total_time_seconds",
+            "kraken_execution_time_seconds",
+            "kraken_execution_time_placement",
+            "kraken_execution_time_push_pull",
+            # Algorithm metrics
+            "prepp_call_count",
+            "placement_evaluations_count",
+            "prepp_cache_hits",
+            "prepp_cache_misses",
+            "prepp_cache_hit_rate",
+            # Network topology metrics
+            "network_clustering_coefficient",
+            "network_centralization",
+            "avg_node_degree",
+            # Query complexity metrics
+            "query_complexity_score",
+            "highest_query_output_rate",
+            "projection_dependency_length",
+            # Placement costs
+            "all_push_central_cost",
+            "inev_cost",
+            "ines_cost",
+            "kraken_cost",
+            # Latency
+            "all_push_central_latency",
+            "ines_latency",
+            "kraken_latency",
+        ]
+
+        kraken_metadata = integrated_operator_placement_results["formatted_results"][
+            "metadata"
+        ]
+        kraken_summary = integrated_operator_placement_results["formatted_results"][
+            "summary"
+        ]
+
+        # Extract all data (keeping original logic)
+        row_data_dict = self._extract_row_data_dict(
+            integrated_operator_placement_results,
+            ines_results,
+            config,
+            graph_density,
+            kraken_metadata,
+            kraken_summary,
+        )
+
+        # Return row values in correct order
+        return [row_data_dict[col] for col in columns_to_copy]
+
+    def _extract_row_data_dict(
+        self,
+        integrated_operator_placement_results,
+        ines_results,
+        config,
+        graph_density,
+        kraken_metadata,
+        kraken_summary,
+    ) -> Dict[str, Any]:
+        """Extract row data into dictionary format."""
+        # Extract IDs
+        ines_simulation_id = ines_results[0]
+        kraken_simulation_id = integrated_operator_placement_results[
+            "kraken_simulation_id"
+        ]
+
+        # Extract config parameters
+        network_size = config.network_size
+        event_skew = config.event_skew
+        node_event_ratio = config.node_event_ratio
+        num_event_types = config.num_event_types
+        max_parents = config.max_parents
+        parent_factor = config.parent_factor
+        workload_size = config.query_size
+        query_length = config.query_length
+        simulation_mode = config.mode.value
+        median_selectivity = ines_results[11]
+
+        # Extract metadata
+        total_projections_placed = kraken_summary.get("successful_placements", 0)
+        placement_difference_to_ines_count = kraken_summary.get(
+            "placement_difference_count", 0
+        )
+        placements_at_cloud = kraken_metadata.get("placements_at_cloud", 0)
+        graph_density_value = graph_density
+
+        # Computation times
+        combigen_time_seconds = ines_results[12]
+        ines_placement_time_seconds = ines_results[14]
+        ines_push_pull_time_seconds = ines_results[22]
+        ines_total_time_seconds = float(ines_placement_time_seconds) + float(
+            ines_push_pull_time_seconds
+        )
+        kraken_execution_time_seconds = kraken_metadata.get(
+            "kraken_execution_time_seconds", 0
+        )
+        kraken_execution_time_placement = kraken_metadata.get(
+            "kraken_execution_time_placement", 0
+        )
+        kraken_execution_time_push_pull = kraken_metadata.get(
+            "kraken_execution_time_push_pull", 0
+        )
+
+        # Algorithm metrics
+        prepp_call_count = kraken_metadata.get("prepp_call_count", 0)
+        placement_evaluations_count = kraken_metadata.get(
+            "placement_evaluations_count", 0
+        )
+        prepp_cache_hits = kraken_metadata.get("prepp_cache_hits", 0)
+        prepp_cache_misses = kraken_metadata.get("prepp_cache_misses", 0)
+        prepp_cache_hit_rate = kraken_metadata.get("prepp_cache_hit_rate", 0.0)
+
+        # Network topology metrics
+        network_clustering_coefficient = kraken_metadata.get(
+            "network_clustering_coefficient", 0.0
+        )
+        network_centralization = kraken_metadata.get("network_centralization", 0.0)
+        avg_node_degree = kraken_metadata.get("avg_node_degree", 0.0)
+
+        # Query complexity metrics
+        query_complexity_score = kraken_metadata.get("query_complexity_score", 0.0)
+        highest_query_output_rate = kraken_metadata.get("highest_query_output_rate")
+        projection_dependency_length = kraken_metadata.get(
+            "projection_dependency_length", 0
+        )
+
+        # Placement costs
+        all_push_central_cost = ines_results[2]
+        inev_cost = ines_results[3]
+        ines_cost = ines_results[21]
+        kraken_cost = kraken_metadata.get("push_pull_plan_cost_sum", 0)
+
+        # Latency
+        all_push_central_latency = ines_results[15]
+        ines_latency = ines_results[23]
+        kraken_latency = kraken_metadata.get("push_pull_plan_latency", 0)
+
+        return {
+            # IDs
+            "ines_simulation_id": ines_simulation_id,
+            "kraken_simulation_id": kraken_simulation_id,
+            # Configuration parameters
+            "network_size": network_size,
+            "event_skew": event_skew,
+            "node_event_ratio": node_event_ratio,
+            "num_event_types": num_event_types,
+            "max_parents": max_parents,
+            "parent_factor": parent_factor,
+            "workload_size": workload_size,
+            "query_length": query_length,
+            "simulation_mode": simulation_mode,
+            "median_selectivity": median_selectivity,
+            # Metadata
+            "total_projections_placed": total_projections_placed,
+            "placement_difference_to_ines_count": placement_difference_to_ines_count,
+            "placements_at_cloud": placements_at_cloud,
+            "graph_density": graph_density_value,
+            # Computation times
+            "combigen_time_seconds": combigen_time_seconds,
+            "ines_placement_time_seconds": ines_placement_time_seconds,
+            "ines_push_pull_time_seconds": ines_push_pull_time_seconds,
+            "ines_total_time_seconds": ines_total_time_seconds,
+            "kraken_execution_time_seconds": kraken_execution_time_seconds,
+            "kraken_execution_time_placement": kraken_execution_time_placement,
+            "kraken_execution_time_push_pull": kraken_execution_time_push_pull,
+            # Algorithm metrics
+            "prepp_call_count": prepp_call_count,
+            "placement_evaluations_count": placement_evaluations_count,
+            "prepp_cache_hits": prepp_cache_hits,
+            "prepp_cache_misses": prepp_cache_misses,
+            "prepp_cache_hit_rate": prepp_cache_hit_rate,
+            # Network topology metrics
+            "network_clustering_coefficient": network_clustering_coefficient,
+            "network_centralization": network_centralization,
+            "avg_node_degree": avg_node_degree,
+            # Query complexity metrics
+            "query_complexity_score": query_complexity_score,
+            "highest_query_output_rate": highest_query_output_rate,
+            "projection_dependency_length": projection_dependency_length,
+            # Placement costs
+            "all_push_central_cost": all_push_central_cost,
+            "inev_cost": inev_cost,
+            "ines_cost": ines_cost,
+            "kraken_cost": kraken_cost,
+            # Latency
+            "all_push_central_latency": all_push_central_latency,
+            "ines_latency": ines_latency,
+            "kraken_latency": kraken_latency,
+        }
+
+
+# Global CSV writer instance
+_csv_writer = None
+_csv_writer_lock = threading.Lock()
+
+
+def get_csv_writer() -> OptimizedCSVWriter:
+    """Get or create the global CSV writer instance."""
+    global _csv_writer
+    with _csv_writer_lock:
+        if _csv_writer is None:
+            result_dir = "./kraken/result"
+            csv_file_path = os.path.join(result_dir, "run_results.csv")
+            _csv_writer = OptimizedCSVWriter(csv_file_path, batch_size=20)
+    return _csv_writer
+
+
 def write_final_results(
     integrated_operator_placement_results: Dict[str, Any],
     ines_results: List[Any],
@@ -126,215 +528,24 @@ def write_final_results(
     ines_object: Any,
 ) -> None:
     """
-    Write final combined simulation results to CSV file.
+    Write final combined simulation results to CSV file using optimized writer.
     Moved from operator_placement_legacy_hook.py for consolidated I/O.
     """
-    columns_to_copy = [
-        # ID
-        "ines_simulation_id",
-        "kraken_simulation_id",
-        # Configuration parameters
-        "network_size",
-        "event_skew",
-        "node_event_ratio",
-        "num_event_types",
-        "max_parents",
-        "parent_factor",
-        "workload_size",
-        "query_length",
-        "simulation_mode",
-        "median_selectivity",
-        # Metadata
-        "total_projections_placed",
-        "placement_difference_to_ines_count",
-        "placements_at_cloud",
-        "graph_density",
-        # Computation times
-        "combigen_time_seconds",
-        "ines_placement_time_seconds",
-        "ines_push_pull_time_seconds",
-        "ines_total_time_seconds",
-        "kraken_execution_time_seconds",
-        "kraken_execution_time_placement",
-        "kraken_execution_time_push_pull",
-        # Algorithm metrics
-        "prepp_call_count",
-        "placement_evaluations_count",
-        "prepp_cache_hits",
-        "prepp_cache_misses",
-        "prepp_cache_hit_rate",
-        # Network topology metrics
-        "network_clustering_coefficient",
-        "network_centralization",
-        "avg_node_degree",
-        # Query complexity metrics
-        "query_complexity_score",
-        "highest_query_output_rate",
-        "projection_dependency_length",
-        # Placement costs
-        "all_push_central_cost",
-        "inev_cost",
-        "ines_cost",
-        "kraken_cost",
-        # Latency
-        "all_push_central_latency",
-        "ines_latency",
-        "kraken_latency",
-    ]
+    writer = get_csv_writer()
+    writer.write_result(
+        integrated_operator_placement_results,
+        ines_results,
+        config,
+        graph_density,
+        ines_object,
+    )
 
+    # Handle detailed logging for latency analysis
     kraken_metadata = integrated_operator_placement_results["formatted_results"][
         "metadata"
     ]
-    kraken_summary = integrated_operator_placement_results["formatted_results"][
-        "summary"
-    ]
-
-    # Extract IDs
-    ines_simulation_id = ines_results[0]
-    kraken_simulation_id = integrated_operator_placement_results["kraken_simulation_id"]
-
-    # Extract config parameters
-    network_size = config.network_size
-    event_skew = config.event_skew
-    node_event_ratio = config.node_event_ratio
-    num_event_types = config.num_event_types
-    max_parents = config.max_parents
-    parent_factor = config.parent_factor
-    workload_size = config.query_size
-    query_length = config.query_length
-    simulation_mode = config.mode.value
-    median_selectivity = ines_results[11]
-
-    # Extract metadata
-    total_projections_placed = kraken_summary.get("successful_placements", 0)
-    placement_difference_to_ines_count = kraken_summary.get(
-        "placement_difference_count", 0
-    )
-    placements_at_cloud = kraken_metadata.get("placements_at_cloud", 0)
-    graph_density_value = graph_density
-
-    # Computation times
-    combigen_time_seconds = ines_results[12]
-    ines_placement_time_seconds = ines_results[14]
-    ines_push_pull_time_seconds = ines_results[22]
-    ines_total_time_seconds = float(ines_placement_time_seconds) + float(
-        ines_push_pull_time_seconds
-    )
-    kraken_execution_time_seconds = kraken_metadata.get(
-        "kraken_execution_time_seconds", 0
-    )
-    kraken_execution_time_placement = kraken_metadata.get(
-        "kraken_execution_time_placement", 0
-    )
-    kraken_execution_time_push_pull = kraken_metadata.get(
-        "kraken_execution_time_push_pull", 0
-    )
-
-    # Algorithm metrics
-    prepp_call_count = kraken_metadata.get("prepp_call_count", 0)
-    placement_evaluations_count = kraken_metadata.get("placement_evaluations_count", 0)
-    prepp_cache_hits = kraken_metadata.get("prepp_cache_hits", 0)
-    prepp_cache_misses = kraken_metadata.get("prepp_cache_misses", 0)
-    prepp_cache_hit_rate = kraken_metadata.get("prepp_cache_hit_rate", 0.0)
-
-    # Network topology metrics
-    network_clustering_coefficient = kraken_metadata.get(
-        "network_clustering_coefficient", 0.0
-    )
-    network_centralization = kraken_metadata.get("network_centralization", 0.0)
-    avg_node_degree = kraken_metadata.get("avg_node_degree", 0.0)
-
-    # Query complexity metrics
-    query_complexity_score = kraken_metadata.get("query_complexity_score", 0.0)
-    highest_query_output_rate = kraken_metadata.get("highest_query_output_rate")
-    projection_dependency_length = kraken_metadata.get(
-        "projection_dependency_length", 0
-    )
-
-    # Placement costs
-    all_push_central_cost = ines_results[2]
-    inev_cost = ines_results[3]
-    ines_cost = ines_results[21]
-    kraken_cost = kraken_metadata.get("push_pull_plan_cost_sum", 0)
-
-    # Latency
-    all_push_central_latency = ines_results[15]
-    ines_latency = ines_results[23]
     kraken_latency = kraken_metadata.get("push_pull_plan_latency", 0)
-
-    # Compile all data into a single row
-    row_data = {
-        # IDs
-        "ines_simulation_id": ines_simulation_id,
-        "kraken_simulation_id": kraken_simulation_id,
-        # Configuration parameters
-        "network_size": network_size,
-        "event_skew": event_skew,
-        "node_event_ratio": node_event_ratio,
-        "num_event_types": num_event_types,
-        "max_parents": max_parents,
-        "parent_factor": parent_factor,
-        "workload_size": workload_size,
-        "query_length": query_length,
-        "simulation_mode": simulation_mode,
-        "median_selectivity": median_selectivity,
-        # Metadata
-        "total_projections_placed": total_projections_placed,
-        "placement_difference_to_ines_count": placement_difference_to_ines_count,
-        "placements_at_cloud": placements_at_cloud,
-        "graph_density": graph_density_value,
-        # Computation times
-        "combigen_time_seconds": combigen_time_seconds,
-        "ines_placement_time_seconds": ines_placement_time_seconds,
-        "ines_push_pull_time_seconds": ines_push_pull_time_seconds,
-        "ines_total_time_seconds": ines_total_time_seconds,
-        "kraken_execution_time_seconds": kraken_execution_time_seconds,
-        "kraken_execution_time_placement": kraken_execution_time_placement,
-        "kraken_execution_time_push_pull": kraken_execution_time_push_pull,
-        # Algorithm metrics
-        "prepp_call_count": prepp_call_count,
-        "placement_evaluations_count": placement_evaluations_count,
-        "prepp_cache_hits": prepp_cache_hits,
-        "prepp_cache_misses": prepp_cache_misses,
-        "prepp_cache_hit_rate": prepp_cache_hit_rate,
-        # Network topology metrics
-        "network_clustering_coefficient": network_clustering_coefficient,
-        "network_centralization": network_centralization,
-        "avg_node_degree": avg_node_degree,
-        # Query complexity metrics
-        "query_complexity_score": query_complexity_score,
-        "highest_query_output_rate": highest_query_output_rate,
-        "projection_dependency_length": projection_dependency_length,
-        # Placement costs
-        "all_push_central_cost": all_push_central_cost,
-        "inev_cost": inev_cost,
-        "ines_cost": ines_cost,
-        "kraken_cost": kraken_cost,
-        # Latency
-        "all_push_central_latency": all_push_central_latency,
-        "ines_latency": ines_latency,
-        "kraken_latency": kraken_latency,
-    }
-
-    # Ensure result directory exists
-    result_dir = "./kraken/result"
-    os.makedirs(result_dir, exist_ok=True)
-    csv_file_path = os.path.join(result_dir, "run_results.csv")
-
-    # Check if file exists to determine if we need to write headers
-    file_exists = os.path.exists(csv_file_path)
-
-    # Write to CSV file (append mode)
-    with open(csv_file_path, "a", newline="", encoding="utf-8") as csvfile:
-        writer = csv.writer(csvfile)
-
-        # Write headers only if file is new
-        if not file_exists:
-            writer.writerow(columns_to_copy)
-
-        # Write data row using the order defined in columns_to_copy
-        row_values = [row_data[col] for col in columns_to_copy]
-        writer.writerow(row_values)
+    ines_latency = ines_results[23]
 
     # Conditional detailed logging when Kraken latency is at least 1.5x INES latency
     if kraken_latency >= 1.5 * ines_latency:
@@ -342,21 +553,22 @@ def write_final_results(
             f"[LATENCY_ANALYSIS] Kraken latency ({kraken_latency:.3f}) >= 1.5x INES latency ({ines_latency:.3f})"
         )
         logger.info(
-            f"[LATENCY_ANALYSIS] INES vs Kraken comparison for simulation {ines_simulation_id}:"
+            f"[LATENCY_ANALYSIS] INES vs Kraken comparison for simulation {ines_results[0]}:"
         )
         logger.info(f"  - INES latency: {ines_latency:.3f}")
         logger.info(f"  - Kraken latency: {kraken_latency:.3f}")
-        logger.info(f"  - Central latency: {all_push_central_latency:.3f}")
+        logger.info(f"  - Central latency: {ines_results[15]:.3f}")
 
         # Log detailed placement decisions for both INES and Kraken
         _log_detailed_placement_decisions(
             integrated_operator_placement_results, config, kraken_latency, ines_latency
         )
 
-    logger.info(f"[I/O] Appended combined simulation results to {csv_file_path}")
-    logger.debug(
-        f"[I/O] INES ID: {ines_simulation_id}, Kraken ID: {kraken_simulation_id}"
-    )
+
+def flush_csv_writer() -> None:
+    """Flush any remaining data in the CSV writer."""
+    writer = get_csv_writer()
+    writer.flush()
 
 
 @dataclass
@@ -378,61 +590,93 @@ class SimulationJob:
 
 class OptimizedSimulationManager:
     """
-    Manages optimized parallel simulation execution with persistent process pool.
+    Manages optimized parallel simulation execution with hybrid batching approach.
+
+    Key optimizations:
+    - Batches jobs to reduce process overhead
+    - Uses optimal worker count based on CPU cores
+    - Buffers I/O operations for better throughput
+    - Persistent worker processes with job batching
     """
 
     def __init__(
         self,
         enable_parallel: bool = True,
         max_workers: Optional[int] = None,
-        batch_size: int = 1,
+        batch_size: Optional[int] = None,
     ):
         self.enable_parallel = enable_parallel
-        self.max_workers = max_workers or (multiprocessing.cpu_count() - 1)
-        self.batch_size = batch_size
+
+        # Optimize worker count: use fewer processes to reduce overhead
+        if max_workers is None:
+            if enable_parallel:
+                # Use half the CPU cores to reduce process overhead
+                self.max_workers = max(1, multiprocessing.cpu_count() // 2)
+            else:
+                self.max_workers = 1
+        else:
+            self.max_workers = max_workers
+
+        # Auto-calculate optimal batch size if not provided
+        if batch_size is None:
+            if enable_parallel and self.max_workers > 1:
+                # Larger batches for parallel processing to amortize overhead
+                self.batch_size = 4
+            else:
+                # No batching for sequential processing
+                self.batch_size = 1
+        else:
+            self.batch_size = batch_size
 
         # Force single worker for sequential mode
         if not enable_parallel:
             self.max_workers = 1
+            self.batch_size = 1
 
         self.successful_jobs = 0
         self.failed_jobs = 0
         self.start_time = None
 
-        # Batched results for optional batching
-        self.result_batch = []
+        # Results buffer for batched I/O
+        self.result_buffer = []
+        self.io_batch_size = 10  # Write results in batches of 10
 
     def run_simulations(self, jobs: List[SimulationJob]) -> None:
         """
-        Execute all simulation jobs using single persistent process pool.
+        Execute all simulation jobs using optimized batching strategy.
 
         Args:
             jobs: List of SimulationJob objects to execute
         """
         total_jobs = len(jobs)
         logger.info(
-            f"[SIMULATION] Starting {total_jobs} jobs with {self.max_workers} workers..."
+            f"[SIMULATION] Starting {total_jobs} jobs with {self.max_workers} workers"
         )
         logger.info(
-            f"[SIMULATION] Parallel processing: {'Enabled' if self.enable_parallel else 'Disabled'}"
+            f"[SIMULATION] Parallel: {'Enabled' if self.enable_parallel else 'Disabled'}, "
+            f"Batch size: {self.batch_size}, I/O batch size: {self.io_batch_size}"
         )
 
         self.start_time = time.time()
 
         if self.enable_parallel and self.max_workers > 1:
-            self._run_parallel(jobs)
+            self._run_parallel_batched(jobs)
         else:
             self._run_sequential(jobs)
 
-        # Flush any remaining batched results
-        self._flush_results()
+        # Flush any remaining buffered results
+        self._flush_result_buffer()
+
+        # Ensure CSV writer flushes any remaining data
+        flush_csv_writer()
 
         # Print final statistics
         total_time = time.time() - self.start_time
         avg_time_per_job = total_time / total_jobs if total_jobs > 0 else 0
 
         logger.info(
-            f"\n[RESULTS] All {total_jobs} jobs completed in {total_time:.1f}s (avg: {avg_time_per_job:.1f}s per job)"
+            f"\n[RESULTS] All {total_jobs} jobs completed in {total_time:.1f}s "
+            f"(avg: {avg_time_per_job:.1f}s per job)"
         )
         logger.info(
             f"[RESULTS] Successful: {self.successful_jobs}, Failed: {self.failed_jobs}"
@@ -441,38 +685,53 @@ class OptimizedSimulationManager:
         if self.failed_jobs > 0:
             logger.warning(f"[RESULTS] Warning: {self.failed_jobs} job(s) failed")
 
-    def _run_parallel(self, jobs: List[SimulationJob]) -> None:
+    def _run_parallel_batched(self, jobs: List[SimulationJob]) -> None:
         """
-        Execute jobs in parallel using single persistent ProcessPoolExecutor.
+        Execute jobs in parallel using batching to reduce process overhead.
         """
-        # Serialize jobs for multiprocessing
-        job_data_list = [job.to_dict() for job in jobs]
+        # Create job batches to amortize process creation overhead
+        total_jobs = len(jobs)
+        job_batches = []
+
+        for i in range(0, total_jobs, self.batch_size):
+            batch = jobs[i : i + self.batch_size]
+            job_batches.append([job.to_dict() for job in batch])
+
+        logger.info(
+            f"[BATCHING] Created {len(job_batches)} batches of {self.batch_size} jobs each"
+        )
 
         with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
-            # Submit all jobs at once for optimal distribution
-            future_to_job_id = {
-                executor.submit(run_simulation_worker, job_data): job_data["job_id"]
-                for job_data in job_data_list
+            # Submit batches instead of individual jobs
+            future_to_batch = {
+                executor.submit(process_job_batch, batch): i
+                for i, batch in enumerate(job_batches)
             }
 
-            # Process results as they complete
-            for future in as_completed(future_to_job_id):
-                job_id = future_to_job_id[future]
+            # Process batch results as they complete
+            for future in as_completed(future_to_batch):
+                batch_idx = future_to_batch[future]
                 try:
-                    result = future.result()
-                    self._process_completed_job(result)
+                    batch_results = future.result()
 
-                    # Progress reporting every 100 jobs
+                    # Process each result in the batch
+                    for result in batch_results:
+                        self._process_completed_job(result)
+
+                    # Progress reporting
                     completed_jobs = self.successful_jobs + self.failed_jobs
-                    if completed_jobs % 100 == 0:
+                    if completed_jobs % 50 == 0 or batch_idx % 5 == 0:
                         elapsed = time.time() - self.start_time
                         logger.info(
-                            f"[PROGRESS] {completed_jobs}/{len(jobs)} jobs completed - {elapsed:.1f}s elapsed"
+                            f"[PROGRESS] {completed_jobs}/{total_jobs} jobs completed "
+                            f"- {elapsed:.1f}s elapsed"
                         )
 
                 except Exception as e:
-                    logger.error(f"[ERROR] Job {job_id} execution failed: {str(e)}")
-                    self.failed_jobs += 1
+                    logger.error(f"[ERROR] Batch {batch_idx} execution failed: {str(e)}")
+                    # Mark all jobs in the failed batch as failed
+                    batch_size_actual = len(job_batches[batch_idx])
+                    self.failed_jobs += batch_size_actual
 
     def _run_sequential(self, jobs: List[SimulationJob]) -> None:
         """
@@ -492,38 +751,32 @@ class OptimizedSimulationManager:
 
     def _process_completed_job(self, result: Dict[str, Any]) -> None:
         """
-        Process a completed job result and handle I/O.
+        Process a completed job result with buffered I/O for better performance.
         """
         if result["success"]:
-            # Write results immediately (or batch if batch_size > 1)
-            if self.batch_size > 1:
-                self.result_batch.append(result)
-                if len(self.result_batch) >= self.batch_size:
-                    self._flush_results()
-            else:
-                # Write immediately
-                write_final_results(
-                    result["integrated_results"],
-                    result["ines_results"],
-                    result["config"],
-                    result["graph_density"],
-                    result["ines_object"],
-                )
+            # Add to I/O buffer for batched writing
+            self.result_buffer.append(result)
+
+            # Flush buffer when it reaches the batch size
+            if len(self.result_buffer) >= self.io_batch_size:
+                self._flush_result_buffer()
 
             self.successful_jobs += 1
         else:
             logger.error(
-                f"[ERROR] Job {result['job_id']} ({result['parameter_set_id']}) failed: {result['error_msg']}"
+                f"[ERROR] Job {result['job_id']} ({result['parameter_set_id']}) "
+                f"failed: {result['error_msg']}"
             )
             self.failed_jobs += 1
 
-    def _flush_results(self) -> None:
+    def _flush_result_buffer(self) -> None:
         """
-        Write any batched results to files.
+        Write buffered results to files in batch for better I/O performance.
         """
-        if self.result_batch:
-            logger.info(f"[I/O] Writing batch of {len(self.result_batch)} results...")
-            for result in self.result_batch:
+        if self.result_buffer:
+            logger.debug(f"[I/O] Writing batch of {len(self.result_buffer)} results")
+
+            for result in self.result_buffer:
                 write_final_results(
                     result["integrated_results"],
                     result["ines_results"],
@@ -531,7 +784,102 @@ class OptimizedSimulationManager:
                     result["graph_density"],
                     result["ines_object"],
                 )
-            self.result_batch.clear()
+
+            self.result_buffer.clear()
+
+
+def process_job_batch(job_batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Process multiple jobs in sequence within a single worker process to amortize overhead.
+
+    This is the key optimization: instead of creating a new process for each job,
+    we process multiple jobs in the same process to amortize the expensive process
+    creation and INES initialization overhead.
+
+    Args:
+        job_batch: List of serialized job dictionaries
+
+    Returns:
+        List of job results with all data needed for write_final_results
+    """
+    global _worker_state
+
+    # Initialize worker on first use
+    _initialize_worker()
+
+    results = []
+    batch_start_time = time.time()
+
+    # Track job processing in this worker
+    with _worker_lock:
+        _worker_state["job_count"] += len(job_batch)
+        current_job_count = _worker_state["job_count"]
+
+    logger.info(
+        f"[BATCH_WORKER] Processing batch of {len(job_batch)} jobs "
+        f"(total processed by this worker: {current_job_count})"
+    )
+
+    # Use cached modules from worker state
+    INES_class = _worker_state["INES"]
+    calculate_graph_density = _worker_state["calculate_graph_density"]
+
+    for job_data in job_batch:
+        try:
+            job_id = job_data["job_id"]
+            config = job_data["config"]
+            parameter_set_id = job_data["parameter_set_id"]
+
+            # Execute INES simulation using cached class
+            simulation = INES_class(config)
+
+            # Calculate graph density using cached function
+            graph_density = calculate_graph_density(simulation.graph)
+
+            # Store successful result
+            results.append(
+                {
+                    "job_id": job_id,
+                    "ines_results": simulation.results,
+                    "integrated_results": simulation.integrated_operator_placement_results,
+                    "config": config,
+                    "graph_density": graph_density,
+                    "ines_object": simulation,
+                    "success": True,
+                    "error_msg": None,
+                    "parameter_set_id": parameter_set_id,
+                }
+            )
+
+        except Exception as e:
+            error_message = (
+                f"Exception in job {job_data.get('job_id', 'unknown')}: {str(e)}"
+            )
+            logger.error(f"[BATCH_WORKER_ERROR] {error_message}")
+
+            results.append(
+                {
+                    "job_id": job_data.get("job_id", -1),
+                    "ines_results": None,
+                    "integrated_results": None,
+                    "config": job_data.get("config"),
+                    "graph_density": None,
+                    "success": False,
+                    "error_msg": error_message,
+                    "parameter_set_id": job_data.get("parameter_set_id", "unknown"),
+                }
+            )
+
+    batch_time = time.time() - batch_start_time
+    successful_count = sum(1 for r in results if r["success"])
+    failed_count = len(results) - successful_count
+
+    logger.info(
+        f"[BATCH_WORKER] Completed batch in {batch_time:.1f}s: "
+        f"{successful_count} successful, {failed_count} failed"
+    )
+
+    return results
 
 
 def run_simulation_worker(job_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -675,7 +1023,7 @@ def run_single_simulation(
     manager = OptimizedSimulationManager(
         enable_parallel=enable_parallel,
         max_workers=max_workers,
-        batch_size=1,  # Immediate writing for single simulations
+        batch_size=2,  # Small batches for single simulations
     )
 
     manager.run_simulations(jobs)
@@ -780,7 +1128,7 @@ def run_parameter_study(
     manager = OptimizedSimulationManager(
         enable_parallel=enable_parallel,
         max_workers=max_workers,
-        batch_size=10,  # Small batching for better progress tracking
+        batch_size=4,  # Optimized batching for parameter studies
     )
 
     manager.run_simulations(jobs)
