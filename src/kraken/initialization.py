@@ -17,10 +17,10 @@ logger = get_kraken_logger(__name__)
 
 
 def initialize_placement_state(
-    combination: List[Any],
-    proj_filter_dict: Dict[str, Any],
+    current_projections_dependencies: List[Any],
+    filter_by_projection: Dict[str, Any],
     no_filter: bool,
-    projection: Any,
+    current_projection: Any,
     graph: nx.Graph,
 ) -> Dict[str, Any]:
     """
@@ -37,13 +37,13 @@ def initialize_placement_state(
          projection's identity and its associated filters.
 
     Args:
-        combination (list):
+        current_projections_dependencies (list):
             List of event types (or tuples of event types) that the projection depends on.
-        proj_filter_dict (dict):
+        filter_by_projection (dict):
             Mapping of event-type combinations to their available filters.
         no_filter (bool):
             If True, ignore all filters; if False, apply maximal filters when available.
-        projection (str or object):
+        current_projection (str or object):
             Identifier or definition of the projection we are placing.
         graph (networkx.Graph):
             The network topology, where nodes represent processing locations and edges
@@ -62,7 +62,7 @@ def initialize_placement_state(
     """
     from allPairs import create_routing_dict
 
-    logger.debug(f"Initializing placement state for projection: {projection}")
+    logger.debug(f"Initializing placement state for projection: {current_projection}")
 
     # Create routing structures
     routing_dict = create_routing_dict(graph)
@@ -74,13 +74,13 @@ def initialize_placement_state(
     filters = []
     extended_combination = []
 
-    for proj in combination:
+    for proj in current_projections_dependencies:
         extended_combination.append(proj)
         if (
             len(proj) > 1
-            and len(getMaximalFilter(proj_filter_dict, proj, no_filter)) > 0
+            and len(getMaximalFilter(filter_by_projection, proj, no_filter)) > 0
         ):
-            max_filter = getMaximalFilter(proj_filter_dict, proj, no_filter)
+            max_filter = getMaximalFilter(filter_by_projection, proj, no_filter)
             filters.append((proj, max_filter))
             extended_combination.extend(max_filter)
             logger.debug(f"Added filter for projection {proj}: {max_filter}")
@@ -89,11 +89,11 @@ def initialize_placement_state(
     extended_combination = list(set(extended_combination))
 
     logger.debug(
-        f"Extended combination: {len(combination)} -> {len(extended_combination)} items"
+        f"Extended combination: {len(current_projections_dependencies)} -> {len(extended_combination)} items"
     )
 
     # Create projection object
-    my_projection = Projection(projection, {}, [], [], filters)
+    my_projection = Projection(current_projection, {}, [], [], filters)
 
     placement_state = {
         "routing_dict": routing_dict,

@@ -1039,6 +1039,7 @@ def run_parameter_study(
     node_event_ratio: float = 0.5,
     num_event_types: int = 6,
     event_skew: float = 2.0,
+    latency_threshold: float = None,
     mode: SimulationMode = SimulationMode.FULLY_DETERMINISTIC,
     enable_parallel: bool = False,
     max_workers: int = 1,
@@ -1058,6 +1059,7 @@ def run_parameter_study(
         node_event_ratio: Fixed node event ratio
         num_event_types: Fixed number of event types
         event_skew: Fixed event skew parameter
+        latency_treshold: Optional latency threshold to make kraken latency aware
         mode: Simulation mode
         enable_parallel: Whether to enable parallel processing
         max_workers: Maximum number of parallel workers
@@ -1096,6 +1098,7 @@ def run_parameter_study(
                         query_size=workload_size,
                         query_length=query_length,
                         mode=mode,
+                        latency_threshold=latency_threshold
                     )
 
                     # Generate multiple runs for this combination
@@ -1164,8 +1167,9 @@ def main() -> None:
         num_event_types=6,
         event_skew=2.0,
         mode=SimulationMode.RANDOM,
-        enable_parallel=True,
+        enable_parallel=False,
         max_workers=14,
+        latency_threshold=3.4
     )
 
 

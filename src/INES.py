@@ -44,6 +44,9 @@ class SimulationConfig:
     query_size: int = 3
     query_length: int = 5
 
+    # Latency Awareness
+    latency_threshold: float = None  # If None, latency is not considered
+
     # Simulation mode
     mode: SimulationMode = SimulationMode.RANDOM
 
@@ -477,6 +480,7 @@ class INES():
         self.max_parents = config.max_parents
         self.query_size = config.query_size
         self.query_length = config.query_length
+        self.latency_threshold = config.latency_threshold
         # Initialize result schema for experiments
         self.schema = ["ID", "TransmissionRatio", "Transmission", "INEvTransmission", "FilterUsed", "Nodes",
                        "EventSkew", "EventNodeRatio", "WorkloadSize", "NumberProjections", "MinimalSelectivity",
@@ -537,7 +541,7 @@ class INES():
             self)
         self.h_projFilterDict = populate_projFilterDict(self)
         self.h_projFilterDict = removeFilters(self)
-        self.h_mycombi, self.h_combiDict, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(
+        self.h_mycombi, self.h_combiDict, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData, self.h_primitive_events = generate_combigen(
             self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
 

@@ -193,7 +193,7 @@ class INES():
         self.h_projlist,self.h_projrates,self.h_projsPerQuery,self.h_sharedProjectionsDict,self.h_sharedProjectionsList = generate_all_projections(self)
         self.h_projFilterDict = populate_projFilterDict(self)
         self.h_projFilterDict= removeFilters(self)
-        self.h_mycombi, self.h_combiDict,self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(self)
+        self.h_mycombi, self.h_combiDict,self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData, self.h_primitive_events = generate_combigen(self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
         self.eval_plan,self.central_eval_plan,self.experiment_result,self.results = calculate_operatorPlacement(self,'test',self.max_parents)
         self.plan=generate_eval_plan(self.network,self.selectivities,self.eval_plan,self.central_eval_plan,self.query_workload)

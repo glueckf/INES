@@ -162,7 +162,7 @@ class INES():
         self.function_times["removeFilters"] = time.time() - start_time
 
         start_time = time.time()
-        self.h_mycombi, self.h_combiDict, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData = generate_combigen(self)
+        self.h_mycombi, self.h_combiDict, self.h_criticalMSTypes_criticalMSProjs, self.h_combiExperimentData, self.h_primitive_events = generate_combigen(self)
         self.function_times["generate_combigen"] = time.time() - start_time
 
         start_time = time.time()

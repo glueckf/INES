@@ -7,7 +7,9 @@ from helper.placement_aug import (
 )
 from helper.processCombination_aug import compute_dependencies, getSharedMSinput
 import time
-from .core import compute_kraken_for_projection
+
+from .backtracking_kraken_core import run_backtracking_kraken_with_latency
+from .greedy_kraken_core import run_greedy_kraken
 from .global_placement_tracker import (
     get_global_placement_tracker,
     reset_global_placement_tracker,
@@ -15,6 +17,8 @@ from .global_placement_tracker import (
 from .logging import get_kraken_logger
 from .state import get_kraken_timing_tracker, reset_kraken_timing_tracker
 from typing import Dict, Any
+
+from allPairs import create_routing_dict
 
 logger = get_kraken_logger(__name__)
 
@@ -179,33 +183,42 @@ def format_results_for_comparison(
 
 
 def calculate_integrated_approach(self, file_path: str, max_parents: int):
-    workload = self.query_workload
-    projFilterDict = self.h_projFilterDict
-    IndexEventNodes = self.h_IndexEventNodes
-    allPairs = self.allPairs
-    rates = self.h_rates_data
-    network = self.network
-    mycombi = self.h_mycombi
-    projrates = self.h_projrates
-    EventNodes = self.h_eventNodes
-    G = self.graph
-    selectivities = self.selectivities
-    mode = self.config.mode
-    EventNodes = self.h_eventNodes
-    IndexEventNodes = self.h_IndexEventNodes
+
+
+    query_workload = self.query_workload
+    filter_by_projection = self.h_projFilterDict
+    index_event_nodes = self.h_IndexEventNodes
+    pairwise_distance_matrix = self.allPairs
+    global_event_rates = self.h_rates_data
+    network_data_nodes = self.network
+    dependencies_per_projection = self.h_mycombi
+    projection_rates_selectivity = self.h_projrates
+    event_distribution_matrix = self.h_eventNodes
+    graph = self.graph
+    pairwise_selectivity = self.selectivities
+    simulation_mode = self.config.mode
+    event_distribution_matrix = self.h_eventNodes
+    index_event_nodes = self.h_IndexEventNodes
     unfolded = self.h_mycombi
     criticalMSTypes = self.h_criticalMSTypes
     network_data = self.h_network_data
     Filters = []
+    latency_threshold = self.latency_threshold
+    primitive_events_per_projection = self.h_primitive_events
 
-    noFilter = 0  # NO FILTER
+    no_filter = 0  # NO FILTER
 
     # Access the arguments
     filename = file_path
     number_parents = max_parents
 
     central_computation_result = NEWcomputeCentralCosts(
-        workload, IndexEventNodes, allPairs, rates, EventNodes, self.graph
+        query_workload,
+        index_event_nodes,
+        pairwise_distance_matrix,
+        global_event_rates,
+        event_distribution_matrix,
+        self.graph,
     )
     (
         central_computation_cost,
@@ -213,10 +226,17 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         central_computation_longest_path,
         central_computation_routing_dict,
     ) = central_computation_result
-    centralHopLatency = max(allPairs[central_computation_node])
-    numberHops = sum(allPairs[central_computation_node])
-    MSPlacements = {}
+    all_push_central_latency = max(pairwise_distance_matrix[central_computation_node])
+    number_of_hops = sum(pairwise_distance_matrix[central_computation_node])
+    ms_placements = {}
     start_time = time.time()
+
+
+    # Calculate latency threshold for this run
+    if latency_threshold is not None:
+        latency_threshold = int(all_push_central_latency * latency_threshold)
+
+    routing_dict = create_routing_dict(graph)
 
     # Initialize timing tracker for detailed metrics
     reset_kraken_timing_tracker()
@@ -227,98 +247,135 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     reset_global_placement_tracker()  # Start fresh for each placement calculation
     global_placement_tracker = get_global_placement_tracker()
 
-    # Initialize global event placement tracker with network data
+    # Initialize global event placement tracker with network_data_nodes data
     from .node_tracker import initialize_global_event_tracker
 
     initialize_global_event_tracker(h_network_data=self.h_network_data)
 
-    hopLatency = {}
+    hop_latency = {}
 
-    sharedDict = getSharedMSinput(self, unfolded, projFilterDict)
+    shared_dict = getSharedMSinput(self, unfolded, filter_by_projection)
     dependencies = compute_dependencies(self, unfolded, criticalMSTypes)
-    processingOrder = sorted(dependencies.keys(), key=lambda x: dependencies[x])
+    processing_order = sorted(dependencies.keys(), key=lambda x: dependencies[x])
     costs = 0
 
     integrated_placement_decision_by_projection = {}
 
     # TODO: This flag currently leaves out MS placement for the integrated approach, as it is not yet implemented
     #  This should be removed and the line in 184 should be commented in once MS placement is implemented
-    partType = False
+    part_type = False
 
-    for projection in (
-        processingOrder
-    ):  # parallelize computation for all projections at the same level
-        if set(unfolded[projection]) == set(
-            projection.leafs()
-        ):  # initialize hop latency with maximum of children
-            hopLatency[projection] = 0
-        else:
-            hopLatency[projection] = max(
-                [hopLatency[x] for x in unfolded[projection] if x in hopLatency.keys()]
-            )
-
-        # TODO: This should be commented in, once MS placement is implemented for the integrated approach
-        # partType,_,_ = returnPartitioning(self, projection, unfolded[projection], projrates ,criticalMSTypes)
-
-        if partType:
-            MSPlacements[projection] = partType
-
-            result = computeMSplacementCosts(
-                self,
-                projection,
-                unfolded[projection],
-                partType,
-                sharedDict,
-                noFilter,
-                G,
-            )
-
-            additional = result[0]
-
-            costs += additional
-
-            hopLatency[projection] += result[1]
-
-            Filters += result[4]
-
-            if projection.get_original(workload) in workload and partType[0] in list(
-                map(
-                    lambda x: str(x),
-                    projection.get_original(workload).kleene_components(),
+    if latency_threshold is None:
+        for current_projection in (
+            processing_order
+        ):  # parallelize computation for all projections at the same level
+            if set(unfolded[current_projection]) == set(
+                current_projection.leafs()
+            ):  # initialize hop latency with maximum of children
+                hop_latency[current_projection] = 0
+            else:
+                hop_latency[current_projection] = max(
+                    [
+                        hop_latency[x]
+                        for x in unfolded[current_projection]
+                        if x in hop_latency.keys()
+                    ]
                 )
-            ):
-                result = ComputeSingleSinkPlacement(
-                    projection.get_original(workload), [projection], noFilter
+
+            # TODO: This should be commented in, once MS placement is implemented for the integrated approach
+            # part_type,_,_ = returnPartitioning(self, current_projection, unfolded[current_projection], projection_rates_selectivity ,criticalMSTypes)
+
+            if part_type:
+                ms_placements[current_projection] = part_type
+
+                result = computeMSplacementCosts(
+                    self,
+                    current_projection,
+                    unfolded[current_projection],
+                    part_type,
+                    shared_dict,
+                    no_filter,
+                    graph,
                 )
+
                 additional = result[0]
+
                 costs += additional
 
-        else:
-            integrated_optimization_result_for_given_projection = (
-                compute_kraken_for_projection(
-                    workload,
-                    selectivities,
-                    mycombi,
-                    mode,
-                    projection,
-                    unfolded[projection],
-                    noFilter,
-                    projFilterDict,
-                    EventNodes,
-                    IndexEventNodes,
-                    network_data,
-                    allPairs,
-                    mycombi,
-                    rates,
-                    projrates,
-                    G,
-                    network,
-                )
-            )
+                hop_latency[current_projection] += result[1]
 
-            integrated_placement_decision_by_projection[projection] = (
-                integrated_optimization_result_for_given_projection
+                Filters += result[4]
+
+                if current_projection.get_original(
+                    query_workload
+                ) in query_workload and part_type[0] in list(
+                    map(
+                        lambda x: str(x),
+                        current_projection.get_original(
+                            query_workload
+                        ).kleene_components(),
+                    )
+                ):
+                    result = ComputeSingleSinkPlacement(
+                        current_projection.get_original(query_workload),
+                        [current_projection],
+                        no_filter,
+                    )
+                    additional = result[0]
+                    costs += additional
+
+            else:
+                integrated_optimization_result_for_given_projection = run_greedy_kraken(
+                    query_workload=query_workload,
+                    pairwise_selectivity=pairwise_selectivity,
+                    dependencies_per_projection=dependencies_per_projection,
+                    simulation_mode=simulation_mode,
+                    current_projection=current_projection,
+                    current_projections_dependencies=unfolded[current_projection],
+                    no_filter=no_filter,
+                    filter_by_projection=filter_by_projection,
+                    event_distribution_matrix=event_distribution_matrix,
+                    index_event_nodes=index_event_nodes,
+                    network_data=network_data,
+                    pairwise_distance_matrix=pairwise_distance_matrix,
+                    global_event_rates=global_event_rates,
+                    projection_rates_selectivity=projection_rates_selectivity,
+                    graph=graph,
+                    network_data_nodes=network_data_nodes,
+                )
+
+                integrated_placement_decision_by_projection[current_projection] = (
+                    integrated_optimization_result_for_given_projection
+                )
+    else:
+        # Start latency aware kraken
+        logger.info("Starting latency-aware integrated placement...")
+        integrated_placement_decision_by_projection = (
+            run_backtracking_kraken_with_latency(
+                query_workload,
+                pairwise_selectivity,
+                dependencies_per_projection,
+                simulation_mode,
+                processing_order,
+                unfolded,
+                no_filter,
+                filter_by_projection,
+                event_distribution_matrix,
+                index_event_nodes,
+                network_data,
+                pairwise_distance_matrix,
+                global_event_rates,
+                projection_rates_selectivity,
+                graph,
+                network_data_nodes,
+                latency_threshold,
+                part_type,
+                primitive_events_per_projection,
+                routing_dict,
+                self,
             )
+        )
+        pass
 
     integrated_placement_decision_by_projection = finalize_placement_results(
         self=self,
@@ -329,7 +386,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     placement_metrics = _analyze_placement_metrics(
         placement_decisions=integrated_placement_decision_by_projection,
         query_workload=self.query_workload,
-        processing_order=processingOrder,
+        processing_order=processing_order,
         unfolded_projections=unfolded,
     )
 
@@ -377,22 +434,24 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         ]
     )
 
-    # Calculate network topology metrics
+    # Calculate network_data_nodes topology metrics
     try:
         import networkx as nx
 
-        # Calculate network metrics
-        network_clustering_coefficient = nx.average_clustering(G)
+        # Calculate network_data_nodes metrics
+        network_clustering_coefficient = nx.average_clustering(graph)
         avg_node_degree = (
-            sum(dict(G.degree()).values()) / len(G.nodes()) if len(G.nodes()) > 0 else 0
+            sum(dict(graph.degree()).values()) / len(graph.nodes())
+            if len(graph.nodes()) > 0
+            else 0
         )
 
         # Network centralization (based on degree centrality)
-        degree_centralities = list(nx.degree_centrality(G).values())
-        if degree_centralities and len(G.nodes()) > 2:
+        degree_centralities = list(nx.degree_centrality(graph).values())
+        if degree_centralities and len(graph.nodes()) > 2:
             max_centrality = max(degree_centralities)
             centrality_sum = sum(max_centrality - c for c in degree_centralities)
-            max_possible_sum = (len(G.nodes()) - 1) * (len(G.nodes()) - 2)
+            max_possible_sum = (len(graph.nodes()) - 1) * (len(graph.nodes()) - 2)
             network_centralization = (
                 centrality_sum / max_possible_sum if max_possible_sum > 0 else 0
             )
@@ -400,29 +459,32 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
             network_centralization = 0.0
 
     except Exception as e:
-        logger.warning(f"Failed to calculate network topology metrics: {e}")
+        logger.warning(f"Failed to calculate network_data_nodes topology metrics: {e}")
         network_clustering_coefficient = 0.0
         avg_node_degree = 0.0
         network_centralization = 0.0
 
     # Calculate query complexity metrics
     try:
-        # Query complexity score based on workload size, dependency depth, and projections count
+        # Query complexity score based on query_workload size, dependency depth, and projections count
         total_projections = len(dependencies)
         dependency_depths = list(dependencies.values())
         max_dependency_length = max(dependency_depths) if dependency_depths else 0
 
         # Query complexity score (normalized metric combining multiple factors)
         query_complexity_score = (
-            len(workload) * 0.3  # Workload size influence
+            len(query_workload) * 0.3  # Workload size influence
             + total_projections * 0.3  # Total projections influence
             + max_dependency_length * 0.4  # Dependency complexity influence
         )
 
-        # Highest query output rate (maximum projection rate in processing order)
+        # Highest query output rate (maximum current_projection rate in processing order)
         highest_query_output_rate = (
-            max((projrates[proj][1] for proj in processingOrder), default=0.0)
-            if projrates
+            max(
+                (projection_rates_selectivity[proj][1] for proj in processing_order),
+                default=0.0,
+            )
+            if projection_rates_selectivity
             else 0.0
         )
 
@@ -452,9 +514,9 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
         "push_pull_plan_cost_sum": costs_for_evaluation_total_workload,
         "push_pull_plan_latency": max_latency,
         "central_cost": central_computation_cost,
-        "central_hop_latency": centralHopLatency,
-        "number_hops": numberHops,
-        "workload_size": len(workload),
+        "central_hop_latency": all_push_central_latency,
+        "number_hops": number_of_hops,
+        "workload_size": len(query_workload),
         "placements_at_cloud": placements_at_cloud,
         "network_clustering_coefficient": network_clustering_coefficient,
         "network_centralization": network_centralization,
@@ -469,7 +531,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
 
     # Format results for comparison
     formatted_results = format_results_for_comparison(
-        integrated_placement_decision_by_projection, execution_info, workload
+        integrated_placement_decision_by_projection, execution_info, query_workload
     )
 
     result = {

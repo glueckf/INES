@@ -463,7 +463,7 @@ def unfold_combi(self, query, combination): #unfolds a combination, however in t
     # print(f"[UNFOLD_COMBI] Final unfoldedDict: {unfoldedDict}")
     return unfoldedDict
 
-def unfold_combiRec(self, combination, unfoldedDict): 
+def unfold_combiRec(self, combination, unfoldedDict):
     # print(f"[UNFOLD_REC] Processing combination: {combination}")
     combiDict = self.h_combiDict
     for proj in combination:
@@ -483,7 +483,56 @@ def unfold_combiRec(self, combination, unfoldedDict):
             unfoldedDict.update(unfold_combiRec(self, mycombination, unfoldedDict))
         # else:
             # print(f"[UNFOLD_REC] Primitive event (len <= 1): {proj}")
-    return unfoldedDict 
+    return unfoldedDict
+
+
+def extract_primitive_events_for_projection(projection):
+    """Extract all primitive events for a given projection, flattening complex subqueries.
+
+    Args:
+        projection: A projection object with leafs() method that returns primitive events
+
+    Returns:
+        List of primitive event strings
+    """
+    if hasattr(projection, 'leafs'):
+        return projection.leafs()
+    else:
+        # Handle string representations or simple event types
+        return [str(projection)]
+
+
+def generate_primitive_events_dict(mycombi):
+    """Generate a dictionary mapping projections to their primitive events.
+
+    This function takes the combination dictionary and creates a new dictionary
+    where each projection maps to a list of its primitive events, with all
+    complex subqueries flattened to their primitive components.
+
+    Args:
+        mycombi: Dictionary mapping projections to their combinations
+
+    Returns:
+        Dictionary mapping projection strings to lists of primitive event strings
+    """
+    primitive_events_dict = {}
+
+    for projection, combination in mycombi.items():
+        # Get primitive events from the projection itself
+        primitive_events = []
+
+        # Use the projection's leafs() method to get all primitive events
+        if hasattr(projection, 'leafs'):
+            primitive_events = projection.leafs()
+        else:
+            # Fallback for simple projections
+            primitive_events = [str(projection)]
+
+        # Convert to strings and store in dictionary with projection string as key
+        projection_str = str(projection)
+        primitive_events_dict[projection_str] = [str(event) for event in primitive_events]
+
+    return primitive_events_dict 
 
  
 
@@ -569,9 +618,12 @@ def generate_combigen(self):
     projlist = self.h_projlist
      
    # getExpensiveProjs(criticalMSTypes)
-   # export number of queries, computation time combination, maximal query length, TODO: maximal depth combination tree, portion of rates saved by multi-sink eventtypes
+   # export number of queries, computation time combination, maximal query length,
+    # TODO: maximal depth combination tree, portion of rates saved by multi-sink eventtypes
     combiExperimentData = [len(wl), combigenTime, max(len(x) for x in wl), len(projlist)] 
 
-    
-    return mycombi,combiDict,[criticalMSTypes, criticalMSProjs],combiExperimentData
+    # Generate primitive events dictionary
+    primitive_events = generate_primitive_events_dict(mycombi)
+
+    return mycombi,combiDict,[criticalMSTypes, criticalMSProjs],combiExperimentData,primitive_events
         

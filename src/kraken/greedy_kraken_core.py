@@ -24,24 +24,23 @@ from .state import (
 logger = get_kraken_logger(__name__)
 
 
-def compute_kraken_for_projection(
+def run_greedy_kraken(
     query_workload: list,
-    selectivities: dict,
-    h_mycombi: dict,
-    mode,
-    projection,
-    combination: list,
+    pairwise_selectivity: dict,
+    dependencies_per_projection: dict,
+    simulation_mode,
+    current_projection,
+    current_projections_dependencies: list,
     no_filter: int,
-    proj_filter_dict: dict,
-    event_nodes: list,
+    filter_by_projection: dict,
+    event_distribution_matrix: list,
     index_event_nodes: dict,
     network_data: dict,
-    all_pairs: list,
-    mycombi: dict,
-    rates: dict,
-    projrates: dict,
+    pairwise_distance_matrix: list,
+    global_event_rates: dict,
+    projection_rates_selectivity: dict,
     graph: networkx.Graph,
-    network: list,
+    network_data_nodes: list,
     sinks: list[int] = [0],
 ) -> Any:
     """Compute optimal joint operator placement and push-pull communication strategy.
@@ -58,28 +57,32 @@ def compute_kraken_for_projection(
     transmission costs, latency, and resource constraints.
 
     Args:
-        projection: The current projection to be placed. Projections are processed
+        query_workload (list): List of projections/queries to be placed in processing order.
+        pairwise_selectivity (dict): Dictionary of pairwise selectivities between primitive events.
+        dependencies_per_projection (dict): Mapping of each projection to its subprojections.
+        simulation_mode (bool): Flag indicating whether the function is running in simulation mode.
+        current_projection: The current projection to be placed. Projections are processed
             sequentially according to the processing order.
-        combination (list): List of subprojections for the current projection.
+        current_projections_dependencies (list): List of subprojections for the current projection.
             Elements can be primitive events (e.g., 'A') or subqueries (e.g., 'AND(A, B)').
         no_filter (int): Binary flag indicating filter presence (0: no filter, 1: has filter).
-        proj_filter_dict (dict): Dictionary containing subprojections, their filters,
+        filter_by_projection (dict): Dictionary containing subprojections, their filters,
             and output rates before/after filtering.
-        event_nodes (list): Matrix where rows represent Event Type Bundles (ETBs),
+        event_distribution_matrix (list): Matrix where rows represent Event Type Bundles (ETBs),
             columns represent nodes, and values indicate ETB emission (1 if ETB is
             emitted by node, 0 otherwise). Row indices map to index_event_nodes.
         index_event_nodes (dict): Mapping of primitive events to their ETB indices
             in the event_nodes matrix.
         network_data (dict): Node-to-primitive-events mapping specifying which
             primitive events are emitted by each node (e.g., {0: [], 1: ['A', 'B'], 2: ['C']}).
-        all_pairs (list): Precomputed shortest path distances between all node pairs.
+        pairwise_distance_matrix (list): Precomputed shortest path distances between all node pairs.
             Note: This disregards edge unidirectionality.
         mycombi (dict): Dictionary containing all combinations for each projection
             in processing order.
-        rates (dict): Global output rates for each primitive event.
-        projrates (dict): Output rates and selectivities as tuples for each projection.
+        global_event_rates (dict): Global output rates for each primitive event.
+        projection_rates_selectivity (dict): Output rates and selectivities as tuples for each projection.
         graph (networkx.Graph): NetworkX graph representation of the network topology.
-        network (list): List of all node objects in the network.
+        network_data_nodes (list): List of all node objects in the network.
         sinks (list[int], optional): List of sink nodes in the network.
             Defaults to [0] (cloud as single sink).
 
@@ -104,38 +107,40 @@ def compute_kraken_for_projection(
 
         # Register this parent projection for FIFO conflict resolution
         global_tracker = get_global_placement_tracker()
-        global_tracker.register_parent_processing(projection)
+        global_tracker.register_parent_processing(current_projection)
 
         # Check if the current projection has any subqueries that are already placed
         # This influences the placement decisions, since we need to respect already placed subqueries.
         has_placed_subqueries = check_if_projection_has_placed_subqueries(
-            projection=projection,
-            mycombi=mycombi,
+            current_projection=current_projection,
+            dependencies_per_projection=dependencies_per_projection,
             global_tracker=global_tracker,
         )
 
         # Placement initialization and state setup.
         placement_state = initialize_placement_state(
-            combination=combination,
-            proj_filter_dict=proj_filter_dict,
+            current_projections_dependencies=current_projections_dependencies,
+            filter_by_projection=filter_by_projection,
             no_filter=no_filter,
-            projection=projection,
+            current_projection=current_projection,
             graph=graph,
         )
 
         # Initialize the placement_decision_tracker for the current projection
         # This tracker will hold all placement decisions evaluated for the projection
         # and help in selecting the best one at the end.
-        placement_decision_tracker = PlacementDecisionTracker(projection=projection)
+        placement_decision_tracker = PlacementDecisionTracker(
+            current_projection=current_projection
+        )
 
         # Get all possible_placement_nodes for the current projection
         # This returns all nodes where all the projections ETBs are available
         possible_placement_nodes = get_all_possible_placement_nodes(
-            projection=projection,
+            current_projection=current_projection,
             placement_state=placement_state,
             network_data=network_data,
             index_event_nodes=index_event_nodes,
-            event_nodes=event_nodes,
+            event_distribution_matrix=event_distribution_matrix,
         )
 
         # Go through all possible placement nodes and calculate the costs
@@ -143,6 +148,7 @@ def compute_kraken_for_projection(
         for node in possible_placement_nodes:
             # Track that we're evaluating a placement option
             from .state import get_kraken_timing_tracker
+
             timing_tracker = get_kraken_timing_tracker()
             timing_tracker.increment_placement_evaluations()
 
@@ -151,10 +157,10 @@ def compute_kraken_for_projection(
             if has_placed_subqueries:
                 optimized_subprojections = (
                     global_tracker.optimize_subprojection_placement(
-                        parent_projection=projection,
+                        parent_projection=current_projection,
                         parent_node=node,
-                        shortest_path_distances=all_pairs,
-                        projection_rates=projrates,
+                        pairwise_distance_matrix=pairwise_distance_matrix,
+                        projection_rates_selectivity=projection_rates_selectivity,
                     )
                 )
 
@@ -165,16 +171,16 @@ def compute_kraken_for_projection(
             # is placed on a non sink node (not the cloud)
             results = calculate_costs(
                 placement_node=node,
-                projection=projection,
+                current_projection=current_projection,
                 query_workload=query_workload,
-                network=network,
-                selectivities=selectivities,
-                combination_dict=h_mycombi,
-                rates=rates,
-                projection_rates=projrates,
+                network_data_nodes=network_data_nodes,
+                pairwise_selectivities=pairwise_selectivity,
+                dependencies_per_projection=dependencies_per_projection,
+                global_event_rates=global_event_rates,
+                projection_rates_selectivity=projection_rates_selectivity,
                 index_event_nodes=index_event_nodes,
-                mode=mode,
-                shortest_path_distances=all_pairs,
+                simulation_mode=simulation_mode,
+                pairwise_distance_matrix=pairwise_distance_matrix,
                 sink_nodes=sinks,
                 has_placed_subqueries=has_placed_subqueries,
             )
@@ -183,6 +189,7 @@ def compute_kraken_for_projection(
             (
                 all_push_costs,
                 push_pull_costs,
+                all_push_latency,
                 latency,
                 computing_time,
                 transmission_ratio,
@@ -194,9 +201,9 @@ def compute_kraken_for_projection(
             # the ressource requirements making nodes that would otherwise be infeasible feasible
             has_enough_resources = check_resources(
                 node=node,
-                projection=projection,
-                network=network,
-                combination=combination,
+                current_projection=current_projection,
+                network_data_nodes=network_data_nodes,
+                current_projections_dependencies=current_projections_dependencies,
             )
 
             # For this node and this projection, given the costs and the ressource availability
@@ -272,7 +279,7 @@ def compute_kraken_for_projection(
             best_decision.costs = base_costs
 
             logger.debug(
-                f"Selected placement for {projection}: Node {best_decision.node} "
+                f"Selected placement for {current_projection}: Node {best_decision.node} "
                 f"(base cost: {base_costs:.2f}, heuristic adjustment: {heuristic_adjustment:.2f})"
             )
 
@@ -296,7 +303,7 @@ def compute_kraken_for_projection(
                     global_tracker.lock_subprojection_placement(subquery)
 
                     logger.info(
-                        f"Re-optimized subprojection {subquery} for parent {projection}: "
+                        f"Re-optimized subprojection {subquery} for parent {current_projection}: "
                         f"moved to node {optimization['placement_node']} "
                         f"(placement cost: {optimization['optimized_decision'].costs:.2f})"
                     )
@@ -305,14 +312,14 @@ def compute_kraken_for_projection(
                     # Just lock it to prevent future changes
                     global_tracker.lock_subprojection_placement(subquery)
                     logger.debug(
-                        f"Locked subprojection {subquery} for parent {projection} "
+                        f"Locked subprojection {subquery} for parent {current_projection} "
                         f"(no placement change needed)"
                     )
 
         update_tracker(
             best_decision=best_decision,
             placement_decision_tracker=placement_decision_tracker,
-            projection=projection,
+            projection=current_projection,
         )
 
         # Finally we return the best decision for this projection

@@ -168,14 +168,14 @@ class PlacementDecisionTracker:
     for analyzing and selecting the best placement option.
     """
 
-    def __init__(self, projection):
+    def __init__(self, current_projection):
         """
         Initialize the decision tracker.
 
         Args:
-            projection: The projection object being tracked
+            current_projection: The projection object being tracked
         """
-        self.projection = projection
+        self.projection = current_projection
         self.decisions: List[PlacementDecision] = []
         self.best_decision: Optional[PlacementDecision] = None
 
@@ -235,14 +235,14 @@ class PlacementDecisionTracker:
 
 
 def check_if_projection_has_placed_subqueries(
-    projection, mycombi, global_tracker
+    current_projection, dependencies_per_projection, global_tracker
 ) -> bool:
     """
     Check if a projection has subqueries that have already been placed.
 
     Args:
-        projection: The projection to check
-        mycombi: Combination dictionary mapping projections to subqueries
+        current_projection: The projection to check
+        dependencies_per_projection: Combination dictionary mapping projections to subqueries
         global_tracker: Global placement tracker instance
 
     Returns:
@@ -252,11 +252,11 @@ def check_if_projection_has_placed_subqueries(
         ValueError: If projection not found in mycombi or invalid structure
     """
     try:
-        subqueries = mycombi[projection]
+        subqueries = dependencies_per_projection[current_projection]
     except KeyError as e:
         raise ValueError("Projection not found in mycombi or invalid structure") from e
 
-    global_tracker.register_query_hierarchy(projection, subqueries)
+    global_tracker.register_query_hierarchy(current_projection, subqueries)
 
     placed = global_tracker.placed_subqueries_set()  # O(1) membership
     return any((hasattr(sq, "children") and (sq in placed)) for sq in subqueries)
@@ -364,7 +364,13 @@ class KrakenTimingTracker:
                 f"evaluations={self.placement_evaluations_count}"
             )
 
-            return total_time, placement_only_time, self.total_prepp_time, self.prepp_call_count, self.placement_evaluations_count
+            return (
+                total_time,
+                placement_only_time,
+                self.total_prepp_time,
+                self.prepp_call_count,
+                self.placement_evaluations_count,
+            )
 
 
 # Global timing tracker instance

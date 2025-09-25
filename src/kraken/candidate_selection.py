@@ -92,7 +92,10 @@ def check_possible_placement_nodes_for_input(
 
 
 def check_resources(
-    node: int, projection: Any, network: List[Any], combination: List[Any]
+    node: int,
+    current_projection: Any,
+    network_data_nodes: List[Any],
+    current_projections_dependencies: List[Any],
 ) -> bool:
     """
     Function to check if a node has enough resources to place a projection.
@@ -100,9 +103,9 @@ def check_resources(
 
     Args:
         node: Node ID to check resources for
-        projection: Projection object with computing_requirements
-        network: List of network nodes with computational_power and memory attributes
-        combination: List of projections in the combination (unused for now)
+        current_projection: Projection object with computing_requirements
+        network_data_nodes: List of network nodes with computational_power and memory attributes
+        current_projections_dependencies: List of projections in the combination (unused for now)
 
     Returns:
         bool: True if node has sufficient resources, False otherwise
@@ -115,31 +118,33 @@ def check_resources(
     logger.debug(f"Checking resources for node {node}")
 
     # Get the node from network
-    if node >= len(network) or node < 0:
-        logger.warning(f"Node {node} is out of range (network size: {len(network)})")
+    if node >= len(network_data_nodes) or node < 0:
+        logger.warning(
+            f"Node {node} is out of range (network size: {len(network_data_nodes)})"
+        )
         return False
 
-    target_node = network[node]
+    target_node = network_data_nodes[node]
 
     try:
         # Check if projection has computing requirements attribute
-        if not hasattr(projection, "computing_requirements"):
+        if not hasattr(current_projection, "computing_requirements"):
             logger.warning(
-                f"Projection {projection} has no computing_requirements attribute"
+                f"Projection {current_projection} has no computing_requirements attribute"
             )
             return False
 
         # Check computational power for all-push scenario
-        if target_node.computational_power < projection.computing_requirements:
+        if target_node.computational_power < current_projection.computing_requirements:
             logger.debug(
-                f"Node {node} insufficient CPU: {target_node.computational_power} < {projection.computing_requirements}"
+                f"Node {node} insufficient CPU: {target_node.computational_power} < {current_projection.computing_requirements}"
             )
             return False
 
         # Check memory for push-pull scenario (needs 2x projection requirements)
-        if target_node.memory < (projection.computing_requirements):
+        if target_node.memory < current_projection.computing_requirements:
             logger.debug(
-                f"Node {node} insufficient memory: {target_node.memory} < {2 * projection.computing_requirements}"
+                f"Node {node} insufficient memory: {target_node.memory} < {2 * current_projection.computing_requirements}"
             )
             return False
 
@@ -154,7 +159,11 @@ def check_resources(
 
 
 def get_all_possible_placement_nodes(
-    projection, placement_state, network_data, index_event_nodes, event_nodes
+    current_projection,
+    placement_state,
+    network_data,
+    index_event_nodes,
+    event_distribution_matrix,
 ) -> List[int]:
     """
     Get all possible placement nodes for a projection.
@@ -163,24 +172,26 @@ def get_all_possible_placement_nodes(
     by checking common ancestor requirements and applies deterministic validation.
 
     Args:
-        projection: The projection being placed
+        current_projection: The projection being placed
         placement_state: Placement state containing extended_combination and routing_dict
         network_data: Dictionary mapping nodes to event types they produce
         index_event_nodes: Event node index mapping
-        event_nodes: Event-to-node matrix
+        event_distribution_matrix: Event-to-node matrix
 
     Returns:
         List of validated node IDs suitable for placement
     """
-    logger.debug(f"Finding possible placement nodes for projection {projection}")
+    logger.debug(
+        f"Finding possible placement nodes for projection {current_projection}"
+    )
 
     # Find possible placement nodes
     possible_placement_nodes = check_possible_placement_nodes_for_input(
-        projection=projection,
+        projection=current_projection,
         combination=placement_state["extended_combination"],
         network_data=network_data,
         index_event_nodes=index_event_nodes,
-        event_nodes=event_nodes,
+        event_nodes=event_distribution_matrix,
         routing_dict=placement_state["routing_dict"],
     )
 

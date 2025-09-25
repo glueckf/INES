@@ -24,7 +24,9 @@ class GlobalPlacementTracker:
         self._placement_history: Dict[Any, PlacementDecisionTracker] = {}
         self._projection_mappings: Dict[Any, str] = {}
         self._query_hierarchy: Dict[Any, List[Any]] = {}
-        self._subquery_to_parents: Dict[Any, set] = {}  # Reverse mapping for O(1) lookup
+        self._subquery_to_parents: Dict[
+            Any, set
+        ] = {}  # Reverse mapping for O(1) lookup
         self._locked_placements: Dict[Any, bool] = {}  # Track locked subprojections
         self._parent_processing_order: List[
             Any
@@ -279,7 +281,9 @@ class GlobalPlacementTracker:
             return False
 
         # Find all parents that use this subprojection using O(1) lookup
-        parents_using_subprojection = list(self._subquery_to_parents.get(subprojection, set()))
+        parents_using_subprojection = list(
+            self._subquery_to_parents.get(subprojection, set())
+        )
 
         if not parents_using_subprojection:
             return True
@@ -347,8 +351,8 @@ class GlobalPlacementTracker:
         self,
         parent_projection: Any,
         parent_node: int,
-        shortest_path_distances: list,
-        projection_rates: Dict[Any, tuple],
+        pairwise_distance_matrix: list,
+        projection_rates_selectivity: Dict[Any, tuple],
     ) -> Dict[Any, Dict[str, Any]]:
         """
         Optimize subprojection placements for a parent projection at a specific node.
@@ -356,8 +360,8 @@ class GlobalPlacementTracker:
         Args:
             parent_projection: The parent projection
             parent_node: The node where parent will be placed
-            shortest_path_distances: Distance matrix
-            projection_rates: Output rates for projections
+            pairwise_distance_matrix: Distance matrix
+            projection_rates_selectivity: Output rates for projections
 
         Returns:
             Dictionary mapping subprojections to their optimal placement details
@@ -375,8 +379,10 @@ class GlobalPlacementTracker:
                 # Use existing placement - calculate transfer cost for parent costing
                 best_placement = self.get_best_placement(subquery)
                 if best_placement:
-                    subprojection_rate = projection_rates.get(subquery, (1.0, 1.0))[1]
-                    transfer_distance = shortest_path_distances[best_placement.node][
+                    subprojection_rate = projection_rates_selectivity.get(
+                        subquery, (1.0, 1.0)
+                    )[1]
+                    transfer_distance = pairwise_distance_matrix[best_placement.node][
                         parent_node
                     ]
                     transfer_cost = transfer_distance * subprojection_rate
@@ -394,7 +400,10 @@ class GlobalPlacementTracker:
 
             # Get alternative placements considering parent context
             alternatives = self.get_alternative_placements(
-                subquery, parent_node, shortest_path_distances, projection_rates
+                subquery,
+                parent_node,
+                pairwise_distance_matrix,
+                projection_rates_selectivity,
             )
 
             if alternatives:

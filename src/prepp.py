@@ -1008,6 +1008,7 @@ def generate_prePP(
         # TODO: Fix costs! Currently it calculates all-push-costs for every singly node making the costs way to high,
         #  since pushing all events to node 0 already includes pushing events through an intermediate node in the network,
         #  so we do not need to count the separate costs of pushing events to the intermediate node into the all push costs
+        central_latency = 0
         for node in node_prim_events_dict:
             "Here we are in our Sinks"
             for prim_event in node_prim_events_dict[node]:
@@ -1019,8 +1020,10 @@ def generate_prePP(
                     "Calculate the Costs to send the PrimEvent to the Sink"
                     "Rate * Path"
                     rate = all_eventtype_output_rates[prim_event]
-                    cost = allPairs[node][source] * rate
+                    hops = allPairs[node][source]
+                    cost = hops * rate
                     total_cost += cost
+                    central_latency = max(central_latency, hops)
         filtered_dict = {k: v for k, v in query_node_dict.items() if v != [0]}
 
         # print(f"total central push cost is {total_cost}")
@@ -1167,9 +1170,14 @@ def generate_prePP(
         exact_cost = sum(exact_costs_avg) / len(exact_costs_avg)
         pushPullTime = total_time
         maxPushPullLatency = max_latency
-        return [exact_cost, pushPullTime, maxPushPullLatency, endTransmissionRatio, total_cost,
-                node_received_eventtypes,
-                aquisition_steps]
+        return [exact_cost,
+                pushPullTime,
+                maxPushPullLatency,
+                endTransmissionRatio,
+                total_cost,
+                central_latency,
+                aquisition_steps
+                ]
     except Exception as e:
         # Minimal error logging
         pass

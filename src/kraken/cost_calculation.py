@@ -5,7 +5,7 @@ This module handles the cost calculation logic for both placement
 strategies, coordinating with adapters for legacy function calls.
 """
 
-from typing import Dict, List, Any, Tuple, Set
+from typing import Dict, List, Any, Tuple, Set, Union
 import re
 import time
 import hashlib
@@ -733,6 +733,11 @@ def process_results_from_prepp(results, query, node, workload):
     except IndexError:
         steps_by_proj = None
 
+    try:
+        all_push_latency = results[5]
+    except IndexError:
+        all_push_latency = 0
+
     if not steps_by_proj or qkey not in steps_by_proj:
         raise ValueError("No acquisition steps found in prePP results")
 
@@ -754,7 +759,8 @@ def process_results_from_prepp(results, query, node, workload):
         "projection": query,
         "all_push_costs": all_push_costs,
         "push_pull_costs": total_plan_costs,
-        "latency": total_plan_latency,
+        "all_push_latency": all_push_latency,
+        "push_pull_latency": total_plan_latency,
         "computing_time": computing_time,
         "transmission_ratio": transmission_ratio,
         "aquisition_steps": steps,  # same key as before
@@ -763,16 +769,16 @@ def process_results_from_prepp(results, query, node, workload):
 
 def calculate_costs(
     placement_node: int,
-    projection: Any,
+    current_projection: Any,
     query_workload,
-    network,
-    selectivities,
-    combination_dict,
-    rates,
-    projection_rates,
+    network_data_nodes,
+    pairwise_selectivities,
+    dependencies_per_projection,
+    global_event_rates,
+    projection_rates_selectivity,
     index_event_nodes,
-    mode,
-    shortest_path_distances,
+    simulation_mode,
+    pairwise_distance_matrix,
     sink_nodes,
     has_placed_subqueries: bool = False,
 ) -> Any:
@@ -786,16 +792,16 @@ def calculate_costs(
 
     Args:
         placement_node: Node ID where projection will be placed
-        projection: The projection/query being processed
+        current_projection: The projection/query being processed
         query_workload: List of queries in the workload
-        network: List of network nodes
-        selectivities: Dictionary of selectivity values
-        combination_dict: Dictionary mapping projections to combinations
-        rates: Event rate dictionary
-        projection_rates: Projection output rates
+        network_data_nodes: List of network nodes
+        pairwise_selectivities: Dictionary of selectivity values
+        dependencies_per_projection: Dictionary mapping projections to combinations
+        global_event_rates: Event rate dictionary
+        projection_rates_selectivity: Projection output rates
         index_event_nodes: Event node index mapping
-        mode: Simulation mode (deterministic/random)
-        shortest_path_distances: All-pairs shortest path distances
+        simulation_mode: Simulation mode (deterministic/random)
+        pairwise_distance_matrix: All-pairs shortest path distances
         sink_nodes: List of sink node IDs
         has_placed_subqueries: Whether subqueries are already placed
 
@@ -804,38 +810,42 @@ def calculate_costs(
                 transmission_ratio, acquisition_steps)
     """
     logger.debug(
-        f"Calculating costs for node {placement_node}, projection {projection}"
+        f"Calculating costs for node {placement_node}, projection {current_projection}"
     )
 
-    selectivity_rate = projection_rates.get(projection, (0.0, 0.0))[0]
+    selectivity_rate = projection_rates_selectivity.get(current_projection, (0.0, 0.0))[
+        0
+    ]
 
     # Initial cost calculation
     results = calculate_prepp_with_placement(
         placement_node=placement_node,
-        projection=projection,
+        projection=current_projection,
         query_workload=query_workload,
-        network=network,
+        network=network_data_nodes,
         selectivity_rate=selectivity_rate,
-        selectivities=selectivities,
-        combination_dict=combination_dict,
-        rates=rates,
-        projection_rates=projection_rates,
+        selectivities=pairwise_selectivities,
+        combination_dict=dependencies_per_projection,
+        rates=global_event_rates,
+        projection_rates=projection_rates_selectivity,
         index_event_nodes=index_event_nodes,
-        mode=mode,
-        shortest_path_distances=shortest_path_distances,
+        mode=simulation_mode,
+        shortest_path_distances=pairwise_distance_matrix,
         has_placed_subqueries=has_placed_subqueries,
     )
 
     # Adjust costs if some events are already available at the node
-    all_push_costs, push_pull_costs, latency, transmission_ratio = (
+    all_push_costs, push_pull_costs, all_push_latency, push_pull_latency, transmission_ratio = (
         handle_locally_available_events(
-            results=results, placement_node=placement_node, projection=projection
+            results=results,
+            placement_node=placement_node,
+            projection=current_projection,
         )
     )
 
     # Check if we need to send results to sinks (e.g., cloud)
     needs_to_be_sent_to_cloud = check_if_projection_needs_to_be_sent_to_cloud(
-        projection=projection,
+        projection=current_projection,
         query_workload=query_workload,
         placement_node=placement_node,
         sink_nodes=sink_nodes,
@@ -847,13 +857,13 @@ def calculate_costs(
             calculate_final_costs_for_sending_to_sinks(
                 current_push_pull_costs=push_pull_costs,
                 current_all_push_costs=all_push_costs,
-                current_latency=latency,
+                current_latency=push_pull_latency,
                 current_transmission_ratio=transmission_ratio,
                 placement_node=placement_node,
-                projection=projection,
+                projection=current_projection,
                 sink_nodes=sink_nodes,
-                projection_rates=projection_rates,
-                shortest_path_distances=shortest_path_distances,
+                projection_rates=projection_rates_selectivity,
+                shortest_path_distances=pairwise_distance_matrix,
             )
         )
 
@@ -861,7 +871,8 @@ def calculate_costs(
     return (
         all_push_costs,
         push_pull_costs,
-        latency,
+        all_push_latency,
+        push_pull_latency,
         results["computing_time"],
         transmission_ratio,
         results["aquisition_steps"],
@@ -889,7 +900,7 @@ def check_if_projection_needs_to_be_sent_to_cloud(
 
 def handle_locally_available_events(
     results, placement_node, projection
-) -> Tuple[float, float, float, float]:
+) -> Union[tuple[float, float, float, float], tuple[Any, Any, Any, Any, Any]]:
     """
     Handle cost adjustments for locally available events at placement node.
 
@@ -919,7 +930,8 @@ def handle_locally_available_events(
         return (
             results["all_push_costs"],
             results["push_pull_costs"],
-            results["latency"],
+            results["all_push_latency"],
+            results["push_pull_latency"],
             results["transmission_ratio"],
         )
 
