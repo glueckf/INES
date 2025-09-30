@@ -24,6 +24,8 @@ def run_prepp(
     plan_print: bool,
     all_pairs: List[List[float]],
     is_deterministic: bool = False,
+    projection=None,
+    combination_dict: dict = None
 ) -> List[Any]:
     """
     Adapter for generate_prePP function.
@@ -84,6 +86,8 @@ def run_prepp(
             plan_print,
             all_pairs,
             is_deterministic,
+            projection,
+            combination_dict
         )
 
         # Validate result

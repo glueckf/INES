@@ -205,6 +205,17 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     Filters = []
     latency_threshold = self.latency_threshold
     primitive_events_per_projection = self.h_primitive_events
+    nodes_per_primitive_event = self.h_nodes
+
+    # Debug: Check if h_local_rate_lookup exists and is properly initialized
+    if hasattr(self, 'h_local_rate_lookup'):
+        local_rate_lookup = self.h_local_rate_lookup
+        logger.info(f"local_rate_lookup initialized: {local_rate_lookup is not None}")
+        if local_rate_lookup:
+            logger.info(f"local_rate_lookup keys: {list(local_rate_lookup.keys())}")
+    else:
+        logger.error("h_local_rate_lookup attribute missing from self object")
+        local_rate_lookup = None
 
     no_filter = 0  # NO FILTER
 
@@ -342,6 +353,8 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
                     projection_rates_selectivity=projection_rates_selectivity,
                     graph=graph,
                     network_data_nodes=network_data_nodes,
+                    nodes_per_primitive_event=nodes_per_primitive_event,
+                    local_rate_lookup=local_rate_lookup,
                 )
 
                 integrated_placement_decision_by_projection[current_projection] = (
@@ -350,7 +363,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     else:
         # Start latency aware kraken
         logger.info("Starting latency-aware integrated placement...")
-        integrated_placement_decision_by_projection = (
+        best_placement_stack = (
             run_backtracking_kraken_with_latency(
                 query_workload,
                 pairwise_selectivity,
@@ -372,9 +385,32 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
                 part_type,
                 primitive_events_per_projection,
                 routing_dict,
+                nodes_per_primitive_event,
                 self,
+                local_rate_lookup=local_rate_lookup,
             )
         )
+
+        print(best_placement_stack)
+
+        total_cost = 0
+        max_latency = 0
+
+        # Reduce placement stack by adding up costs for all projections that are in the query_workload and taking the
+        # max latency for all projections in the query_workload
+        query_workload_set = set(query_workload)
+        for projection, placement_info in best_placement_stack.items():
+            # Unpack first 4 elements, ignoring detailed_plan if present
+            node, strategy, cost, latency = placement_info[:4]
+            if projection in query_workload_set:
+                total_cost += cost
+                max_latency = max(max_latency, latency)
+
+        logger.info("Total cost of placement: %f", total_cost)
+        logger.info("Max latency of placement: %f", max_latency)
+
+        aaaaaa = total_cost, max_latency
+        logger.info("")
         pass
 
     integrated_placement_decision_by_projection = finalize_placement_results(

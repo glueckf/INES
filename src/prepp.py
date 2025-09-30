@@ -804,7 +804,10 @@ def generate_prePP(
         runs,
         plan_print,
         allPairs,
-        is_deterministic=False):
+        is_deterministic=False,
+        projection=None,
+        combination_dict=None
+):
     # print(f"[PREPP_DEBUG] generate_prePP called with is_deterministic={is_deterministic}")
     # Accessing the arguments
     #print(input_buffer.getvalue())
@@ -1021,9 +1024,9 @@ def generate_prePP(
                     "Rate * Path"
                     rate = all_eventtype_output_rates[prim_event]
                     hops = allPairs[node][source]
+                    central_latency = max(central_latency, hops)
                     cost = hops * rate
                     total_cost += cost
-                    central_latency = max(central_latency, hops)
         filtered_dict = {k: v for k, v in query_node_dict.items() if v != [0]}
 
         # print(f"total central push cost is {total_cost}")

@@ -5,9 +5,9 @@ logger = get_kraken_logger(__name__)
 
 
 def sort_candidate_nodes(
-    possible_placement_nodes,
-    current_projection,
-    primitive_events_per_projection,
+        possible_placement_nodes,
+        current_projection,
+        primitive_events_per_projection,
 ):
     logger.info("Sorting candidate nodes based on latency constraints")
 
@@ -43,105 +43,43 @@ def sort_candidate_nodes(
         raise e
 
 
-def get_baseline_latency(
-    current_projection,
-    stack_per_projection,
-    dependencies_per_projection,
+def get_current_config_cost_and_latency(
+        current_projection,
+        stack_per_projection,
+        dependencies_per_projection,
 ):
     """
-    Calculate total latency for a projection and all its subprojections.
+    Calculate total latency and cost for a projection's dependencies.
 
-    This function traverses the projection tree recursively, calculating latency
-    for each subprojection and summing them to get the total latency for the
-    current projection's all-push strategy.
+    This function examines the direct dependencies of a projection and extracts
+    their latencies and cumulative costs from the placement stack.
+
+    Stack entry structure: (node, strategy, individual_cost, cumulative_cost, latency, acquisition_steps)
 
     Args:
-        latency_threshold: Maximum allowed latency threshold
-        result: Placement result containing latency information
         current_projection: The projection to calculate latency for
         stack_per_projection: Stack tracking for backtracking algorithm
-        global_tracker: Global placement tracker
-        node: Target node for placement
-        pairwise_distance_matrix: Matrix of network distances between nodes
         dependencies_per_projection: Mapping of projections to their dependencies
-        processing_order: Order in which projections are processed
 
     Returns:
-        float: Total calculated latency, or -1 if exceeds threshold
+        tuple: (current_config_latency, current_config_cost)
+            - current_config_latency: Max latency among dependencies
+            - current_config_cost: Sum of cumulative costs from dependencies
     """
     dependencies_for_projection = dependencies_per_projection.get(current_projection, [])
 
-    baseline_latency = 0.0
+    current_config_latency = 0.0
+    current_config_cost = 0.0
+
 
     for dependency in dependencies_for_projection:
         if dependency in stack_per_projection:
-            # If any dependency is already in the stack, we take the first element from the stack and it's latency
-            dependency_latency = stack_per_projection[dependency][0][3]
+            # Stack structure: (node, strategy, individual_cost, cumulative_cost, latency, acquisition_steps)
+            # Index 4 is latency, index 3 is cumulative_cost
+            dependency_latency = stack_per_projection[dependency][0][4]
+            dependency_cumulative_cost = stack_per_projection[dependency][0][3]
 
-            if current_projection.mytype == 'AND':
-                baseline_latency = max(baseline_latency, dependency_latency)
-            elif current_projection.mytype == 'SEQ':
-                baseline_latency += dependency_latency
+            current_config_latency = max(current_config_latency, dependency_latency)
+            current_config_cost += dependency_cumulative_cost
 
-    return baseline_latency
-
-
-
-def _calculate_recursive_subprojection_latency(
-    projection, dependencies_per_projection, global_tracker, processing_set, visited
-):
-    """
-    Recursively calculate latency for all nested subprojections.
-
-    Args:
-        projection: Current projection to process
-        dependencies_per_projection: Mapping of projections to dependencies
-        global_tracker: Global placement tracker with decisions
-        processing_set: Set of projections being processed
-        visited: Set to avoid cycles in dependency graph
-
-    Returns:
-        float: Sum of latencies for all nested subprojections
-    """
-    if projection in visited:
-        return 0.0  # Avoid cycles
-
-    visited.add(projection)
-    total_nested_latency = 0.0
-
-    try:
-        subprojections = dependencies_per_projection.get(projection, [])
-
-        for subproj in subprojections:
-            if (
-                subproj in processing_set
-                and subproj in global_tracker._placement_decisions
-            ):
-                # Get latency for this subprojection
-                subproj_decision = global_tracker._placement_decisions[subproj]
-                subproj_latency = 0.0
-
-                if (
-                    hasattr(subproj_decision, "plan_details")
-                    and "latency" in subproj_decision.plan_details
-                ):
-                    subproj_latency = subproj_decision.plan_details["latency"]
-                elif hasattr(subproj_decision, "latency"):
-                    subproj_latency = subproj_decision.latency
-
-                total_nested_latency += subproj_latency
-
-                # Recurse for nested dependencies
-                nested_latency = _calculate_recursive_subprojection_latency(
-                    subproj,
-                    dependencies_per_projection,
-                    global_tracker,
-                    processing_set,
-                    visited.copy(),  # Pass copy to avoid shared state
-                )
-                total_nested_latency += nested_latency
-
-    finally:
-        visited.discard(projection)
-
-    return total_nested_latency
+    return current_config_latency, current_config_cost

@@ -1,6 +1,7 @@
 import string
 from enum import Enum
 from dataclasses import dataclass
+from typing import Dict
 
 import networkx as nx
 import numpy as np
@@ -210,27 +211,27 @@ def generate_hardcoded_workload():
     q1 = number_children(q1)
     queries.append(q1)
 
-    # # Query 2:
-    # q2 = AND(PrimEvent('A'), PrimEvent('B'))
-    # q2 = number_children(q2)
-    # queries.append(q2)
-    #
-    # # Query 3: Simple AND with shared elements - AND(A, B, D)
-    # q3 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
-    # q3 = number_children(q3)
-    # queries.append(q3)
-    #
-    # # Query 4: Medium complexity - SEQ(A, B, AND(E, F))
-    # # Shares A, B with queries 1 and 2
-    # q4 = SEQ(PrimEvent('A'), PrimEvent('B'), AND(PrimEvent('E'), PrimEvent('F')))
-    # q4 = number_children(q4)
-    # queries.append(q4)
-    #
-    # # Query 4: Complex nested - AND(SEQ(A, B, C), D, SEQ(E, F))
-    # # Shares SEQ(A, B, C) with query 1, and has synergy with query 3
-    # q5 = AND(SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C')), PrimEvent('D'), SEQ(PrimEvent('E'), PrimEvent('F')))
-    # q5 = number_children(q5)
-    # queries.append(q5)
+    # Query 2:
+    q2 = AND(PrimEvent('A'), PrimEvent('B'))
+    q2 = number_children(q2)
+    queries.append(q2)
+
+    # Query 3: Simple AND with shared elements - AND(A, B, D)
+    q3 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('D'))
+    q3 = number_children(q3)
+    queries.append(q3)
+
+    # Query 4: Medium complexity - SEQ(A, B, AND(E, F))
+    # Shares A, B with queries 1 and 2
+    q4 = SEQ(PrimEvent('A'), PrimEvent('B'), AND(PrimEvent('E'), PrimEvent('F')))
+    q4 = number_children(q4)
+    queries.append(q4)
+
+    # Query 4: Complex nested - AND(SEQ(A, B, C), D, SEQ(E, F))
+    # Shares SEQ(A, B, C) with query 1, and has synergy with query 3
+    q5 = AND(SEQ(PrimEvent('A'), PrimEvent('B'), PrimEvent('C')), PrimEvent('D'), SEQ(PrimEvent('E'), PrimEvent('F')))
+    q5 = number_children(q5)
+    queries.append(q5)
     #
     # # Query 6: AND(A, B, C)
     # q6 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('C'))
@@ -545,6 +546,9 @@ class INES():
             self)
         self.h_criticalMSTypes, self.h_criticalMSProjs = self.h_criticalMSTypes_criticalMSProjs
 
+        # Create optimized rate lookup structure for fast dependency rate calculations
+        self.h_local_rate_lookup = self._create_optimized_rate_lookup()
+
         integrated_operator_placement_results = calculate_integrated_approach(self, 'test', 0)
         
         # Store integrated results for worker access
@@ -588,6 +592,42 @@ class INES():
 
         # I/O operations moved to start_simulation.py for consolidated processing
         # Results are now available via self.integrated_operator_placement_results
+
+    def _create_optimized_rate_lookup(self) -> Dict[str, Dict[int, float]]:
+        """
+        Create optimized data structure for O(1) rate lookups.
+
+        Returns:
+            Dictionary structure:
+            {
+                'A': {6: 1000.0, 8: 0.0, 10: 0.0},  # Local rates for event A per node
+                'B': {7: 2.0, 10: 0.0},              # Local rates for event B per node
+                'C': {7: 45.0, 8: 45.0, 11: 0.0},   # etc.
+                ...
+            }
+        """
+        local_rate_lookup = {}
+
+        # For each primitive event type
+        for event_type, node_list in self.h_nodes.items():
+            local_rate_lookup[event_type] = {}
+
+            # For each node that has this event type
+            for node_id in node_list:
+                # Calculate local rate for this event at this node
+                if node_id < len(self.network):
+                    node = self.network[node_id]
+                    # Get the index of this event type (A=0, B=1, etc.)
+                    event_index = ord(event_type) - ord('A')
+                    if event_index < len(node.eventrates):
+                        local_rate = float(node.eventrates[event_index])
+                        local_rate_lookup[event_type][node_id] = local_rate
+                    else:
+                        local_rate_lookup[event_type][node_id] = 0.0
+                else:
+                    local_rate_lookup[event_type][node_id] = 0.0
+
+        return local_rate_lookup
 
     def _initialize_network_topology(self):
         """Create network topology based on configuration mode."""

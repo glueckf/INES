@@ -5,13 +5,13 @@ This module handles the cost calculation logic for both placement
 strategies, coordinating with adapters for legacy function calls.
 """
 
-from typing import Dict, List, Any, Tuple, Set, Union
+from typing import Dict, List, Any, Tuple, Set, Optional
 import re
 import time
 import hashlib
 from .adapters import run_prepp
+from .event_stack import get_events_from_stack, get_event_metadata_from_stack
 from .logging import get_kraken_logger
-from .node_tracker import get_global_event_placement_tracker
 
 
 # Import SimulationMode for deterministic mode checking
@@ -70,10 +70,7 @@ def _get_prepp_cache_stats() -> Dict[str, int]:
     }
 
 
-# Initialize global trackers lazily to avoid initialization issues
-def _get_global_event_placement_tracker():
-    """Get global event placement tracker with lazy initialization."""
-    return get_global_event_placement_tracker()
+# Removed global tracker - now using stack-based approach
 
 
 def _get_global_placement_tracker():
@@ -182,7 +179,10 @@ def calculate_prepp_with_placement(
     index_event_nodes,
     mode,
     shortest_path_distances,
+    nodes_per_primitive_event,
     has_placed_subqueries: bool = False,
+    placed_subqueries: Optional[Dict[Any, int]] = None,
+    local_rate_lookup: Optional[Dict[str, Dict[int, float]]] = None,
 ):
     # Check if we should use deterministic behavior
     config_mode = mode.value
@@ -222,6 +222,8 @@ def calculate_prepp_with_placement(
         rates=rates,
         projrates=projection_rates,
         index_event_nodes=index_event_nodes,
+        placed_subqueries=placed_subqueries,
+        local_rate_lookup=local_rate_lookup,
     )
 
     if input_buffer is None:
@@ -238,6 +240,23 @@ def calculate_prepp_with_placement(
     timing_tracker = get_kraken_timing_tracker()
     prepp_start_time = time.time()
 
+    all_push_costs, all_push_latency = calculate_central_costs_for_placement(
+        placement_node,
+        projection,
+        network,
+        selectivities,
+        selectivity_rate,
+        has_placed_subqueries=has_placed_subqueries,
+        mycombi=combination_dict,
+        rates=rates,
+        projrates=projection_rates,
+        index_event_nodes=index_event_nodes,
+        placed_subqueries=placed_subqueries,
+        shortest_path_distances=shortest_path_distances,
+        nodes_per_primitive_event=nodes_per_primitive_event,
+        local_rate_lookup=local_rate_lookup,
+    )
+
     results = run_prepp(
         input_buffer=input_buffer,
         method=method,
@@ -248,7 +267,14 @@ def calculate_prepp_with_placement(
         plan_print=True,
         all_pairs=shortest_path_distances,
         is_deterministic=is_deterministic,
+        projection=projection,
+        combination_dict=combination_dict,
     )
+
+    # Update prepp results for all push with the correct results from central cost calculation
+    if results and len(results) >= 5:
+        results[4] = all_push_costs
+        results[5] = all_push_latency
 
     prepp_end_time = time.time()
     prepp_duration = prepp_end_time - prepp_start_time
@@ -277,6 +303,180 @@ def calculate_prepp_with_placement(
         raise ValueError("Invalid prePP results")
 
 
+def calculate_central_costs_for_placement(
+    placement_node: int,
+    projection: Any,
+    network,
+    selectivities: Dict,
+    selection_rate: float,
+    has_placed_subqueries: bool = False,
+    mycombi=None,
+    rates=None,
+    projrates=None,
+    index_event_nodes=None,
+    nodes_per_primitive_event=None,
+    placed_subqueries: Optional[Dict[Any, int]] = None,
+    shortest_path_distances: Dict[int, Dict[int, int]] = None,
+    local_rate_lookup: Optional[Dict[str, Dict[int, float]]] = None,
+) -> Tuple[float, float]:
+    dependencies = mycombi.get(projection, []) if mycombi else []
+
+    # Optimized latency calculation using the new data structure
+    latency = 0.0
+    total_cost = 0.0
+
+    for dependency in dependencies:
+        if local_rate_lookup and dependency in local_rate_lookup:
+            for source_node in local_rate_lookup[dependency]:
+                # O(1) lookup of local rate for this dependency at this source node
+                rate = local_rate_lookup[dependency][source_node]
+
+                # O(1) lookup of shortest path distance
+                hops = shortest_path_distances[source_node][placement_node]
+
+                # Calculate cost contribution
+                cost = hops * rate
+                total_cost += cost
+
+                # Update maximum latency (latency is determined by the maximum hops)
+                latency = max(hops, latency)
+        elif dependency in projrates and dependency in placed_subqueries:
+            hops = shortest_path_distances[placed_subqueries[dependency]][
+                placement_node
+            ]
+            rate = projrates[dependency][1]
+
+            latency = max(hops, latency)
+            cost = hops * rate
+            total_cost += cost
+
+    return total_cost, latency
+
+
+def calculate_push_acquisition_steps(
+    placement_node: int,
+    projection: Any,
+    mycombi=None,
+    rates=None,
+    projrates=None,
+    placed_subqueries: Optional[Dict[Any, int]] = None,
+    shortest_path_distances: Dict[int, Dict[int, int]] = None,
+    local_rate_lookup: Optional[Dict[str, Dict[int, float]]] = None,
+) -> Dict[int, Dict[str, Any]]:
+    """Calculate acquisition steps for all-push strategy.
+
+    Args:
+        placement_node: Target placement node
+        projection: Projection being placed
+        mycombi: Dependency mappings
+        rates: Event rates
+        projrates: Projection rates
+        placed_subqueries: Already placed subqueries
+        shortest_path_distances: Distance matrix
+        local_rate_lookup: Local rate lookup structure
+
+    Returns:
+        Dict mapping step number to acquisition step details
+    """
+    dependencies = mycombi.get(projection, []) if mycombi else []
+    acquisition_steps = {0: _create_empty_step()}
+
+    step = acquisition_steps[0]
+    events_to_pull = []
+    pull_response_details = {}
+    total_cost = 0.0
+    max_latency = 0.0
+
+    for dependency in dependencies:
+        if local_rate_lookup and dependency in local_rate_lookup:
+            events_to_pull.append(str(dependency))
+            event_sources = []
+            event_cost = 0.0
+            event_latency = 0
+
+            for source_node in local_rate_lookup[dependency]:
+                rate = local_rate_lookup[dependency][source_node]
+                hops = shortest_path_distances[source_node][placement_node]
+                raw_cost = hops * rate
+
+                event_sources.append(
+                    {
+                        "source_node": source_node,
+                        "distance": hops,
+                        "base_rate": rate,
+                        "raw_cost": raw_cost,
+                    }
+                )
+
+                event_cost += raw_cost
+                event_latency = max(event_latency, hops)
+
+            pull_response_details[str(dependency)] = {
+                "raw_cost": event_cost,
+                "cost_with_selectivity": event_cost,
+                "selectivity_applied": 1.0,
+                "latency": event_latency,
+                "sources": event_sources,
+            }
+
+            total_cost += event_cost
+            max_latency = max(max_latency, event_latency)
+
+        elif dependency in projrates and dependency in placed_subqueries:
+            events_to_pull.append(str(dependency))
+            source_node = placed_subqueries[dependency]
+            rate = projrates[dependency][1]
+            hops = shortest_path_distances[source_node][placement_node]
+            raw_cost = hops * rate
+
+            pull_response_details[str(dependency)] = {
+                "raw_cost": raw_cost,
+                "cost_with_selectivity": raw_cost,
+                "selectivity_applied": 1.0,
+                "latency": hops,
+                "sources": [
+                    {
+                        "source_node": source_node,
+                        "distance": hops,
+                        "base_rate": rate,
+                        "raw_cost": raw_cost,
+                    }
+                ],
+            }
+
+            total_cost += raw_cost
+            max_latency = max(max_latency, hops)
+
+    step["events_to_pull"] = events_to_pull
+    step["detailed_cost_contribution"]["pull_response"] = pull_response_details
+    step["pull_response_costs"] = total_cost
+    step["pull_response_latency"] = max_latency
+    step["total_step_costs"] = total_cost
+    step["total_latency"] = float(max_latency)
+
+    return acquisition_steps
+
+
+def _create_empty_step() -> Dict[str, Any]:
+    """Create an empty acquisition step structure."""
+    return {
+        "pull_set": [],
+        "events_to_pull": [],
+        "pull_request_costs": 0.0,
+        "pull_request_latency": 0.0,
+        "pull_response_costs": 0.0,
+        "pull_response_latency": 0,
+        "total_step_costs": 0.0,
+        "total_latency": 0.0,
+        "already_at_node": None,
+        "acquired_by_query": None,
+        "detailed_cost_contribution": {
+            "pull_request": {},
+            "pull_response": {},
+        },
+    }
+
+
 def initiate_buffer(
     node,
     projection,
@@ -289,6 +489,8 @@ def initiate_buffer(
     rates=None,
     projrates=None,
     index_event_nodes=None,
+    placed_subqueries: Optional[Dict[Any, int]] = None,
+    local_rate_lookup: Optional[Dict[str, Dict[int, float]]] = None,
 ) -> Any:
     """
     Generate a configuration buffer similar to generate_eval_plan but for a single projection.
@@ -300,6 +502,13 @@ def initiate_buffer(
         network: List of network nodes
         selectivities: Dictionary of selectivity values
         selection_rate: Calculated selection rate for the projection
+        global_placement_tracker: Legacy tracker (deprecated, use placed_subqueries)
+        has_placed_subqueries: Whether subqueries have been placed
+        mycombi: Subquery combination mappings
+        rates: Rate mappings
+        projrates: Projection rate mappings
+        index_event_nodes: Event node indices
+        placed_subqueries: Dict mapping subqueries to their placement node IDs
 
     Returns:
         io.StringIO: Configuration buffer containing the generated plan
@@ -365,6 +574,8 @@ def initiate_buffer(
             has_placed_subqueries=has_placed_subqueries,
             mycombi=mycombi,
             projrates=projrates,
+            global_placement_tracker=global_placement_tracker,
+            placed_subqueries=placed_subqueries,
         )
 
         config_buffer.write(plan_content)
@@ -482,6 +693,8 @@ def _generate_plan_content(
     has_placed_subqueries=False,
     mycombi=None,
     projrates=None,
+    global_placement_tracker=None,
+    placed_subqueries: Optional[Dict[Any, int]] = None,
 ):
     """Generate the actual plan content string."""
     lines = []
@@ -603,56 +816,108 @@ def _generate_plan_content(
 
         # Check if we have placed subqueries and need to handle them differently
         if has_placed_subqueries and projection and mycombi and projrates:
-            global_placement_tracker = _get_global_placement_tracker()
-            # Get subqueries for this projection
-            if projection in mycombi:
-                subqueries = mycombi[projection]
-
-                # Add placed subqueries first
-                for subquery in subqueries:
-                    if hasattr(
-                        subquery, "leafs"
-                    ) and global_placement_tracker.has_placement_for(subquery):
-                        placement_decision = (
-                            global_placement_tracker.get_best_placement(subquery)
-                        )
-                        subquery_rate = projrates.get(subquery, 0.001)
-                        if len(subquery_rate) > 1:
-                            subquery_rate = subquery_rate[0]
-
-                        # Get primitive events for subquery
-                        if hasattr(subquery, "leafs"):
-                            primitive_events = subquery.leafs()
-                        else:
-                            primitive_events = [str(subquery)]
-
-                        combination_str = "; ".join(primitive_events)
-                        lines.append(
-                            f"SELECT {subquery} FROM {combination_str} ON {{{placement_decision.node}}} WITH selectionRate= {subquery_rate}"
-                        )
-
-                # Add main query with virtual events (replace placed subqueries with their virtual names)
-                main_query = workload[0]
-                main_rate = selection_rate_dict.get(main_query, 0)
-
-                # Create combination for main query
-                main_combination = []
-                for elem in subqueries:
-                    if hasattr(
-                        elem, "leafs"
-                    ) and global_placement_tracker.has_placement_for(elem):
-                        # This subquery is placed, so we reference it as virtual event
-                        main_combination.append(str(elem))
-                    else:
-                        # This is a primitive event
-                        main_combination.append(str(elem))
-
-                combination_str = "; ".join(main_combination)
-                lines.append(
-                    f"SELECT {main_query} FROM {combination_str} ON {{0}} WITH selectionRate= {main_rate}"
-                )
+            # Determine the source of placement information
+            if placed_subqueries is not None:
+                # Use the new parameter (preferred)
+                placement_source = placed_subqueries
+            elif global_placement_tracker is not None:
+                # Fallback to legacy tracker for backward compatibility
+                placement_source = global_placement_tracker
             else:
-                # Fallback to normal handling
+                # No placement information available, fallback to normal handling
+                placement_source = None
+
+            if placement_source is not None:
+                # Get subqueries for this projection
+                if projection in mycombi:
+                    subqueries = mycombi[projection]
+
+                    # Add placed subqueries first
+                    for subquery in subqueries:
+                        placement_node = None
+
+                        # Check placement based on source type
+                        if (
+                            isinstance(placement_source, dict)
+                            and hasattr(subquery, "leafs")
+                            and subquery in placement_source
+                        ):
+                            # New parameter: direct dictionary lookup
+                            placement_node = placement_source[subquery]
+                        elif (
+                            hasattr(placement_source, "has_placement_for")
+                            and hasattr(subquery, "leafs")
+                            and placement_source.has_placement_for(subquery)
+                        ):
+                            # Legacy tracker: use tracker methods
+                            placement_decision = placement_source.get_best_placement(
+                                subquery
+                            )
+                            placement_node = placement_decision.node
+
+                        if placement_node is not None:
+                            subquery_rate = projrates.get(subquery, 0.001)
+                            if len(subquery_rate) > 1:
+                                subquery_rate = subquery_rate[0]
+
+                            # Get primitive events for subquery
+                            if hasattr(subquery, "leafs"):
+                                primitive_events = subquery.leafs()
+                            else:
+                                primitive_events = [str(subquery)]
+
+                            combination_str = "; ".join(primitive_events)
+                            lines.append(
+                                f"SELECT {subquery} FROM {combination_str} ON {{{placement_node}}} WITH selectionRate= {subquery_rate}"
+                            )
+
+                    # Add main query with virtual events
+                    main_query = workload[0]
+                    main_rate = selection_rate_dict.get(main_query, 0)
+
+                    # Create combination for main query
+                    main_combination = []
+                    for elem in subqueries:
+                        is_placed = False
+
+                        # Check placement based on source type
+                        if (
+                            isinstance(placement_source, dict)
+                            and hasattr(elem, "leafs")
+                            and elem in placement_source
+                        ):
+                            # New parameter: direct dictionary check
+                            is_placed = True
+                        elif (
+                            hasattr(placement_source, "has_placement_for")
+                            and hasattr(elem, "leafs")
+                            and placement_source.has_placement_for(elem)
+                        ):
+                            # Legacy tracker: use tracker methods
+                            is_placed = True
+
+                        if is_placed:
+                            # This subquery is placed, reference as virtual event
+                            main_combination.append(str(elem))
+                        else:
+                            # This is a primitive event
+                            main_combination.append(str(elem))
+
+                    combination_str = "; ".join(main_combination)
+                    lines.append(
+                        f"SELECT {main_query} FROM {combination_str} ON {{0}} WITH selectionRate= {main_rate}"
+                    )
+                else:
+                    # Fallback to normal handling if projection not in mycombi
+                    _add_normal_muse_graph_entry(
+                        lines,
+                        workload,
+                        selection_rate_dict,
+                        sink_dict,
+                        combination_dict,
+                    )
+            else:
+                # Fallback to normal handling if no placement source
                 _add_normal_muse_graph_entry(
                     lines, workload, selection_rate_dict, sink_dict, combination_dict
                 )
@@ -780,7 +1045,11 @@ def calculate_costs(
     simulation_mode,
     pairwise_distance_matrix,
     sink_nodes,
+    nodes_per_primitive_event,
     has_placed_subqueries: bool = False,
+    placed_subqueries: Optional[Dict[Any, int]] = None,
+    local_rate_lookup: Optional[Dict[str, Dict[int, float]]] = None,
+    stack_of_events_per_node: Optional[Dict[int, Dict[str, Any]]] = None,
 ) -> Any:
     """
     Calculate all placement costs for a given node and projection.
@@ -804,6 +1073,7 @@ def calculate_costs(
         pairwise_distance_matrix: All-pairs shortest path distances
         sink_nodes: List of sink node IDs
         has_placed_subqueries: Whether subqueries are already placed
+        placed_subqueries: Dict mapping subqueries to their placement node IDs
 
     Returns:
         Tuple: (all_push_costs, push_pull_costs, latency, computing_time,
@@ -811,6 +1081,9 @@ def calculate_costs(
     """
     logger.debug(
         f"Calculating costs for node {placement_node}, projection {current_projection}"
+    )
+    logger.debug(
+        f"local_rate_lookup parameter in calculate_costs: {local_rate_lookup is not None}"
     )
 
     selectivity_rate = projection_rates_selectivity.get(current_projection, (0.0, 0.0))[
@@ -831,16 +1104,24 @@ def calculate_costs(
         index_event_nodes=index_event_nodes,
         mode=simulation_mode,
         shortest_path_distances=pairwise_distance_matrix,
+        nodes_per_primitive_event=nodes_per_primitive_event,
         has_placed_subqueries=has_placed_subqueries,
+        placed_subqueries=placed_subqueries,
+        local_rate_lookup=local_rate_lookup,
     )
 
     # Adjust costs if some events are already available at the node
-    all_push_costs, push_pull_costs, all_push_latency, push_pull_latency, transmission_ratio = (
-        handle_locally_available_events(
-            results=results,
-            placement_node=placement_node,
-            projection=current_projection,
-        )
+    (
+        all_push_costs,
+        push_pull_costs,
+        all_push_latency,
+        push_pull_latency,
+        transmission_ratio,
+    ) = handle_locally_available_events(
+        results=results,
+        placement_node=placement_node,
+        projection=current_projection,
+        stack_of_events_per_node=stack_of_events_per_node,
     )
 
     # Check if we need to send results to sinks (e.g., cloud)
@@ -899,8 +1180,11 @@ def check_if_projection_needs_to_be_sent_to_cloud(
 
 
 def handle_locally_available_events(
-    results, placement_node, projection
-) -> Union[tuple[float, float, float, float], tuple[Any, Any, Any, Any, Any]]:
+    results,
+    placement_node,
+    projection,
+    stack_of_events_per_node: Optional[Dict[int, Dict[str, Any]]] = None,
+) -> tuple[float, float, float, float, float]:
     """
     Handle cost adjustments for locally available events at placement node.
 
@@ -908,13 +1192,18 @@ def handle_locally_available_events(
         results: Results from initial cost calculation
         placement_node: Node ID where projection is placed
         projection: The projection being processed
+        stack_of_events_per_node: Stack tracking events at each node
 
     Returns:
-        Tuple: (adjusted_all_push_costs, adjusted_push_pull_costs, latency, transmission_ratio)
+        Tuple: (adjusted_all_push_costs, adjusted_push_pull_costs,
+                adjusted_all_push_latency, adjusted_push_pull_latency,
+                adjusted_transmission_ratio)
     """
-    global_event_placement_tracker = _get_global_event_placement_tracker()
+    if stack_of_events_per_node is None:
+        stack_of_events_per_node = {}
+
     available_events = set(
-        global_event_placement_tracker.get_events_at_node(placement_node)
+        get_events_from_stack(stack_of_events_per_node, placement_node)
     )
     needed_events = get_events_for_projection(projection)
 
@@ -924,7 +1213,7 @@ def handle_locally_available_events(
             results,
             available_events,
             needed_events,
-            global_event_placement_tracker,
+            stack_of_events_per_node,
         )
     else:
         return (
@@ -934,6 +1223,171 @@ def handle_locally_available_events(
             results["push_pull_latency"],
             results["transmission_ratio"],
         )
+
+
+def _adjust_acquisition_steps(
+    acquisition_steps: Dict[int, Dict[str, Any]],
+    events_already_available: Set[str],
+    node: int,
+    stack_of_events_per_node: Dict[int, Dict[str, Any]],
+) -> Tuple[float, float]:
+    """
+    Adjust acquisition steps by removing costs for locally available events.
+
+    Logic:
+    - If ALL events in a step are available: remove entire step cost and latency
+    - If NO events in a step are available: keep step unchanged
+    - If SOME events are available: remove their cost contribution, keep latency
+
+    Args:
+        acquisition_steps: Dict mapping step number to step details
+        events_already_available: Set of events available locally
+        node: Node ID
+        stack_of_events_per_node: Stack tracking events at each node
+
+    Returns:
+        Tuple of (total_cost_adjustment, total_latency_adjustment)
+    """
+    total_cost_adjustment = 0.0
+    total_latency_adjustment = 0.0
+
+    for step_details in acquisition_steps.values():
+        events_to_pull = step_details.get("events_to_pull", [])
+        if not events_to_pull:
+            continue
+
+        # Extract primitive events from this step
+        all_primitive_events_in_step = _extract_primitive_events_from_step(
+            events_to_pull
+        )
+
+        # Find intersection with available events
+        events_we_can_skip = all_primitive_events_in_step & events_already_available
+
+        if not events_we_can_skip:
+            # No events available, keep step as-is
+            continue
+
+        # Update metadata about which events are already at node
+        _update_step_metadata(
+            step_details, events_we_can_skip, node, stack_of_events_per_node
+        )
+
+        # Check if ALL events in step are available
+        if all_primitive_events_in_step <= events_already_available:
+            # Complete step skip - remove entire cost and latency
+            step_cost = step_details.get("total_step_costs", 0.0)
+            step_latency = step_details.get("total_latency", 0.0)
+            total_cost_adjustment += step_cost
+            total_latency_adjustment += step_latency
+        else:
+            # Partial skip - calculate cost contribution of available events
+            cost_adj = _calculate_partial_step_adjustment(
+                step_details, events_we_can_skip, all_primitive_events_in_step
+            )
+            total_cost_adjustment += cost_adj
+            # Keep latency as-is for partial steps
+
+    return total_cost_adjustment, total_latency_adjustment
+
+
+def _adjust_all_push_acquisition(
+    push_pull_acquisition_steps: Dict[int, Dict[str, Any]],
+    events_already_available: Set[str],
+    node: int,
+    stack_of_events_per_node: Dict[int, Dict[str, Any]],
+) -> Tuple[float, float]:
+    """
+    Adjust all-push strategy costs when we only have push-pull acquisition steps.
+
+    For all-push, we look at step 0's pull_response to determine which events
+    would be directly pulled and their costs.
+
+    Args:
+        push_pull_acquisition_steps: Push-pull acquisition steps from PrePP
+        events_already_available: Set of events available locally
+        node: Node ID
+        stack_of_events_per_node: Stack tracking events at each node
+
+    Returns:
+        Tuple of (cost_adjustment, latency_adjustment)
+    """
+    if 0 not in push_pull_acquisition_steps:
+        return 0.0, 0.0
+
+    step_0 = push_pull_acquisition_steps[0]
+    pull_response = step_0.get("detailed_cost_contribution", {}).get(
+        "pull_response", {}
+    )
+
+    if not pull_response:
+        return 0.0, 0.0
+
+    # Get all events that would be pulled in all-push (from pull_response)
+    all_push_events = set(pull_response.keys())
+
+    # Find which of these are already available
+    events_we_can_skip = all_push_events & events_already_available
+
+    if not events_we_can_skip:
+        return 0.0, 0.0
+
+    total_cost_adjustment = 0.0
+    max_latency = 0.0
+
+    # Calculate cost and latency adjustments
+    for event in events_we_can_skip:
+        if event in pull_response:
+            event_details = pull_response[event]
+            cost = event_details.get("cost_with_selectivity", 0.0)
+            latency = event_details.get("latency", 0)
+
+            total_cost_adjustment += cost
+            max_latency = max(max_latency, latency)
+
+    # If ALL events are available, we can remove the latency too
+    if all_push_events <= events_already_available:
+        return total_cost_adjustment, max_latency
+    else:
+        # Partial availability - keep latency
+        return total_cost_adjustment, 0.0
+
+
+def _calculate_partial_step_adjustment(
+    step_details: Dict[str, Any],
+    events_we_can_skip: Set[str],
+    all_primitive_events_in_step: Set[str],
+) -> float:
+    """
+    Calculate cost adjustment for partially available events in a step.
+
+    Args:
+        step_details: Step details dictionary
+        events_we_can_skip: Events that are locally available
+        all_primitive_events_in_step: All events needed in this step
+
+    Returns:
+        Cost adjustment amount
+    """
+    pull_response_details = step_details.get("detailed_cost_contribution", {}).get(
+        "pull_response", {}
+    )
+
+    total_cost_adjustment = 0.0
+
+    # Try to get exact cost for each available event
+    for event in events_we_can_skip:
+        if event in pull_response_details:
+            cost = pull_response_details[event].get("cost_with_selectivity", 0.0)
+            total_cost_adjustment += cost
+        else:
+            # Fallback: proportional adjustment
+            fraction = len(events_we_can_skip) / len(all_primitive_events_in_step)
+            step_cost = step_details.get("total_step_costs", 0.0)
+            total_cost_adjustment += step_cost * fraction
+            break  # Only do fallback once for all events
+
+    return total_cost_adjustment
 
 
 def _extract_primitive_events_from_step(events_to_pull: List[Any]) -> Set[str]:
@@ -960,37 +1414,11 @@ def _extract_primitive_events_from_step(events_to_pull: List[Any]) -> Set[str]:
     return all_primitive_events
 
 
-def _calculate_event_cost_adjustment(
-    event: str,
-    step_pull_request_details: Dict[str, Any],
-    step_total_cost: float,
-    fraction_available: float,
-) -> float:
-    """
-    Calculate the cost adjustment for a specific event.
-
-    Args:
-        event: The event name
-        step_pull_request_details: Pull request details from the step
-        step_total_cost: Total cost of the step
-        fraction_available: Fraction of events available in this step
-
-    Returns:
-        Cost adjustment value for this event
-    """
-    cost_adjustment = step_pull_request_details.get(event, {}).get(
-        "cost_with_selectivity", 0
-    )
-    if cost_adjustment == 0:
-        cost_adjustment = step_total_cost * fraction_available
-    return cost_adjustment
-
-
 def _update_step_metadata(
     step_details: Dict[str, Any],
     events_we_can_skip: Set[str],
     node: int,
-    global_event_placement_tracker: Any,
+    stack_of_events_per_node: Dict[int, Dict[str, Any]],
 ) -> None:
     """
     Update step details with metadata about acquired events.
@@ -999,73 +1427,15 @@ def _update_step_metadata(
         step_details: Step details dictionary to update
         events_we_can_skip: Set of events that can be skipped
         node: Node ID
-        global_event_placement_tracker: Tracker for event placement metadata
+        stack_of_events_per_node: Stack tracking events at each node
     """
     step_details["already_at_node"] = list(events_we_can_skip)
     step_details["acquired_by_query"] = {}
 
     for event in events_we_can_skip:
-        metadata = global_event_placement_tracker.get_event_metadata(
-            node_id=node, event=event
-        )
+        metadata = get_event_metadata_from_stack(stack_of_events_per_node, node, event)
         if metadata:
-            step_details["acquired_by_query"][event] = metadata.get_query_id()
-
-
-def _process_acquisition_step(
-    step_details: Dict[str, Any],
-    events_already_available: Set[str],
-    node: int,
-    global_event_placement_tracker: Any,
-) -> Tuple[float, float]:
-    """
-    Process a single acquisition step and calculate cost/latency adjustments.
-
-    Args:
-        step_details: Details of the acquisition step
-        events_already_available: Set of events already available at the node
-        node: Node ID
-        global_event_placement_tracker: Tracker for event placement metadata
-
-    Returns:
-        Tuple of (cost_adjustment, latency_adjustment)
-    """
-    events_to_pull = step_details.get("events_to_pull", [])
-    step_total_cost = step_details.get("total_step_costs", 0.0)
-    step_total_latency = step_details.get("total_latency", 0.0)
-    step_cost_details = step_details.get("detailed_cost_contribution", {})
-    step_pull_request_details = step_cost_details.get("pull_response", {})
-
-    # Extract primitive events from this step
-    all_primitive_events_in_step = _extract_primitive_events_from_step(events_to_pull)
-
-    # Find events we can skip (intersection of needed and available)
-    events_we_can_skip = all_primitive_events_in_step & events_already_available
-
-    if not events_we_can_skip:
-        return 0.0, 0.0
-
-    # Update step metadata
-    _update_step_metadata(
-        step_details, events_we_can_skip, node, global_event_placement_tracker
-    )
-
-    # Check if all events in step are available (complete step skip)
-    if all_primitive_events_in_step <= events_already_available:
-        return step_total_cost, step_total_latency
-
-    # Partial adjustment - calculate individual event costs
-    fraction_available = len(events_we_can_skip) / len(all_primitive_events_in_step)
-    total_cost_adjustment = 0.0
-
-    for event in events_we_can_skip:
-        event_cost = _calculate_event_cost_adjustment(
-            event, step_pull_request_details, step_total_cost, fraction_available
-        )
-        total_cost_adjustment += event_cost
-
-    # For partial steps, we don't adjust latency (keep original latency)
-    return total_cost_adjustment, 0.0
+            step_details["acquired_by_query"][event] = metadata.get("query_id")
 
 
 def handle_intersection(
@@ -1073,31 +1443,33 @@ def handle_intersection(
     results: Dict[str, Any],
     available_events: Set[str],
     needed_events: Set[str],
-    global_event_placement_tracker: Any,
-) -> Tuple[float, float, float, float]:
+    stack_of_events_per_node: Dict[int, Dict[str, Any]],
+) -> Tuple[float, float, float, float, float]:
     """
     Handle cost adjustments when some events are already available at the placement node.
 
-    This function removes acquisition costs for events that don't need to be acquired
-    because they're already present at the node. It handles both primitive events (A, B, C)
-    and complex events (SEQ(A, B), AND(C, D)) by extracting the primitive components.
+    This function adjusts costs for BOTH all-push and push-pull strategies separately
+    based on their respective acquisition plans.
 
     Args:
         node: Node ID where placement is being considered
         results: Cost calculation results dictionary
         available_events: Set of events available at the node
         needed_events: Set of events needed for the projection
-        global_event_placement_tracker: Tracker for event placement metadata
+        stack_of_events_per_node: Stack tracking events at each node
 
     Returns:
-        Tuple: (adjusted_all_push_costs, adjusted_push_pull_costs, adjusted_latency, transmission_ratio)
+        Tuple: (adjusted_all_push_costs, adjusted_push_pull_costs,
+                adjusted_all_push_latency, adjusted_push_pull_latency,
+                adjusted_transmission_ratio)
     """
     # Extract current costs from results
     current_all_push_costs = results["all_push_costs"]
     current_push_pull_costs = results["push_pull_costs"]
-    current_latency = results["latency"]
+    current_all_push_latency = results["all_push_latency"]
+    current_push_pull_latency = results["push_pull_latency"]
     current_transmission_ratio = results["transmission_ratio"]
-    current_acquisition_steps = results["aquisition_steps"]
+    push_pull_acquisition_steps = results["aquisition_steps"]
 
     # Find events that are both available and needed (intersection)
     events_already_available = available_events & needed_events
@@ -1107,25 +1479,63 @@ def handle_intersection(
         return (
             current_all_push_costs,
             current_push_pull_costs,
-            current_latency,
+            current_all_push_latency,
+            current_push_pull_latency,
             current_transmission_ratio,
         )
 
-    # Process each acquisition step
-    total_cost_adjustment = 0.0
-    total_latency_adjustment = 0.0
+    # Determine which scenario we're in
+    strategies_are_same = (
+        current_all_push_costs == current_push_pull_costs
+        and current_all_push_latency == current_push_pull_latency
+    )
 
-    for step_details in current_acquisition_steps.values():
-        cost_adj, latency_adj = _process_acquisition_step(
-            step_details, events_already_available, node, global_event_placement_tracker
+    if strategies_are_same:
+        # Scenario 1: PrePP returned all-push as optimal (same costs/latencies)
+        # Only adjust the push-pull acquisition steps (which is the same as all-push)
+        adjusted_costs, adjusted_latency = _adjust_acquisition_steps(
+            push_pull_acquisition_steps,
+            events_already_available,
+            node,
+            stack_of_events_per_node,
         )
-        total_cost_adjustment += cost_adj
-        total_latency_adjustment += latency_adj
 
-    # Apply cost adjustments
-    adjusted_push_pull_costs = max(0.0, current_push_pull_costs - total_cost_adjustment)
-    adjusted_all_push_costs = max(0.0, current_all_push_costs - total_cost_adjustment)
-    adjusted_latency = max(0.0, current_latency - total_latency_adjustment)
+        adjusted_all_push_costs = max(0.0, current_all_push_costs - adjusted_costs)
+        adjusted_push_pull_costs = adjusted_all_push_costs
+        adjusted_all_push_latency = max(
+            0.0, current_all_push_latency - adjusted_latency
+        )
+        adjusted_push_pull_latency = adjusted_all_push_latency
+    else:
+        # Scenario 2: Different strategies - adjust each separately
+        # Adjust push-pull using its acquisition steps
+        push_pull_cost_adj, push_pull_latency_adj = _adjust_acquisition_steps(
+            push_pull_acquisition_steps,
+            events_already_available,
+            node,
+            stack_of_events_per_node,
+        )
+
+        # For all-push, we need to create synthetic all-push acquisition steps
+        # since PrePP didn't provide them (it returned push-pull as better)
+        # We'll use step 0 from push_pull_acquisition_steps to extract needed info
+        all_push_cost_adj, all_push_latency_adj = _adjust_all_push_acquisition(
+            push_pull_acquisition_steps,
+            events_already_available,
+            node,
+            stack_of_events_per_node,
+        )
+
+        adjusted_push_pull_costs = max(
+            0.0, current_push_pull_costs - push_pull_cost_adj
+        )
+        adjusted_all_push_costs = max(0.0, current_all_push_costs - all_push_cost_adj)
+        adjusted_push_pull_latency = max(
+            0.0, current_push_pull_latency - push_pull_latency_adj
+        )
+        adjusted_all_push_latency = max(
+            0.0, current_all_push_latency - all_push_latency_adj
+        )
 
     # Recalculate transmission ratio
     if adjusted_all_push_costs > 0:
@@ -1136,7 +1546,8 @@ def handle_intersection(
     return (
         adjusted_all_push_costs,
         adjusted_push_pull_costs,
-        adjusted_latency,
+        adjusted_all_push_latency,
+        adjusted_push_pull_latency,
         adjusted_transmission_ratio,
     )
 

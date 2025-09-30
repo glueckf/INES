@@ -6,7 +6,7 @@ maintaining compatibility with the legacy API while providing a clean
 internal implementation.
 """
 
-from typing import Any
+from typing import Any, Dict, Optional
 import networkx
 from .logging import get_kraken_logger
 from .global_placement_tracker import get_global_placement_tracker
@@ -41,6 +41,8 @@ def run_greedy_kraken(
     projection_rates_selectivity: dict,
     graph: networkx.Graph,
     network_data_nodes: list,
+    nodes_per_primitive_event: dict,
+    local_rate_lookup: Optional[Dict[str, Dict[int, float]]] = None,
     sinks: list[int] = [0],
 ) -> Any:
     """Compute optimal joint operator placement and push-pull communication strategy.
@@ -165,6 +167,9 @@ def run_greedy_kraken(
                 )
 
             # Calculate the costs for placing the current projection on this node
+            # Extract placement information from global tracker
+            placed_subqueries = _extract_placed_subqueries_from_tracker()
+
             # This function respects already placed subqueries if there are any
             # Also respects already locally available events
             # And also adds the final costs if the final query e.g. projection = query in query_workload
@@ -183,6 +188,9 @@ def run_greedy_kraken(
                 pairwise_distance_matrix=pairwise_distance_matrix,
                 sink_nodes=sinks,
                 has_placed_subqueries=has_placed_subqueries,
+                placed_subqueries=placed_subqueries,
+                nodes_per_primitive_event=nodes_per_primitive_event,
+                local_rate_lookup=local_rate_lookup,
             )
 
             # Initialize the relevant variables from the results we got back
@@ -328,3 +336,27 @@ def run_greedy_kraken(
     except Exception as e:
         logger.error(f"Error in compute_kraken_for_projection: {e}")
         raise
+
+
+def _extract_placed_subqueries_from_tracker() -> Dict[Any, int]:
+    """
+    Extract placed subqueries mapping from global placement tracker.
+
+    Returns:
+        Dict mapping subquery -> node_id for placed subqueries
+    """
+    placed_subqueries = {}
+    global_placement_tracker = get_global_placement_tracker()
+
+    # Get all tracked projections and their placements
+    # Note: The global tracker API would need to provide a method to get all placed projections
+    # This is a placeholder implementation that assumes such a method exists or can be added
+    if hasattr(global_placement_tracker, "_placement_history"):
+        for projection in global_placement_tracker._placement_history:
+            if global_placement_tracker.has_placement_for(projection):
+                placement_decision = global_placement_tracker.get_best_placement(
+                    projection
+                )
+                placed_subqueries[projection] = placement_decision.node
+
+    return placed_subqueries
