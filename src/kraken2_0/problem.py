@@ -1,32 +1,48 @@
 from typing import List, Any, Dict
 
 from src.kraken2_0.components.event_stack_manager import update_event_stack
+from src.kraken2_0.components.cost_calculator import CostCalculator
+from src.kraken2_0.components.optimizer import PlacementOptimizer
+from src.kraken2_0.components.sorter import EventPlacementSorter
 from src.kraken2_0.state import SolutionCandidate, PlacementInfo
 
 
 class PlacementProblem:
-
-    def __init__(self, processing_order: List[Any], latency_threshold: float, context: Dict[str, Any]):
+    def __init__(
+        self,
+        processing_order: List[Any],
+        latency_threshold: float,
+        context: Dict[str, Any],
+    ):
         """Initializes the entire problem context"""
 
         # --- Core Search & Problem Parameters ---
         self.processing_order = processing_order
-        self.latency_threshold = latency_threshold if latency_threshold is not None else float("inf")
-        self.query_workload = context['query_workload']
-        self.dependencies_per_projection = context['dependencies_per_projection']
-        self.latency_weighting_factor = context.get('latency_weighting_factor', 1.0)  # The 'xi' factor
+        self.latency_threshold = (
+            latency_threshold if latency_threshold is not None else float("inf")
+        )
+        self.query_workload = context["query_workload"]
+        self.dependencies_per_projection = context["dependencies_per_projection"]
+        self.latency_weighting_factor = context.get(
+            "latency_weighting_factor", 1.0
+        )  # The 'xi' factor
 
         # --- Instantiate Helper Component ---
-        self.optimizer = PlacementOptimizer(context['graph'], context.get('routing_dict', {}))
+        self.optimizer = PlacementOptimizer(
+            context["graph"], context.get("routing_dict", {})
+        )
         self.sorter = EventPlacementSorter()
         self.cost_calculator = CostCalculator(context)
 
+        # Add problem reference to cost calculator for accessing placed subqueries
+        self.cost_calculator.params["problem_ref"] = self
+
     def get_initial_candidate(self) -> SolutionCandidate:
-        """ Return the root node of the Solution Space S """
+        """Return the root node of the Solution Space S"""
         return SolutionCandidate()
 
     def is_goal(self, candidate: SolutionCandidate) -> bool:
-        """ Checks if a candidate represent a complete and valid solution e.g. a complete INEv graph. """
+        """Checks if a candidate represent a complete and valid solution e.g. a complete INEv graph."""
 
         # Here we should do more checks in the future, for now we only check if each projection has been placed.
         return len(candidate.placements) == len(self.processing_order)
@@ -50,7 +66,8 @@ class PlacementProblem:
         # If the current state is the start state, the index returns 0 starting with the first projection and so on
         projection_index = len(s_current.placements)
 
-        if self.is_goal(s_current): return []
+        if self.is_goal(s_current):
+            return []
 
         # Get the next projection to be placed from the processing_order
         p = self.processing_order[projection_index]
@@ -65,6 +82,9 @@ class PlacementProblem:
             p, placed_subqueries, self.cost_calculator.params
         )
 
+        if not possible_nodes:
+            return []
+
         # This sorts the nodes in an optimized manner to allow for pruning.
         # The goal is to: Check nodes that have all the inputs available first
         # Then go from the bottom of the network to the cloud, this way our latency constraint allows for pruning
@@ -74,7 +94,6 @@ class PlacementProblem:
 
         # Now we can loop through each node n
         for n in candidate_nodes:
-
             # We calculate the costs for getting all the inputs to this node.
             # This returns a list of dicts, one for each valid comm strategy (e.g. push, predicate based push-pull)
             strategy_results = self.cost_calculator.calculate(p, n, s_current)
@@ -87,9 +106,12 @@ class PlacementProblem:
                 s_next_temp = self._create_next_candidate(s_current, p, n, result)
 
                 # Perform the accurate, step-by-step latency check.
-                max_latency_so_far = s_next_temp.get_max_latency_of_partial_plan(self)
+                max_latency_so_far = s_next_temp.get_critical_path_latency(self)
 
-                if s_next_temp.strategy == "push" and max_latency_so_far > self.latency_threshold:
+                if (
+                    result["strategy"] == "all_push"
+                    and max_latency_so_far > self.latency_threshold
+                ):
                     # Pruning condition achieved, we can prune everything.
                     pruning = True
                     break
@@ -100,17 +122,13 @@ class PlacementProblem:
             if pruning:
                 break
 
-            s_next_options.sort(key=lambda s: s.cumulative_cost, reverse=True)
-            return s_next_options
+        s_next_options.sort(key=lambda s: s.cumulative_cost)
+        return s_next_options
 
     def _create_next_candidate(
-            self,
-            s_current: SolutionCandidate,
-            p: Any,
-            n: int,
-            strategy_result: dict
+        self, s_current: SolutionCandidate, p: Any, n: int, strategy_result: dict
     ) -> SolutionCandidate:
-        """ Helper function to create a new, extended SolutionCandidate object. """
+        """Helper function to create a new, extended SolutionCandidate object."""
         new_placements = s_current.placements.copy()
         new_event_stack = {k: v.copy() for k, v in s_current.event_stack.items()}
 
@@ -128,14 +146,11 @@ class PlacementProblem:
 
         # TODO: Implement this in /kraken/components/event_stack_manager.py
         update_event_stack(
-            stack=new_event_stack,
-            node_id=n,
-            query_id=p,
-            placement_info=placement_info
+            stack=new_event_stack, node_id=n, query_id=p, placement_info=placement_info
         )
 
         return SolutionCandidate(
             placements=new_placements,
             cumulative_cost=s_current.cumulative_cost + placement_info.individual_cost,
-            event_stack=new_event_stack
+            event_stack=new_event_stack,
         )

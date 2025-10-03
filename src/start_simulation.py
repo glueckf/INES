@@ -68,9 +68,15 @@ def _log_detailed_placement_decisions(
         ines_latency: INES total latency
     """
     try:
-        placements = integrated_operator_placement_results["formatted_results"][
-            "placements"
-        ]
+        # Extract placements from new structure
+        best_solution = integrated_operator_placement_results.get("best_solution", {})
+        solution = best_solution.get("solution")
+
+        if solution is None or not hasattr(solution, "placements"):
+            logger.warning("[PLACEMENT_ANALYSIS] No placements available in results")
+            return
+
+        placements = solution.placements
 
         logger.info(
             f"[PLACEMENT_ANALYSIS] Detailed placement decisions (Kraken latency {kraken_latency:.3f} >= 1.5x INES {ines_latency:.3f}):"
@@ -82,7 +88,8 @@ def _log_detailed_placement_decisions(
         # Log summary statistics
         total_placements = len(placements)
         cloud_placements = sum(
-            1 for p in placements.values() if p.get("placement_node") == 0
+            1 for placement_info in placements.values()
+            if placement_info.node == 0
         )
         fog_placements = total_placements - cloud_placements
 
@@ -93,61 +100,44 @@ def _log_detailed_placement_decisions(
         logger.info(f"[PLACEMENT_ANALYSIS] Fog placements: {fog_placements}")
 
         # Log each placement decision in detail
-        for i, (projection, details) in enumerate(placements.items(), 1):
-            if details.get("success", False):
-                node = details.get("placement_node", "unknown")
-                cost = details.get("total_cost", 0)
-                strategy = details.get("strategy", "unknown")
-                latency = details.get("plan_details", {}).get("latency", 0)
+        for i, (projection, placement_info) in enumerate(placements.items(), 1):
+            node = placement_info.node
+            cost = placement_info.individual_cost
+            strategy = placement_info.strategy
 
-                # Calculate hops from cloud (node 0)
-                hops_from_cloud = "unknown"
-                if isinstance(node, int):
-                    if node == 0:
-                        hops_from_cloud = 0  # Cloud node
+            # Calculate hops from cloud (node 0)
+            hops_from_cloud = "unknown"
+            if isinstance(node, int):
+                if node == 0:
+                    hops_from_cloud = 0  # Cloud node
+                else:
+                    # Try to calculate actual hops if graph data is available
+                    if graph_data is not None:
+                        try:
+                            import networkx as nx
+
+                            if hasattr(graph_data, "shortest_path_length"):
+                                hops_from_cloud = nx.shortest_path_length(
+                                    graph_data, source=0, target=node
+                                )
+                            else:
+                                hops_from_cloud = (
+                                    1  # Fallback: assume direct connection to fog
+                                )
+                        except (ImportError, Exception):
+                            hops_from_cloud = 1  # Fallback
                     else:
-                        # Try to calculate actual hops if graph data is available
-                        if graph_data is not None:
-                            try:
-                                import networkx as nx
+                        hops_from_cloud = (
+                            1  # Simplified: cloud vs fog approximation
+                        )
 
-                                if hasattr(graph_data, "shortest_path_length"):
-                                    hops_from_cloud = nx.shortest_path_length(
-                                        graph_data, source=0, target=node
-                                    )
-                                else:
-                                    hops_from_cloud = (
-                                        1  # Fallback: assume direct connection to fog
-                                    )
-                            except (ImportError, Exception):
-                                hops_from_cloud = 1  # Fallback
-                        else:
-                            hops_from_cloud = (
-                                1  # Simplified: cloud vs fog approximation
-                            )
-
-                logger.info(
-                    f"[PLACEMENT_DETAIL] {i:2d}. Projection: {projection[:50]}..."
-                )
-                logger.info(
-                    f"    Node: {node}, Strategy: {strategy}, Cost: {cost:.3f}, Latency: {latency:.3f}"
-                )
-                logger.info(f"    Hops from cloud: {hops_from_cloud}")
-
-                # Log additional details if available
-                plan_details = details.get("plan_details", {})
-                if "transmission_ratio" in plan_details:
-                    logger.info(
-                        f"    Transmission ratio: {plan_details['transmission_ratio']:.3f}"
-                    )
-                if "computing_time" in plan_details:
-                    logger.info(
-                        f"    Computing time: {plan_details['computing_time']:.3f}"
-                    )
-            else:
-                logger.warning(
-                    f"[PLACEMENT_DETAIL] {i:2d}. Failed placement for: {projection[:50]}..."
-                )
+            logger.info(
+                f"[PLACEMENT_DETAIL] {i:2d}. Projection: {str(projection)[:50]}..."
+            )
+            logger.info(
+                f"    Node: {node}, Strategy: {strategy}, Cost: {cost:.3f}"
+            )
+            logger.info(f"    Hops from cloud: {hops_from_cloud}")
 
     except Exception as e:
         logger.error(
@@ -305,59 +295,39 @@ class OptimizedCSVWriter:
             "query_length",
             "simulation_mode",
             "median_selectivity",
+            "latency_threshold",
             # Metadata
             "total_projections_placed",
-            "placement_difference_to_ines_count",
             "placements_at_cloud",
             "graph_density",
+            "strategy_name",
+            "strategy_status",
             # Computation times
             "combigen_time_seconds",
             "ines_placement_time_seconds",
             "ines_push_pull_time_seconds",
             "ines_total_time_seconds",
-            "kraken_execution_time_seconds",
-            "kraken_execution_time_placement",
-            "kraken_execution_time_push_pull",
-            # Algorithm metrics
-            "prepp_call_count",
-            "placement_evaluations_count",
-            "prepp_cache_hits",
-            "prepp_cache_misses",
-            "prepp_cache_hit_rate",
-            # Network topology metrics
-            "network_clustering_coefficient",
-            "network_centralization",
-            "avg_node_degree",
-            # Query complexity metrics
-            "query_complexity_score",
-            "highest_query_output_rate",
-            "projection_dependency_length",
+            "kraken_total_execution_time_seconds",
+            "kraken_strategy_execution_time_seconds",
             # Placement costs
             "all_push_central_cost",
             "inev_cost",
             "ines_cost",
-            "kraken_cost",
+            "kraken_total_cost",
+            "kraken_workload_cost",
+            "kraken_average_cost_per_placement",
             # Latency
             "all_push_central_latency",
             "ines_latency",
-            "kraken_latency",
+            "kraken_max_latency",
         ]
 
-        kraken_metadata = integrated_operator_placement_results["formatted_results"][
-            "metadata"
-        ]
-        kraken_summary = integrated_operator_placement_results["formatted_results"][
-            "summary"
-        ]
-
-        # Extract all data (keeping original logic)
+        # Extract all data from new Kraken structure
         row_data_dict = self._extract_row_data_dict(
             integrated_operator_placement_results,
             ines_results,
             config,
             graph_density,
-            kraken_metadata,
-            kraken_summary,
         )
 
         # Return row values in correct order
@@ -369,15 +339,11 @@ class OptimizedCSVWriter:
         ines_results,
         config,
         graph_density,
-        kraken_metadata,
-        kraken_summary,
     ) -> Dict[str, Any]:
-        """Extract row data into dictionary format."""
+        """Extract row data into dictionary format using new Kraken 2.0 structure."""
         # Extract IDs
         ines_simulation_id = ines_results[0]
-        kraken_simulation_id = integrated_operator_placement_results[
-            "kraken_simulation_id"
-        ]
+        kraken_simulation_id = integrated_operator_placement_results.get("run_id", "")
 
         # Extract config parameters
         network_size = config.network_size
@@ -390,13 +356,22 @@ class OptimizedCSVWriter:
         query_length = config.query_length
         simulation_mode = config.mode.value
         median_selectivity = ines_results[11]
+        latency_threshold = config.latency_threshold
+
+        # Extract from new Kraken 2.0 structure
+        best_solution = integrated_operator_placement_results.get("best_solution", {})
+        best_metrics = best_solution.get("metrics", {})
+        strategies = integrated_operator_placement_results.get("strategies", {})
+        problem_info = integrated_operator_placement_results.get("problem_info", {})
+
+        # Get the strategy that was used (default to 'greedy')
+        strategy_name = best_solution.get("strategy_name", "greedy") if best_solution else "none"
+        strategy_data = strategies.get(strategy_name, {})
+        strategy_status = strategy_data.get("status", "unknown")
 
         # Extract metadata
-        total_projections_placed = kraken_summary.get("successful_placements", 0)
-        placement_difference_to_ines_count = kraken_summary.get(
-            "placement_difference_count", 0
-        )
-        placements_at_cloud = kraken_metadata.get("placements_at_cloud", 0)
+        total_projections_placed = best_metrics.get("num_placements", 0)
+        placements_at_cloud = best_metrics.get("placements_at_cloud", 0)
         graph_density_value = graph_density
 
         # Computation times
@@ -406,49 +381,25 @@ class OptimizedCSVWriter:
         ines_total_time_seconds = float(ines_placement_time_seconds) + float(
             ines_push_pull_time_seconds
         )
-        kraken_execution_time_seconds = kraken_metadata.get(
-            "kraken_execution_time_seconds", 0
+        kraken_total_execution_time_seconds = integrated_operator_placement_results.get(
+            "total_execution_time_seconds", 0
         )
-        kraken_execution_time_placement = kraken_metadata.get(
-            "kraken_execution_time_placement", 0
-        )
-        kraken_execution_time_push_pull = kraken_metadata.get(
-            "kraken_execution_time_push_pull", 0
-        )
-
-        # Algorithm metrics
-        prepp_call_count = kraken_metadata.get("prepp_call_count", 0)
-        placement_evaluations_count = kraken_metadata.get(
-            "placement_evaluations_count", 0
-        )
-        prepp_cache_hits = kraken_metadata.get("prepp_cache_hits", 0)
-        prepp_cache_misses = kraken_metadata.get("prepp_cache_misses", 0)
-        prepp_cache_hit_rate = kraken_metadata.get("prepp_cache_hit_rate", 0.0)
-
-        # Network topology metrics
-        network_clustering_coefficient = kraken_metadata.get(
-            "network_clustering_coefficient", 0.0
-        )
-        network_centralization = kraken_metadata.get("network_centralization", 0.0)
-        avg_node_degree = kraken_metadata.get("avg_node_degree", 0.0)
-
-        # Query complexity metrics
-        query_complexity_score = kraken_metadata.get("query_complexity_score", 0.0)
-        highest_query_output_rate = kraken_metadata.get("highest_query_output_rate")
-        projection_dependency_length = kraken_metadata.get(
-            "projection_dependency_length", 0
+        kraken_strategy_execution_time_seconds = strategy_data.get(
+            "execution_time_seconds", 0
         )
 
         # Placement costs
         all_push_central_cost = ines_results[2]
         inev_cost = ines_results[3]
         ines_cost = ines_results[21]
-        kraken_cost = kraken_metadata.get("push_pull_plan_cost_sum", 0)
+        kraken_total_cost = best_metrics.get("total_cost", 0)
+        kraken_workload_cost = best_metrics.get("workload_cost", 0)
+        kraken_average_cost_per_placement = best_metrics.get("average_cost_per_placement", 0)
 
         # Latency
         all_push_central_latency = ines_results[15]
         ines_latency = ines_results[23]
-        kraken_latency = kraken_metadata.get("push_pull_plan_latency", 0)
+        kraken_max_latency = best_metrics.get("max_latency", 0)
 
         return {
             # IDs
@@ -465,42 +416,31 @@ class OptimizedCSVWriter:
             "query_length": query_length,
             "simulation_mode": simulation_mode,
             "median_selectivity": median_selectivity,
+            "latency_threshold": latency_threshold,
             # Metadata
             "total_projections_placed": total_projections_placed,
-            "placement_difference_to_ines_count": placement_difference_to_ines_count,
             "placements_at_cloud": placements_at_cloud,
             "graph_density": graph_density_value,
+            "strategy_name": strategy_name,
+            "strategy_status": strategy_status,
             # Computation times
             "combigen_time_seconds": combigen_time_seconds,
             "ines_placement_time_seconds": ines_placement_time_seconds,
             "ines_push_pull_time_seconds": ines_push_pull_time_seconds,
             "ines_total_time_seconds": ines_total_time_seconds,
-            "kraken_execution_time_seconds": kraken_execution_time_seconds,
-            "kraken_execution_time_placement": kraken_execution_time_placement,
-            "kraken_execution_time_push_pull": kraken_execution_time_push_pull,
-            # Algorithm metrics
-            "prepp_call_count": prepp_call_count,
-            "placement_evaluations_count": placement_evaluations_count,
-            "prepp_cache_hits": prepp_cache_hits,
-            "prepp_cache_misses": prepp_cache_misses,
-            "prepp_cache_hit_rate": prepp_cache_hit_rate,
-            # Network topology metrics
-            "network_clustering_coefficient": network_clustering_coefficient,
-            "network_centralization": network_centralization,
-            "avg_node_degree": avg_node_degree,
-            # Query complexity metrics
-            "query_complexity_score": query_complexity_score,
-            "highest_query_output_rate": highest_query_output_rate,
-            "projection_dependency_length": projection_dependency_length,
+            "kraken_total_execution_time_seconds": kraken_total_execution_time_seconds,
+            "kraken_strategy_execution_time_seconds": kraken_strategy_execution_time_seconds,
             # Placement costs
             "all_push_central_cost": all_push_central_cost,
             "inev_cost": inev_cost,
             "ines_cost": ines_cost,
-            "kraken_cost": kraken_cost,
+            "kraken_total_cost": kraken_total_cost,
+            "kraken_workload_cost": kraken_workload_cost,
+            "kraken_average_cost_per_placement": kraken_average_cost_per_placement,
             # Latency
             "all_push_central_latency": all_push_central_latency,
             "ines_latency": ines_latency,
-            "kraken_latency": kraken_latency,
+            "kraken_max_latency": kraken_max_latency,
         }
 
 
@@ -514,7 +454,7 @@ def get_csv_writer() -> OptimizedCSVWriter:
     global _csv_writer
     with _csv_writer_lock:
         if _csv_writer is None:
-            result_dir = "./kraken/result"
+            result_dir = "./kraken2_0/result"
             csv_file_path = os.path.join(result_dir, "run_results.csv")
             _csv_writer = OptimizedCSVWriter(csv_file_path, batch_size=20)
     return _csv_writer
@@ -541,10 +481,9 @@ def write_final_results(
     )
 
     # Handle detailed logging for latency analysis
-    kraken_metadata = integrated_operator_placement_results["formatted_results"][
-        "metadata"
-    ]
-    kraken_latency = kraken_metadata.get("push_pull_plan_latency", 0)
+    best_solution = integrated_operator_placement_results.get("best_solution", {})
+    best_metrics = best_solution.get("metrics", {})
+    kraken_latency = best_metrics.get("max_latency", 0)
     ines_latency = ines_results[23]
 
     # Conditional detailed logging when Kraken latency is at least 1.5x INES latency
@@ -841,7 +780,7 @@ def process_job_batch(job_batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 {
                     "job_id": job_id,
                     "ines_results": simulation.results,
-                    "integrated_results": simulation.integrated_operator_placement_results,
+                    "integrated_results": simulation.kraken_results,
                     "config": config,
                     "graph_density": graph_density,
                     "ines_object": simulation,
@@ -913,7 +852,7 @@ def run_simulation_worker(job_data: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "job_id": job_id,
             "ines_results": simulation.results,
-            "integrated_results": simulation.integrated_operator_placement_results,
+            "integrated_results": simulation.kraken_results,
             "config": config,
             "graph_density": graph_density,
             "ines_object": simulation,
@@ -970,6 +909,7 @@ def run_single_simulation(
         num_runs: Number of simulation runs to execute
         mode: Simulation mode determining what components are fixed/random
         enable_parallel: Whether to enable parallel processing
+        latency_threshold: Threshold for latency calculation
         max_workers: Maximum number of parallel workers (auto-detected if None)
     """
     # Calculate parent_factor from max_parents for consistency with parameter study
@@ -1004,7 +944,7 @@ def run_single_simulation(
         query_size=workload_size,
         query_length=query_length,
         mode=mode,
-        latency_threshold=latency_threshold
+        latency_threshold=latency_threshold,
     )
 
     # Generate jobs for the same configuration
@@ -1061,7 +1001,7 @@ def run_parameter_study(
         node_event_ratio: Fixed node event ratio
         num_event_types: Fixed number of event types
         event_skew: Fixed event skew parameter
-        latency_treshold: Optional latency threshold to make kraken latency aware
+        latency_threshold: Optional latency threshold to make kraken latency aware
         mode: Simulation mode
         enable_parallel: Whether to enable parallel processing
         max_workers: Maximum number of parallel workers
@@ -1100,7 +1040,7 @@ def run_parameter_study(
                         query_size=workload_size,
                         query_length=query_length,
                         mode=mode,
-                        latency_threshold=latency_threshold
+                        latency_threshold=latency_threshold,
                     )
 
                     # Generate multiple runs for this combination
@@ -1149,30 +1089,29 @@ def main() -> None:
     Choose between single simulation debugging or full parameter study.
     """
 
-    # Option 1: Single simulation debugging (commented by default)
-    # Uncomment for debugging single configurations
-    run_single_simulation(
-        network_size=30,
-        mode=SimulationMode.FULLY_DETERMINISTIC,
-        enable_parallel=False,
-        num_runs=1
-    )
-
-    # # Option 2: Full parameter study (active by default)
-    # run_parameter_study(
-    #     network_sizes=[30],
-    #     workload_sizes=[3],
-    #     parent_factors=[1.8],
-    #     query_lengths=[3],
-    #     runs_per_combination=1,
-    #     node_event_ratio=0.5,
-    #     num_event_types=6,
-    #     event_skew=2.0,
-    #     mode=SimulationMode.RANDOM,
+    # # Option 1: Single simulation debugging (commented by default)
+    # # Uncomment for debugging single configurations
+    # run_single_simulation(
+    #     network_size=30,
+    #     mode=SimulationMode.FULLY_DETERMINISTIC,
     #     enable_parallel=False,
-    #     max_workers=14,
-    #     latency_threshold=40
+    #     num_runs=1
     # )
+
+    # Option 2: Full parameter study (active by default)
+    run_parameter_study(
+        network_sizes=[30],
+        workload_sizes=[3],
+        parent_factors=[1.8],
+        query_lengths=[3],
+        runs_per_combination=1,
+        node_event_ratio=0.5,
+        num_event_types=6,
+        event_skew=2.0,
+        mode=SimulationMode.RANDOM,
+        enable_parallel=False,
+        max_workers=14,
+    )
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ class PlacementProblem:
     pass
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass()
 class PlacementInfo:
     """
     Represents a single Vertex 'v' in the INEv Graph 'I'.

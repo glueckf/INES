@@ -804,9 +804,7 @@ def generate_prePP(
         runs,
         plan_print,
         allPairs,
-        is_deterministic=False,
-        projection=None,
-        combination_dict=None
+        is_deterministic=False
 ):
     # print(f"[PREPP_DEBUG] generate_prePP called with is_deterministic={is_deterministic}")
     # Accessing the arguments
@@ -1183,5 +1181,6 @@ def generate_prePP(
                 ]
     except Exception as e:
         # Minimal error logging
+        print(e)
         pass
         return None

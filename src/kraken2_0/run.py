@@ -129,18 +129,20 @@ def _gather_problem_parameters(ines_context: Any) -> Dict[str, Any]:
 
         # Network topology and routing
         "pairwise_distance_matrix": ines_context.allPairs,
+        "all_pairs": ines_context.allPairs,  # Alias for cost calculator
         "graph": ines_context.graph,
         "routing_dict": create_routing_dict(ines_context.graph),
 
         # Network and event data
         "network_data": ines_context.h_network_data,
+        "event_nodes": ines_context.h_eventNodes,
         "event_distribution_matrix": ines_context.h_eventNodes,
         "index_event_nodes": ines_context.h_IndexEventNodes,
         "global_event_rates": ines_context.h_rates_data,
 
         # Projection and selectivity
         "projection_rates_selectivity": ines_context.h_projrates,
-        "pairwise_selectivity": ines_context.selectivities,
+        "pairwise_selectivities": ines_context.selectivities,
         "filter_by_projection": ines_context.h_projFilterDict,
 
         # Node information
@@ -148,8 +150,14 @@ def _gather_problem_parameters(ines_context: Any) -> Dict[str, Any]:
         "primitive_events_per_projection": ines_context.h_primitive_events,
         "nodes_per_primitive_event": ines_context.h_nodes,
 
+        # Sink nodes (cloud is typically node 0)
+        "sink_nodes": [0],
+
         # Optimization structures
         "local_rate_lookup": ines_context.h_local_rate_lookup,
+
+        # Simulation mode
+        "simulation_mode": ines_context.config.mode,
 
         # Latency weighting
         "latency_weighting_factor": getattr(ines_context, "latency_weighting_factor", 1.0),
@@ -172,18 +180,21 @@ def _select_strategy(algorithm_enum: Any):
         NotImplementedError: If the strategy is not yet implemented.
         ValueError: If the algorithm enum is not recognized.
     """
+    from src.kraken2_0.search import GreedySearch
 
-    # TODO: Import actual strategy classes once implemented
-    # from src.kraken2_0.search.backtracking import BacktrackingSearch
-    # from src.kraken2_0.search.greedy import GreedySearch
-    # from src.kraken2_0.search.branch_and_cut import BranchAndCutSearch
+    # Get the algorithm name
+    algorithm_name = algorithm_enum.value if hasattr(algorithm_enum, 'value') else str(algorithm_enum)
 
-    if algorithm_enum:
-        return None
+    if algorithm_name == "greedy":
+        return GreedySearch()
+    elif algorithm_name == "backtracking":
+        raise NotImplementedError("Backtracking search not yet implemented")
+    elif algorithm_name == "branch_and_cut":
+        raise NotImplementedError("Branch and cut search not yet implemented")
     else:
         raise ValueError(
             f"Unknown placement algorithm: {algorithm_enum}. "
-            f"Valid options: BACKTRACKING, GREEDY, BRANCH_AND_CUT"
+            f"Valid options: GREEDY, BACKTRACKING, BRANCH_AND_CUT"
         )
 
 

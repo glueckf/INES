@@ -30,20 +30,20 @@ def initialize_selectivities(primEvents,x=0.2,y=0.05):
     selectivity = 0
 
     # Make selectivities smaller based on the biggest rate
-    max_rate = np.max(primitive_events_rates)
+    max_rate = float(np.max(primitive_events_rates))
 
-    for i in projlist: 
-        #if len(filter_numbers(i)) >1 :                  
+    for i in projlist:
+        #if len(filter_numbers(i)) >1 :
             random_float = rd.uniform(0.0,0.4)
             if random_float > 0.3:
                 selectivity = 1
                 selectivities[str(i)] = selectivity
                 selectivities[str(changeorder(i))] = selectivity
             if random_float <= 0.3:
-                selectivity = rd.uniform(x,y) / max_rate
+                selectivity = float(rd.uniform(x,y) / max_rate)
                 selectivities[str(i)] = selectivity
                 selectivities[str(changeorder(i))] = selectivity
-    selectivitiesExperimentData = [x, np.median(list(selectivities.values()))]
+    selectivitiesExperimentData = [x, float(np.median(list(selectivities.values())))]
     return selectivities,selectivitiesExperimentData
 
 
