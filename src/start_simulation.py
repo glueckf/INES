@@ -14,9 +14,49 @@ from INES import INES, SimulationConfig, SimulationMode
 logger = logging.getLogger(__name__)
 
 
+def _safe_float_convert(value: Any) -> float:
+    """Safely convert value to float, handling numpy types and their string representations."""
+    if value is None:
+        return 0.0
+
+    # If it's already a number, convert directly
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    # If it's a numpy type, get the item value
+    if hasattr(value, 'item'):
+        return float(value.item())
+
+    # If it's a string representation of numpy type like "np.int64(647)"
+    if isinstance(value, str) and 'np.' in value:
+        import re
+        match = re.search(r'\(([^)]+)\)', value)
+        if match:
+            return float(match.group(1))
+
+    # Last resort: direct conversion
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        logger.warning(f"Could not convert {value} (type: {type(value)}) to float, returning 0.0")
+        return 0.0
+
+
 # Global worker state for persistent initialization
 _worker_state = {}
 _worker_lock = threading.Lock()
+
+
+def _setup_worker_path(parent_dir: str = None) -> None:
+    """Set up sys.path for worker processes BEFORE any unpickling."""
+    import sys
+    if parent_dir is None:
+        # Fallback: compute from __file__ if available
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(script_dir)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+        print(f"[WORKER_PATH_SETUP] Added {parent_dir} to sys.path", flush=True)
 
 
 def _initialize_worker() -> None:
@@ -25,6 +65,10 @@ def _initialize_worker() -> None:
     This runs once per worker process and caches expensive operations.
     """
     global _worker_state
+
+    # Ensure sys.path is set up (should already be done by initializer, but double-check)
+    _setup_worker_path()
+
     with _worker_lock:
         if "initialized" not in _worker_state:
             logger.info("[WORKER_INIT] Initializing worker process")
@@ -181,42 +225,32 @@ class OptimizedCSVWriter:
                 "query_length",
                 "simulation_mode",
                 "median_selectivity",
+                "xi",
+                "latency_threshold",
                 # Metadata
                 "total_projections_placed",
-                "placement_difference_to_ines_count",
                 "placements_at_cloud",
                 "graph_density",
+                "strategy_name",
+                "strategy_status",
                 # Computation times
                 "combigen_time_seconds",
                 "ines_placement_time_seconds",
                 "ines_push_pull_time_seconds",
                 "ines_total_time_seconds",
-                "kraken_execution_time_seconds",
-                "kraken_execution_time_placement",
-                "kraken_execution_time_push_pull",
-                # Algorithm metrics
-                "prepp_call_count",
-                "placement_evaluations_count",
-                "prepp_cache_hits",
-                "prepp_cache_misses",
-                "prepp_cache_hit_rate",
-                # Network topology metrics
-                "network_clustering_coefficient",
-                "network_centralization",
-                "avg_node_degree",
-                # Query complexity metrics
-                "query_complexity_score",
-                "highest_query_output_rate",
-                "projection_dependency_length",
+                "kraken_total_execution_time_seconds",
+                "kraken_strategy_execution_time_seconds",
                 # Placement costs
                 "all_push_central_cost",
                 "inev_cost",
                 "ines_cost",
-                "kraken_cost",
+                "kraken_total_cost",
+                "kraken_workload_cost",
+                "kraken_average_cost_per_placement",
                 # Latency
                 "all_push_central_latency",
                 "ines_latency",
-                "kraken_latency",
+                "kraken_max_latency",
             ]
 
             with open(self.csv_file_path, "w", newline="", encoding="utf-8") as f:
@@ -295,6 +329,7 @@ class OptimizedCSVWriter:
             "query_length",
             "simulation_mode",
             "median_selectivity",
+            "xi",
             "latency_threshold",
             # Metadata
             "total_projections_placed",
@@ -341,6 +376,16 @@ class OptimizedCSVWriter:
         graph_density,
     ) -> Dict[str, Any]:
         """Extract row data into dictionary format using new Kraken 2.0 structure."""
+        # Debug logging to see what we're receiving
+        logger.info(f"[CSV_EXTRACT] Keys in integrated_results: {list(integrated_operator_placement_results.keys())}")
+        logger.info(f"[CSV_EXTRACT] Has best_solution: {'best_solution' in integrated_operator_placement_results}")
+        if 'best_solution' in integrated_operator_placement_results:
+            bs = integrated_operator_placement_results.get('best_solution')
+            logger.info(f"[CSV_EXTRACT] best_solution type: {type(bs)}, value: {bs is not None}")
+            if bs:
+                logger.info(f"[CSV_EXTRACT] best_solution keys: {list(bs.keys()) if isinstance(bs, dict) else 'NOT A DICT'}")
+                logger.info(f"[CSV_EXTRACT] best_solution metrics: {bs.get('metrics', {}) if isinstance(bs, dict) else 'N/A'}")
+
         # Extract IDs
         ines_simulation_id = ines_results[0]
         kraken_simulation_id = integrated_operator_placement_results.get("run_id", "")
@@ -355,51 +400,66 @@ class OptimizedCSVWriter:
         workload_size = config.query_size
         query_length = config.query_length
         simulation_mode = config.mode.value
-        median_selectivity = ines_results[11]
+        median_selectivity = _safe_float_convert(ines_results[11])
+        xi = config.xi
         latency_threshold = config.latency_threshold
 
         # Extract from new Kraken 2.0 structure
-        best_solution = integrated_operator_placement_results.get("best_solution", {})
-        best_metrics = best_solution.get("metrics", {})
+        best_solution = integrated_operator_placement_results.get("best_solution")
         strategies = integrated_operator_placement_results.get("strategies", {})
         problem_info = integrated_operator_placement_results.get("problem_info", {})
 
-        # Get the strategy that was used (default to 'greedy')
-        strategy_name = best_solution.get("strategy_name", "greedy") if best_solution else "none"
-        strategy_data = strategies.get(strategy_name, {})
-        strategy_status = strategy_data.get("status", "unknown")
+        # Handle case where best_solution might be None
+        if best_solution and isinstance(best_solution, dict):
+            best_metrics = best_solution.get("metrics", {})
+            strategy_name = best_solution.get("strategy_name", "greedy")
+            strategy_data = strategies.get(strategy_name, {})
+            strategy_status = strategy_data.get("status", "unknown")
 
-        # Extract metadata
-        total_projections_placed = best_metrics.get("num_placements", 0)
-        placements_at_cloud = best_metrics.get("placements_at_cloud", 0)
+            # Extract metadata
+            total_projections_placed = best_metrics.get("num_placements", 0)
+            placements_at_cloud = best_metrics.get("placements_at_cloud", 0)
+
+            # Kraken costs and latency
+            kraken_total_cost = best_metrics.get("total_cost", 0)
+            kraken_workload_cost = best_metrics.get("workload_cost", 0)
+            kraken_average_cost_per_placement = best_metrics.get("average_cost_per_placement", 0)
+            kraken_max_latency = best_metrics.get("max_latency", 0)
+
+            # Strategy execution time
+            kraken_strategy_execution_time_seconds = strategy_data.get("execution_time_seconds", 0)
+        else:
+            # No valid solution from Kraken
+            best_metrics = {}
+            strategy_name = ""
+            strategy_status = ""
+            total_projections_placed = 0
+            placements_at_cloud = 0
+            kraken_total_cost = None
+            kraken_workload_cost = None
+            kraken_average_cost_per_placement = None
+            kraken_max_latency = None
+            kraken_strategy_execution_time_seconds = 0
+
         graph_density_value = graph_density
 
-        # Computation times
-        combigen_time_seconds = ines_results[12]
-        ines_placement_time_seconds = ines_results[14]
-        ines_push_pull_time_seconds = ines_results[22]
-        ines_total_time_seconds = float(ines_placement_time_seconds) + float(
-            ines_push_pull_time_seconds
-        )
+        # Computation times (convert numpy types to Python types)
+        combigen_time_seconds = _safe_float_convert(ines_results[12])
+        ines_placement_time_seconds = _safe_float_convert(ines_results[14])
+        ines_push_pull_time_seconds = _safe_float_convert(ines_results[22])
+        ines_total_time_seconds = ines_placement_time_seconds + ines_push_pull_time_seconds
         kraken_total_execution_time_seconds = integrated_operator_placement_results.get(
             "total_execution_time_seconds", 0
         )
-        kraken_strategy_execution_time_seconds = strategy_data.get(
-            "execution_time_seconds", 0
-        )
 
-        # Placement costs
-        all_push_central_cost = ines_results[2]
-        inev_cost = ines_results[3]
-        ines_cost = ines_results[21]
-        kraken_total_cost = best_metrics.get("total_cost", 0)
-        kraken_workload_cost = best_metrics.get("workload_cost", 0)
-        kraken_average_cost_per_placement = best_metrics.get("average_cost_per_placement", 0)
+        # Placement costs (convert numpy types to Python types)
+        all_push_central_cost = _safe_float_convert(ines_results[2])
+        inev_cost = _safe_float_convert(ines_results[3])
+        ines_cost = _safe_float_convert(ines_results[21])
 
-        # Latency
-        all_push_central_latency = ines_results[15]
-        ines_latency = ines_results[23]
-        kraken_max_latency = best_metrics.get("max_latency", 0)
+        # Latency (convert numpy types to Python types)
+        all_push_central_latency = _safe_float_convert(ines_results[15])
+        ines_latency = _safe_float_convert(ines_results[23])
 
         return {
             # IDs
@@ -416,6 +476,7 @@ class OptimizedCSVWriter:
             "query_length": query_length,
             "simulation_mode": simulation_mode,
             "median_selectivity": median_selectivity,
+            "xi": xi,
             "latency_threshold": latency_threshold,
             # Metadata
             "total_projections_placed": total_projections_placed,
@@ -454,7 +515,10 @@ def get_csv_writer() -> OptimizedCSVWriter:
     global _csv_writer
     with _csv_writer_lock:
         if _csv_writer is None:
-            result_dir = "./kraken2_0/result"
+            # Use absolute path based on script location to ensure it works
+            # regardless of where the script is run from
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            result_dir = os.path.join(script_dir, "kraken2_0", "result")
             csv_file_path = os.path.join(result_dir, "run_results.csv")
             _csv_writer = OptimizedCSVWriter(csv_file_path, batch_size=20)
     return _csv_writer
@@ -484,10 +548,11 @@ def write_final_results(
     best_solution = integrated_operator_placement_results.get("best_solution", {})
     best_metrics = best_solution.get("metrics", {})
     kraken_latency = best_metrics.get("max_latency", 0)
-    ines_latency = ines_results[23]
+    ines_latency = _safe_float_convert(ines_results[23])
 
     # Conditional detailed logging when Kraken latency is at least 1.5x INES latency
     if kraken_latency >= 1.5 * ines_latency:
+        central_latency = _safe_float_convert(ines_results[15])
         logger.info(
             f"[LATENCY_ANALYSIS] Kraken latency ({kraken_latency:.3f}) >= 1.5x INES latency ({ines_latency:.3f})"
         )
@@ -496,7 +561,7 @@ def write_final_results(
         )
         logger.info(f"  - INES latency: {ines_latency:.3f}")
         logger.info(f"  - Kraken latency: {kraken_latency:.3f}")
-        logger.info(f"  - Central latency: {ines_results[15]:.3f}")
+        logger.info(f"  - Central latency: {central_latency:.3f}")
 
         # Log detailed placement decisions for both INES and Kraken
         _log_detailed_placement_decisions(
@@ -628,6 +693,14 @@ class OptimizedSimulationManager:
         """
         Execute jobs in parallel using batching to reduce process overhead.
         """
+        # Ensure main process also has correct path for unpickling worker results
+        import sys
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(script_dir)
+        if parent_dir not in sys.path:
+            sys.path.insert(0, parent_dir)
+            logger.info(f"[MAIN_PROCESS] Added {parent_dir} to sys.path")
+
         # Create job batches to amortize process creation overhead
         total_jobs = len(jobs)
         job_batches = []
@@ -640,7 +713,11 @@ class OptimizedSimulationManager:
             f"[BATCHING] Created {len(job_batches)} batches of {self.batch_size} jobs each"
         )
 
-        with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
+        with ProcessPoolExecutor(
+            max_workers=self.max_workers,
+            initializer=_setup_worker_path,
+            initargs=(parent_dir,)
+        ) as executor:
             # Submit batches instead of individual jobs
             future_to_batch = {
                 executor.submit(process_job_batch, batch): i
@@ -667,7 +744,10 @@ class OptimizedSimulationManager:
                         )
 
                 except Exception as e:
+                    import traceback
+                    error_trace = traceback.format_exc()
                     logger.error(f"[ERROR] Batch {batch_idx} execution failed: {str(e)}")
+                    logger.error(f"[ERROR] Traceback:\n{error_trace}")
                     # Mark all jobs in the failed batch as failed
                     batch_size_actual = len(job_batches[batch_idx])
                     self.failed_jobs += batch_size_actual
@@ -791,8 +871,10 @@ def process_job_batch(job_batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             )
 
         except Exception as e:
+            import traceback
+            error_traceback = traceback.format_exc()
             error_message = (
-                f"Exception in job {job_data.get('job_id', 'unknown')}: {str(e)}"
+                f"Exception in job {job_data.get('job_id', 'unknown')}: {str(e)}\n{error_traceback}"
             )
             logger.error(f"[BATCH_WORKER_ERROR] {error_message}")
 
@@ -831,6 +913,13 @@ def run_simulation_worker(job_data: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dictionary with job results including all data needed for write_final_results
     """
+    # Ensure sys.path includes the parent directory for 'src' imports
+    import sys
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(script_dir)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+
     try:
         job_id = job_data["job_id"]
         config = job_data["config"]
@@ -889,6 +978,7 @@ def run_single_simulation(
     num_runs: int = 50,
     mode: SimulationMode = SimulationMode.RANDOM,
     enable_parallel: bool = True,
+    xi: float = 0.0,
     latency_threshold: float = None,
     max_workers: Optional[int] = None,
 ) -> None:
@@ -909,6 +999,7 @@ def run_single_simulation(
         num_runs: Number of simulation runs to execute
         mode: Simulation mode determining what components are fixed/random
         enable_parallel: Whether to enable parallel processing
+        xi: Xi value for processing latency weight (default 0.0)
         latency_threshold: Threshold for latency calculation
         max_workers: Maximum number of parallel workers (auto-detected if None)
     """
@@ -944,6 +1035,7 @@ def run_single_simulation(
         query_size=workload_size,
         query_length=query_length,
         mode=mode,
+        xi=xi,
         latency_threshold=latency_threshold,
     )
 
@@ -981,6 +1073,7 @@ def run_parameter_study(
     node_event_ratio: float = 0.5,
     num_event_types: int = 6,
     event_skew: float = 2.0,
+    xi: float = 0,
     latency_threshold: float = None,
     mode: SimulationMode = SimulationMode.FULLY_DETERMINISTIC,
     enable_parallel: bool = False,
@@ -1001,6 +1094,7 @@ def run_parameter_study(
         node_event_ratio: Fixed node event ratio
         num_event_types: Fixed number of event types
         event_skew: Fixed event skew parameter
+        xi: Xi value for processing latency weight (default 0.0)
         latency_threshold: Optional latency threshold to make kraken latency aware
         mode: Simulation mode
         enable_parallel: Whether to enable parallel processing
@@ -1039,6 +1133,7 @@ def run_parameter_study(
                         parent_factor=parent_factor,
                         query_size=workload_size,
                         query_length=query_length,
+                        xi=xi,
                         mode=mode,
                         latency_threshold=latency_threshold,
                     )
@@ -1100,17 +1195,18 @@ def main() -> None:
 
     # Option 2: Full parameter study (active by default)
     run_parameter_study(
-        network_sizes=[30],
-        workload_sizes=[3],
+        network_sizes=[10, 30, 50, 100],
+        workload_sizes=[3, 5, 8],
         parent_factors=[1.8],
-        query_lengths=[3],
-        runs_per_combination=1,
+        query_lengths=[3, 5, 8],
+        runs_per_combination=4,
         node_event_ratio=0.5,
         num_event_types=6,
         event_skew=2.0,
         mode=SimulationMode.RANDOM,
-        enable_parallel=False,
+        enable_parallel=True,
         max_workers=14,
+        xi=0,
     )
 
 
