@@ -27,6 +27,7 @@ class CostCalculator:
         """
         self.params = context
         self._prepp_cache: Dict[str, Any] = {}
+        self._static_buffer_cache: Optional[str] = None
 
     def calculate(
         self, p: Any, n: int, s_current: SolutionCandidate
@@ -263,28 +264,32 @@ class CostCalculator:
         Returns:
             Input buffer for PrePP or None if creation fails
         """
+        if self._static_buffer_cache is None:
+            # First time call: Generate and cache the static sections
+            context = self._get_placement_context(p, s_current)
+            static_lines = self._generate_network_config()
+            static_lines.append("selectivities")
+            static_lines.append(str(context["selectivities"]))
+            static_lines.append("")
+            self._static_buffer_cache = "\n".join(static_lines)
+
+        # Start with the cached static sections
+        buffer_content = [self._static_buffer_cache]
+
         context = self._get_placement_context(p, s_current)
 
-        # Generate the network configuration
-        lines = self._generate_network_config()
-
-        # Add selectivities
-        lines.append("selectivities")
-        lines.append(str(context["selectivities"]))
-        lines.append("")
-
-        # Add queries
-        lines.append("queries")
-        lines.append(str(p))
-        lines.append("")
-
-        # Add muse graph with placed subqueries
-        lines.append("muse graph")
-        self._add_muse_graph_entries(lines, p, n, context["placed_subqueries"])
+        # Add the dynamic sections
+        buffer_content.append("queries")
+        buffer_content.append(str(p))
+        buffer_content.append("")
+        buffer_content.append("muse graph")
+        dynamic_lines = []
+        self._add_muse_graph_entries(dynamic_lines, p, n, context["placed_subqueries"])
+        buffer_content.append("\n".join(dynamic_lines))
 
         # Create buffer
         buffer = io.StringIO()
-        buffer.write("\n".join(lines))
+        buffer.write("\n".join(buffer_content))
         buffer.seek(0)
 
         return buffer
