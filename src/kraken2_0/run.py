@@ -20,7 +20,6 @@ from src.kraken2_0.state import SolutionCandidate
 def run_kraken_solver(
     ines_context: Any,
     strategies_to_run: List[Any],
-    latency_threshold: float = None,
 ) -> Dict[str, Any]:
     """
     Main entry point for the Kraken 2.0 solver framework.
@@ -57,7 +56,7 @@ def run_kraken_solver(
     processing_order = sorted(dependencies.keys(), key=lambda x: dependencies[x])
 
     # Phase 2: Problem Instantiation
-    problem = PlacementProblem(processing_order, latency_threshold, context)
+    problem = PlacementProblem(processing_order, context)
 
     # Phase 3: Strategy Execution Loop
     strategy_results = {}
@@ -103,7 +102,7 @@ def run_kraken_solver(
         "problem_info": {
             "num_projections": len(processing_order),
             "num_queries": len(ines_context.query_workload),
-            "latency_threshold": latency_threshold,
+            "latency_threshold": context.get("latency_threshold", None),
             "network_size": len(ines_context.network),
         },
         "best_solution": best_solution,
@@ -159,8 +158,9 @@ def _gather_problem_parameters(ines_context: Any) -> Dict[str, Any]:
         # Simulation mode
         "simulation_mode": ines_context.config.mode,
 
-        # Latency weighting
-        "latency_weighting_factor": getattr(ines_context, "latency_weighting_factor", 1.0),
+        # Latency
+        "latency_threshold": ines_context.config.latency_threshold,
+        "latency_weighting_factor": ines_context.config.xi,
     }
 
     return context

@@ -11,9 +11,10 @@ class PlacementProblem:
     def __init__(
         self,
         processing_order: List[Any],
-        latency_threshold: float,
         context: Dict[str, Any],
     ):
+
+        latency_threshold = context["latency_threshold"]
         """Initializes the entire problem context"""
 
         # --- Core Search & Problem Parameters ---
