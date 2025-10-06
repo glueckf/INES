@@ -189,17 +189,16 @@ def _log_detailed_placement_decisions(
         )
 
 
-class OptimizedCSVWriter:
+class SimplifiedCSVWriter:
     """
-    Thread-safe CSV writer with batched operations for better I/O performance.
+    Thread-safe CSV writer with immediate writes for better reliability.
+    No batching - each result is written immediately to disk.
     """
 
-    def __init__(self, csv_file_path: str, batch_size: int = 20):
+    def __init__(self, csv_file_path: str):
         self.csv_file_path = csv_file_path
-        self.batch_size = batch_size
         self.lock = threading.Lock()
         self.write_count = 0
-        self.batch_buffer = []
 
         # Ensure result directory exists
         os.makedirs(os.path.dirname(csv_file_path), exist_ok=True)
@@ -265,7 +264,7 @@ class OptimizedCSVWriter:
         graph_density: float,
         ines_object: Any,
     ) -> None:
-        """Write a single result with batching for better performance."""
+        """Write a single result immediately with thread safety."""
         with self.lock:
             # Prepare the row data
             row_data = self._prepare_row_data(
@@ -276,34 +275,12 @@ class OptimizedCSVWriter:
                 ines_object,
             )
 
-            self.batch_buffer.append(row_data)
-
-            # Flush if buffer is full
-            if len(self.batch_buffer) >= self.batch_size:
-                self._flush_buffer()
-
-    def flush(self) -> None:
-        """Flush any remaining buffered data."""
-        with self.lock:
-            if self.batch_buffer:
-                self._flush_buffer()
-
-    def _flush_buffer(self) -> None:
-        """Internal method to write buffered data to CSV."""
-        if not self.batch_buffer:
-            return
-
-        with open(self.csv_file_path, "a", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            for row_data in self.batch_buffer:
+            # Write immediately to CSV
+            with open(self.csv_file_path, "a", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
                 writer.writerow(row_data)
 
-        self.write_count += len(self.batch_buffer)
-        logger.debug(
-            f"[CSV_WRITER] Wrote batch of {len(self.batch_buffer)} results "
-            f"(total: {self.write_count})"
-        )
-        self.batch_buffer.clear()
+            self.write_count += 1
 
     def _prepare_row_data(
         self,
@@ -510,7 +487,7 @@ _csv_writer = None
 _csv_writer_lock = threading.Lock()
 
 
-def get_csv_writer() -> OptimizedCSVWriter:
+def get_csv_writer() -> SimplifiedCSVWriter:
     """Get or create the global CSV writer instance."""
     global _csv_writer
     with _csv_writer_lock:
@@ -520,7 +497,7 @@ def get_csv_writer() -> OptimizedCSVWriter:
             script_dir = os.path.dirname(os.path.abspath(__file__))
             result_dir = os.path.join(script_dir, "kraken2_0", "result")
             csv_file_path = os.path.join(result_dir, "run_results.csv")
-            _csv_writer = OptimizedCSVWriter(csv_file_path, batch_size=20)
+            _csv_writer = SimplifiedCSVWriter(csv_file_path)
     return _csv_writer
 
 
@@ -532,7 +509,7 @@ def write_final_results(
     ines_object: Any,
 ) -> None:
     """
-    Write final combined simulation results to CSV file using optimized writer.
+    Write final combined simulation results to CSV file using simplified writer.
     Moved from operator_placement_legacy_hook.py for consolidated I/O.
     """
     writer = get_csv_writer()
@@ -569,12 +546,6 @@ def write_final_results(
         )
 
 
-def flush_csv_writer() -> None:
-    """Flush any remaining data in the CSV writer."""
-    writer = get_csv_writer()
-    writer.flush()
-
-
 @dataclass
 class SimulationJob:
     """Represents a single simulation job with all necessary data."""
@@ -592,62 +563,109 @@ class SimulationJob:
         }
 
 
-class OptimizedSimulationManager:
+def run_simulation_worker(job_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Manages optimized parallel simulation execution with hybrid batching approach.
+    Worker function for parallel simulation execution.
+    Executes a single simulation job and returns the complete results.
 
-    Key optimizations:
-    - Batches jobs to reduce process overhead
-    - Uses optimal worker count based on CPU cores
-    - Buffers I/O operations for better throughput
-    - Persistent worker processes with job batching
+    Args:
+        job_data: Dictionary containing serialized job data
+
+    Returns:
+        Dictionary with job results including all data needed for CSV writing
+    """
+    global _worker_state
+
+    # Initialize worker on first use
+    _initialize_worker()
+
+    try:
+        job_id = job_data["job_id"]
+        config = job_data["config"]
+        parameter_set_id = job_data["parameter_set_id"]
+
+        # Use cached modules from worker state
+        INES_class = _worker_state["INES"]
+        calculate_graph_density = _worker_state["calculate_graph_density"]
+
+        # Execute INES simulation using cached class
+        simulation = INES_class(config)
+
+        # Calculate graph density using cached function
+        graph_density = calculate_graph_density(simulation.graph)
+
+        # Return complete result data
+        return {
+            "job_id": job_id,
+            "ines_results": simulation.results,
+            "integrated_results": simulation.kraken_results,
+            "config": config,
+            "graph_density": graph_density,
+            "ines_object": simulation,
+            "success": True,
+            "error_msg": None,
+            "parameter_set_id": parameter_set_id,
+        }
+
+    except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        error_message = (
+            f"Exception in job {job_data.get('job_id', 'unknown')}: {str(e)}\n{error_traceback}"
+        )
+        logger.error(f"[WORKER_ERROR] {error_message}")
+
+        return {
+            "job_id": job_data.get("job_id", -1),
+            "ines_results": None,
+            "integrated_results": None,
+            "config": job_data.get("config"),
+            "graph_density": None,
+            "ines_object": None,
+            "success": False,
+            "error_msg": error_message,
+            "parameter_set_id": job_data.get("parameter_set_id", "unknown"),
+        }
+
+
+class ParallelSimulationExecutor:
+    """
+    Streamlined parallel simulation executor with direct job execution.
+
+    Key features:
+    - No batching overhead - one job per task
+    - Direct parallel execution with ProcessPoolExecutor
+    - Immediate result processing with as_completed
+    - Minimal memory footprint and complexity
     """
 
     def __init__(
         self,
         enable_parallel: bool = True,
         max_workers: Optional[int] = None,
-        batch_size: Optional[int] = None,
     ):
         self.enable_parallel = enable_parallel
 
-        # Optimize worker count: use fewer processes to reduce overhead
+        # Set worker count
         if max_workers is None:
             if enable_parallel:
-                # Use half the CPU cores to reduce process overhead
-                self.max_workers = max(1, multiprocessing.cpu_count() // 2)
+                self.max_workers = multiprocessing.cpu_count()
             else:
                 self.max_workers = 1
         else:
             self.max_workers = max_workers
 
-        # Auto-calculate optimal batch size if not provided
-        if batch_size is None:
-            if enable_parallel and self.max_workers > 1:
-                # Larger batches for parallel processing to amortize overhead
-                self.batch_size = 4
-            else:
-                # No batching for sequential processing
-                self.batch_size = 1
-        else:
-            self.batch_size = batch_size
-
         # Force single worker for sequential mode
         if not enable_parallel:
             self.max_workers = 1
-            self.batch_size = 1
 
         self.successful_jobs = 0
         self.failed_jobs = 0
         self.start_time = None
 
-        # Results buffer for batched I/O
-        self.result_buffer = []
-        self.io_batch_size = 10  # Write results in batches of 10
-
     def run_simulations(self, jobs: List[SimulationJob]) -> None:
         """
-        Execute all simulation jobs using optimized batching strategy.
+        Execute all simulation jobs using direct parallel execution.
 
         Args:
             jobs: List of SimulationJob objects to execute
@@ -657,22 +675,15 @@ class OptimizedSimulationManager:
             f"[SIMULATION] Starting {total_jobs} jobs with {self.max_workers} workers"
         )
         logger.info(
-            f"[SIMULATION] Parallel: {'Enabled' if self.enable_parallel else 'Disabled'}, "
-            f"Batch size: {self.batch_size}, I/O batch size: {self.io_batch_size}"
+            f"[SIMULATION] Parallel: {'Enabled' if self.enable_parallel else 'Disabled'}"
         )
 
         self.start_time = time.time()
 
         if self.enable_parallel and self.max_workers > 1:
-            self._run_parallel_batched(jobs)
+            self._run_parallel(jobs)
         else:
             self._run_sequential(jobs)
-
-        # Flush any remaining buffered results
-        self._flush_result_buffer()
-
-        # Ensure CSV writer flushes any remaining data
-        flush_csv_writer()
 
         # Print final statistics
         total_time = time.time() - self.start_time
@@ -689,11 +700,11 @@ class OptimizedSimulationManager:
         if self.failed_jobs > 0:
             logger.warning(f"[RESULTS] Warning: {self.failed_jobs} job(s) failed")
 
-    def _run_parallel_batched(self, jobs: List[SimulationJob]) -> None:
+    def _run_parallel(self, jobs: List[SimulationJob]) -> None:
         """
-        Execute jobs in parallel using batching to reduce process overhead.
+        Execute jobs in parallel with direct task submission.
         """
-        # Ensure main process also has correct path for unpickling worker results
+        # Ensure main process has correct path for unpickling
         import sys
         script_dir = os.path.dirname(os.path.abspath(__file__))
         parent_dir = os.path.dirname(script_dir)
@@ -701,42 +712,29 @@ class OptimizedSimulationManager:
             sys.path.insert(0, parent_dir)
             logger.info(f"[MAIN_PROCESS] Added {parent_dir} to sys.path")
 
-        # Create job batches to amortize process creation overhead
         total_jobs = len(jobs)
-        job_batches = []
-
-        for i in range(0, total_jobs, self.batch_size):
-            batch = jobs[i : i + self.batch_size]
-            job_batches.append([job.to_dict() for job in batch])
-
-        logger.info(
-            f"[BATCHING] Created {len(job_batches)} batches of {self.batch_size} jobs each"
-        )
 
         with ProcessPoolExecutor(
             max_workers=self.max_workers,
             initializer=_setup_worker_path,
             initargs=(parent_dir,)
         ) as executor:
-            # Submit batches instead of individual jobs
-            future_to_batch = {
-                executor.submit(process_job_batch, batch): i
-                for i, batch in enumerate(job_batches)
+            # Submit individual jobs (no batching)
+            future_to_job = {
+                executor.submit(run_simulation_worker, job.to_dict()): job
+                for job in jobs
             }
 
-            # Process batch results as they complete
-            for future in as_completed(future_to_batch):
-                batch_idx = future_to_batch[future]
+            # Process results as they complete
+            for future in as_completed(future_to_job):
+                job = future_to_job[future]
                 try:
-                    batch_results = future.result()
-
-                    # Process each result in the batch
-                    for result in batch_results:
-                        self._process_completed_job(result)
+                    result = future.result()
+                    self._process_completed_job(result)
 
                     # Progress reporting
                     completed_jobs = self.successful_jobs + self.failed_jobs
-                    if completed_jobs % 50 == 0 or batch_idx % 5 == 0:
+                    if completed_jobs % 50 == 0:
                         elapsed = time.time() - self.start_time
                         logger.info(
                             f"[PROGRESS] {completed_jobs}/{total_jobs} jobs completed "
@@ -746,11 +744,9 @@ class OptimizedSimulationManager:
                 except Exception as e:
                     import traceback
                     error_trace = traceback.format_exc()
-                    logger.error(f"[ERROR] Batch {batch_idx} execution failed: {str(e)}")
+                    logger.error(f"[ERROR] Job {job.job_id} execution failed: {str(e)}")
                     logger.error(f"[ERROR] Traceback:\n{error_trace}")
-                    # Mark all jobs in the failed batch as failed
-                    batch_size_actual = len(job_batches[batch_idx])
-                    self.failed_jobs += batch_size_actual
+                    self.failed_jobs += 1
 
     def _run_sequential(self, jobs: List[SimulationJob]) -> None:
         """
@@ -770,16 +766,17 @@ class OptimizedSimulationManager:
 
     def _process_completed_job(self, result: Dict[str, Any]) -> None:
         """
-        Process a completed job result with buffered I/O for better performance.
+        Process a completed job result and write to CSV immediately.
         """
         if result["success"]:
-            # Add to I/O buffer for batched writing
-            self.result_buffer.append(result)
-
-            # Flush buffer when it reaches the batch size
-            if len(self.result_buffer) >= self.io_batch_size:
-                self._flush_result_buffer()
-
+            # Write result immediately
+            write_final_results(
+                result["integrated_results"],
+                result["ines_results"],
+                result["config"],
+                result["graph_density"],
+                result["ines_object"],
+            )
             self.successful_jobs += 1
         else:
             logger.error(
@@ -787,184 +784,6 @@ class OptimizedSimulationManager:
                 f"failed: {result['error_msg']}"
             )
             self.failed_jobs += 1
-
-    def _flush_result_buffer(self) -> None:
-        """
-        Write buffered results to files in batch for better I/O performance.
-        """
-        if self.result_buffer:
-            logger.debug(f"[I/O] Writing batch of {len(self.result_buffer)} results")
-
-            for result in self.result_buffer:
-                write_final_results(
-                    result["integrated_results"],
-                    result["ines_results"],
-                    result["config"],
-                    result["graph_density"],
-                    result["ines_object"],
-                )
-
-            self.result_buffer.clear()
-
-
-def process_job_batch(job_batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Process multiple jobs in sequence within a single worker process to amortize overhead.
-
-    This is the key optimization: instead of creating a new process for each job,
-    we process multiple jobs in the same process to amortize the expensive process
-    creation and INES initialization overhead.
-
-    Args:
-        job_batch: List of serialized job dictionaries
-
-    Returns:
-        List of job results with all data needed for write_final_results
-    """
-    global _worker_state
-
-    # Initialize worker on first use
-    _initialize_worker()
-
-    results = []
-    batch_start_time = time.time()
-
-    # Track job processing in this worker
-    with _worker_lock:
-        _worker_state["job_count"] += len(job_batch)
-        current_job_count = _worker_state["job_count"]
-
-    logger.info(
-        f"[BATCH_WORKER] Processing batch of {len(job_batch)} jobs "
-        f"(total processed by this worker: {current_job_count})"
-    )
-
-    # Use cached modules from worker state
-    INES_class = _worker_state["INES"]
-    calculate_graph_density = _worker_state["calculate_graph_density"]
-
-    for job_data in job_batch:
-        try:
-            job_id = job_data["job_id"]
-            config = job_data["config"]
-            parameter_set_id = job_data["parameter_set_id"]
-
-            # Execute INES simulation using cached class
-            simulation = INES_class(config)
-
-            # Calculate graph density using cached function
-            graph_density = calculate_graph_density(simulation.graph)
-
-            # Store successful result
-            results.append(
-                {
-                    "job_id": job_id,
-                    "ines_results": simulation.results,
-                    "integrated_results": simulation.kraken_results,
-                    "config": config,
-                    "graph_density": graph_density,
-                    "ines_object": simulation,
-                    "success": True,
-                    "error_msg": None,
-                    "parameter_set_id": parameter_set_id,
-                }
-            )
-
-        except Exception as e:
-            import traceback
-            error_traceback = traceback.format_exc()
-            error_message = (
-                f"Exception in job {job_data.get('job_id', 'unknown')}: {str(e)}\n{error_traceback}"
-            )
-            logger.error(f"[BATCH_WORKER_ERROR] {error_message}")
-
-            results.append(
-                {
-                    "job_id": job_data.get("job_id", -1),
-                    "ines_results": None,
-                    "integrated_results": None,
-                    "config": job_data.get("config"),
-                    "graph_density": None,
-                    "success": False,
-                    "error_msg": error_message,
-                    "parameter_set_id": job_data.get("parameter_set_id", "unknown"),
-                }
-            )
-
-    batch_time = time.time() - batch_start_time
-    successful_count = sum(1 for r in results if r["success"])
-    failed_count = len(results) - successful_count
-
-    logger.info(
-        f"[BATCH_WORKER] Completed batch in {batch_time:.1f}s: "
-        f"{successful_count} successful, {failed_count} failed"
-    )
-
-    return results
-
-
-def run_simulation_worker(job_data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Worker function for parallel simulation execution.
-
-    Args:
-        job_data: Dictionary containing serialized job data
-
-    Returns:
-        Dictionary with job results including all data needed for write_final_results
-    """
-    # Ensure sys.path includes the parent directory for 'src' imports
-    import sys
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    parent_dir = os.path.dirname(script_dir)
-    if parent_dir not in sys.path:
-        sys.path.insert(0, parent_dir)
-
-    try:
-        job_id = job_data["job_id"]
-        config = job_data["config"]
-        parameter_set_id = job_data["parameter_set_id"]
-
-        logger.info(
-            f"[WORKER] Starting simulation job {job_id + 1} ({parameter_set_id})"
-        )
-
-        # Execute INES simulation
-        simulation = INES(config)
-
-        # Calculate graph density
-        from INES import calculate_graph_density
-
-        graph_density = calculate_graph_density(simulation.graph)
-
-        # Return complete result data
-        return {
-            "job_id": job_id,
-            "ines_results": simulation.results,
-            "integrated_results": simulation.kraken_results,
-            "config": config,
-            "graph_density": graph_density,
-            "ines_object": simulation,
-            "success": True,
-            "error_msg": None,
-            "parameter_set_id": parameter_set_id,
-        }
-
-    except Exception as e:
-        error_message = (
-            f"Exception in job {job_data.get('job_id', 'unknown')}: {str(e)}"
-        )
-        logger.error(f"[WORKER ERROR] {error_message}")
-        return {
-            "job_id": job_data.get("job_id", -1),
-            "ines_results": None,
-            "integrated_results": None,
-            "config": job_data.get("config"),
-            "graph_density": None,
-            "success": False,
-            "error_msg": error_message,
-            "parameter_set_id": job_data.get("parameter_set_id", "unknown"),
-        }
 
 
 def run_single_simulation(
@@ -986,7 +805,7 @@ def run_single_simulation(
     Run a single simulation configuration multiple times.
 
     This function creates jobs for the same configuration and executes them
-    with the optimized simulation manager.
+    with the parallel simulation executor.
 
     Args:
         network_size: Number of nodes in the network topology
@@ -1053,14 +872,13 @@ def run_single_simulation(
         )
         jobs.append(job)
 
-    # Execute with optimized manager
-    manager = OptimizedSimulationManager(
+    # Execute with parallel executor
+    executor = ParallelSimulationExecutor(
         enable_parallel=enable_parallel,
         max_workers=max_workers,
-        batch_size=2,  # Small batches for single simulations
     )
 
-    manager.run_simulations(jobs)
+    executor.run_simulations(jobs)
     logger.info(f"[SINGLE] Completed {len(jobs)} runs for single configuration")
 
 
@@ -1164,14 +982,13 @@ def run_parameter_study(
         f"Job count mismatch: generated {total_jobs}, expected {expected_jobs}"
     )
 
-    # Execute all jobs with single persistent process pool
-    manager = OptimizedSimulationManager(
+    # Execute all jobs with parallel executor
+    executor = ParallelSimulationExecutor(
         enable_parallel=enable_parallel,
         max_workers=max_workers,
-        batch_size=4,  # Optimized batching for parameter studies
     )
 
-    manager.run_simulations(jobs)
+    executor.run_simulations(jobs)
     logger.info(
         f"[PARAMETER_STUDY] Completed all {total_jobs} jobs across all parameter combinations"
     )
