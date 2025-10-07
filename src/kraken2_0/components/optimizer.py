@@ -113,7 +113,9 @@ class PlacementOptimizer:
         for ev in required_events:
             for etb in index_event_nodes.get(ev, ()):
                 if etb not in etb_sources_cache:
-                    etb_sources_cache[etb] = getNodes(etb, event_nodes, index_event_nodes)
+                    etb_sources_cache[etb] = getNodes(
+                        etb, event_nodes, index_event_nodes
+                    )
                 required_sources.update(etb_sources_cache[etb])
 
         # Fast bail-out: if nothing is required, any non-leaf is suitable

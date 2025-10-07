@@ -17,14 +17,13 @@ class GreedySearch(SearchStrategy):
     This strategy builds a solution by always choosing the next state with
     the minimum cumulative cost, without backtracking.
     """
-    def solve(self, problem):
 
+    def solve(self, problem):
         # Start at the root of the solution space S
         s_current = problem.get_initial_candidate()
 
         # Continue until the INEv graph is complete, e.g. all projections are placed.
         while not problem.is_goal(s_current):
-
             # Generate all possible next states, sorted by best-to-worst by cost.
             s_next_options = problem.expand(s_current)
 

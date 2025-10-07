@@ -10,7 +10,10 @@ class EventPlacementSorter:
     """
 
     def sort_candidate_nodes_optimized(
-        self, candidate_nodes: List[int], projection: Any, event_stack: Dict[int, Dict[str, Any]]
+        self,
+        candidate_nodes: List[int],
+        projection: Any,
+        event_stack: Dict[int, Dict[str, Any]],
     ) -> List[int]:
         """Sort candidate nodes for optimal search with pruning.
 
@@ -59,6 +62,7 @@ class EventPlacementSorter:
 
         # Fallback: parse from string
         import re
+
         proj_str = str(projection)
         proj_str = proj_str.replace("AND", "").replace("SEQ", "")
         proj_str = proj_str.replace("(", "").replace(")", "")

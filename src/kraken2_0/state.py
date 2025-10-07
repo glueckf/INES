@@ -20,7 +20,9 @@ class PlacementInfo:
     node: int  # The physical node n from Graph T
     strategy: str  # e.g. 'all_push' or 'push_pull'
 
-    individual_cost: float  # Cost for this specific node v to acquire and process its inputs
+    individual_cost: (
+        float  # Cost for this specific node v to acquire and process its inputs
+    )
 
     individual_transmission_latency: float  # l_t(v)
     individual_processing_latency: float  # l_p(v)
@@ -61,7 +63,9 @@ class SolutionCandidate:
                 continue
 
             # 1. Find the arrival time of the latest-arriving dependency
-            latest_input_arrival = 0.0  # This represent max(l_v(w) for w in predecessors)
+            latest_input_arrival = (
+                0.0  # This represent max(l_v(w) for w in predecessors)
+            )
             dependencies = problem.dependencies_per_projection.get(p, [])
             for dep in dependencies:
                 latest_input_arrival = max(
@@ -75,7 +79,9 @@ class SolutionCandidate:
 
             # 3. Apply the formal latency model for this single projection:
             # l_v(v) = (l_p(v) * xi) + l_t(v) + max(l_v(w) for w in predecessors)
-            end_to_end_latencies[p] = (processing_latency * xi) + transmission_latency + latest_input_arrival
+            end_to_end_latencies[p] = (
+                (processing_latency * xi) + transmission_latency + latest_input_arrival
+            )
 
         if not end_to_end_latencies:
             return 0.0
@@ -83,7 +89,9 @@ class SolutionCandidate:
         # 4. Return the "high-water mark": the max latency of ANY projection placed so far.
         return max(end_to_end_latencies.values())
 
-    def get_placed_subqueries(self, projection:Any, problem: "PlacementProblem") -> Dict[Any, int]:
+    def get_placed_subqueries(
+        self, projection: Any, problem: "PlacementProblem"
+    ) -> Dict[Any, int]:
         """Helper method to get the locations of already-placed direct dependencies"""
         return {
             dep: self.placements[dep].node
