@@ -3,3 +3,6 @@ src/helper/__pycache__/
 *.png
 *.vscode
 CLAUDE.md
+
+*.parquet
+*.csv

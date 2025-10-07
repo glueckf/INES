@@ -15,7 +15,11 @@ from allPairs import create_routing_dict
 
 from src.kraken2_0.problem import PlacementProblem
 from src.kraken2_0.state import SolutionCandidate
-from src.kraken2_0.results_logger import initialize_detailed_csv, write_detailed_log
+from src.kraken2_0.results_logger import (
+    initialize_logging,
+    write_detailed_log,
+    write_run_results,
+)
 
 
 def run_kraken_solver(
@@ -50,7 +54,7 @@ def run_kraken_solver(
 
     # Initialize detailed logging if enabled
     if enable_detailed_logging:
-        initialize_detailed_csv()
+        initialize_logging()
 
     # Phase 1: Setup & Data Gathering
     context = _gather_problem_parameters(ines_context)
@@ -93,9 +97,9 @@ def run_kraken_solver(
             }
 
             # Collect and enrich detailed logs if enabled
-            if enable_detailed_logging:
+            if enable_detailed_logging and hasattr(problem, "detailed_log"):
                 enriched_log = _enrich_log_with_solution(
-                    problem.detailed_log, solution, str(run_id), strategy_name
+                    problem.detailed_log, solution, str(run_id), strategy_name, problem
                 )
                 master_log_data.extend(enriched_log)
 
@@ -107,12 +111,19 @@ def run_kraken_solver(
                 "execution_time_seconds": strategy_end - strategy_start,
             }
 
-    # Write detailed logs to CSV if enabled
+    # Write detailed logs to Parquet if enabled
     if enable_detailed_logging and master_log_data:
         write_detailed_log(str(run_id), master_log_data)
 
     # Phase 4: Final Report Assembly
     end_time = time.time()
+
+    # Prepare and write run results summary
+    run_results_data = _prepare_run_results_summary(
+        str(run_id), strategy_results, problem
+    )
+    if run_results_data:
+        write_run_results(run_results_data)
 
     # Select best solution (lowest cost among successful strategies)
     best_solution = _select_best_solution(strategy_results)
@@ -313,18 +324,20 @@ def _enrich_log_with_solution(
     solution: SolutionCandidate,
     run_id: str,
     strategy_name: str,
+    problem: Any,
 ) -> List[Dict[str, Any]]:
     """
     Enrich log entries with solution context and metadata.
 
     Marks which placement decisions were part of the final solution path
-    and adds run identification metadata.
+    and adds run identification metadata and problem context.
 
     Args:
         detailed_log: Raw log entries from problem expansion.
         solution: The final solution candidate.
         run_id: Unique identifier for this run.
         strategy_name: Name of the strategy that generated this solution.
+        problem: PlacementProblem instance for accessing workload/processing_order.
 
     Returns:
         List of enriched log entry dictionaries ready for CSV export.
@@ -334,6 +347,10 @@ def _enrich_log_with_solution(
         (info.projection, info.node, info.strategy)
         for info in solution.placements.values()
     }
+
+    # Format workload and processing_order once for all entries
+    workload_str = ";".join(str(q) for q in problem.query_workload)
+    processing_order_str = ";".join(str(p) for p in problem.processing_order)
 
     enriched_log = []
     for entry in detailed_log:
@@ -345,10 +362,71 @@ def _enrich_log_with_solution(
         )
         entry["is_part_of_final_solution"] = decision_tuple in solution_set
 
-        # Add run metadata
+        # Add run metadata (same for all entries in this run)
         entry["run_id"] = run_id
         entry["strategy_name"] = strategy_name
+        entry["workload"] = workload_str
+        entry["processing_order"] = processing_order_str
 
         enriched_log.append(entry)
 
     return enriched_log
+
+
+def _prepare_run_results_summary(
+    run_id: str, strategy_results: Dict[str, Any], problem: PlacementProblem
+) -> List[Dict[str, Any]]:
+    """
+    Prepare summary data for run results from strategy executions.
+
+    Extracts key metrics from each strategy execution and formats them
+    for storage in the run_results Parquet dataset.
+
+    Args:
+        run_id: Unique identifier for this run.
+        strategy_results: Dictionary of results from each strategy execution.
+        problem: PlacementProblem instance for workload information.
+
+    Returns:
+        List of dictionaries containing run result summaries.
+    """
+    workload_str = ";".join(str(q) for q in problem.query_workload)
+    results_data = []
+
+    for strategy_name, result in strategy_results.items():
+        result_entry = {
+            "run_id": run_id,
+            "strategy_name": strategy_name,
+            "workload": workload_str,
+            "status": result["status"],
+            "execution_time_seconds": result["execution_time_seconds"],
+        }
+
+        if result["status"] == "success":
+            metrics = result["metrics"]
+            result_entry.update(
+                {
+                    "total_cost": metrics["total_cost"],
+                    "workload_cost": metrics["workload_cost"],
+                    "max_latency": metrics["max_latency"],
+                    "num_placements": metrics["num_placements"],
+                    "placements_at_cloud": metrics["placements_at_cloud"],
+                    "average_cost_per_placement": metrics["average_cost_per_placement"],
+                }
+            )
+        else:
+            # Fill with None for failed strategies
+            result_entry.update(
+                {
+                    "total_cost": None,
+                    "workload_cost": None,
+                    "max_latency": None,
+                    "num_placements": None,
+                    "placements_at_cloud": None,
+                    "average_cost_per_placement": None,
+                }
+            )
+
+        results_data.append(result_entry)
+
+    return results_data

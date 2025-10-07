@@ -684,7 +684,7 @@ class INES:
         # Call kraken2_0
         from src.kraken2_0.run import run_kraken_solver
 
-        results = run_kraken_solver(self, ["greedy"])
+        results = run_kraken_solver(self, ["greedy"], enable_detailed_logging=True)
 
         self.kraken_results = results
 
