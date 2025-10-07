@@ -24,13 +24,14 @@ def _safe_float_convert(value: Any) -> float:
         return float(value)
 
     # If it's a numpy type, get the item value
-    if hasattr(value, 'item'):
+    if hasattr(value, "item"):
         return float(value.item())
 
     # If it's a string representation of numpy type like "np.int64(647)"
-    if isinstance(value, str) and 'np.' in value:
+    if isinstance(value, str) and "np." in value:
         import re
-        match = re.search(r'\(([^)]+)\)', value)
+
+        match = re.search(r"\(([^)]+)\)", value)
         if match:
             return float(match.group(1))
 
@@ -38,7 +39,9 @@ def _safe_float_convert(value: Any) -> float:
     try:
         return float(value)
     except (ValueError, TypeError):
-        logger.warning(f"Could not convert {value} (type: {type(value)}) to float, returning 0.0")
+        logger.warning(
+            f"Could not convert {value} (type: {type(value)}) to float, returning 0.0"
+        )
         return 0.0
 
 
@@ -50,6 +53,7 @@ _worker_lock = threading.Lock()
 def _setup_worker_path(parent_dir: str = None) -> None:
     """Set up sys.path for worker processes BEFORE any unpickling."""
     import sys
+
     if parent_dir is None:
         # Fallback: compute from __file__ if available
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -79,14 +83,16 @@ def _initialize_worker() -> None:
                 import numpy as np
                 from INES import INES, calculate_graph_density
 
-                _worker_state.update({
-                    "initialized": True,
-                    "networkx": nx,
-                    "numpy": np,
-                    "INES": INES,
-                    "calculate_graph_density": calculate_graph_density,
-                    "job_count": 0,
-                })
+                _worker_state.update(
+                    {
+                        "initialized": True,
+                        "networkx": nx,
+                        "numpy": np,
+                        "INES": INES,
+                        "calculate_graph_density": calculate_graph_density,
+                        "job_count": 0,
+                    }
+                )
 
                 logger.info("[WORKER_INIT] Worker initialization completed")
             except ImportError as e:
@@ -132,8 +138,7 @@ def _log_detailed_placement_decisions(
         # Log summary statistics
         total_placements = len(placements)
         cloud_placements = sum(
-            1 for placement_info in placements.values()
-            if placement_info.node == 0
+            1 for placement_info in placements.values() if placement_info.node == 0
         )
         fog_placements = total_placements - cloud_placements
 
@@ -171,16 +176,12 @@ def _log_detailed_placement_decisions(
                         except (ImportError, Exception):
                             hops_from_cloud = 1  # Fallback
                     else:
-                        hops_from_cloud = (
-                            1  # Simplified: cloud vs fog approximation
-                        )
+                        hops_from_cloud = 1  # Simplified: cloud vs fog approximation
 
             logger.info(
                 f"[PLACEMENT_DETAIL] {i:2d}. Projection: {str(projection)[:50]}..."
             )
-            logger.info(
-                f"    Node: {node}, Strategy: {strategy}, Cost: {cost:.3f}"
-            )
+            logger.info(f"    Node: {node}, Strategy: {strategy}, Cost: {cost:.3f}")
             logger.info(f"    Hops from cloud: {hops_from_cloud}")
 
     except Exception as e:
@@ -354,14 +355,24 @@ class SimplifiedCSVWriter:
     ) -> Dict[str, Any]:
         """Extract row data into dictionary format using new Kraken 2.0 structure."""
         # Debug logging to see what we're receiving
-        logger.info(f"[CSV_EXTRACT] Keys in integrated_results: {list(integrated_operator_placement_results.keys())}")
-        logger.info(f"[CSV_EXTRACT] Has best_solution: {'best_solution' in integrated_operator_placement_results}")
-        if 'best_solution' in integrated_operator_placement_results:
-            bs = integrated_operator_placement_results.get('best_solution')
-            logger.info(f"[CSV_EXTRACT] best_solution type: {type(bs)}, value: {bs is not None}")
+        logger.info(
+            f"[CSV_EXTRACT] Keys in integrated_results: {list(integrated_operator_placement_results.keys())}"
+        )
+        logger.info(
+            f"[CSV_EXTRACT] Has best_solution: {'best_solution' in integrated_operator_placement_results}"
+        )
+        if "best_solution" in integrated_operator_placement_results:
+            bs = integrated_operator_placement_results.get("best_solution")
+            logger.info(
+                f"[CSV_EXTRACT] best_solution type: {type(bs)}, value: {bs is not None}"
+            )
             if bs:
-                logger.info(f"[CSV_EXTRACT] best_solution keys: {list(bs.keys()) if isinstance(bs, dict) else 'NOT A DICT'}")
-                logger.info(f"[CSV_EXTRACT] best_solution metrics: {bs.get('metrics', {}) if isinstance(bs, dict) else 'N/A'}")
+                logger.info(
+                    f"[CSV_EXTRACT] best_solution keys: {list(bs.keys()) if isinstance(bs, dict) else 'NOT A DICT'}"
+                )
+                logger.info(
+                    f"[CSV_EXTRACT] best_solution metrics: {bs.get('metrics', {}) if isinstance(bs, dict) else 'N/A'}"
+                )
 
         # Extract IDs
         ines_simulation_id = ines_results[0]
@@ -400,11 +411,15 @@ class SimplifiedCSVWriter:
             # Kraken costs and latency
             kraken_total_cost = best_metrics.get("total_cost", 0)
             kraken_workload_cost = best_metrics.get("workload_cost", 0)
-            kraken_average_cost_per_placement = best_metrics.get("average_cost_per_placement", 0)
+            kraken_average_cost_per_placement = best_metrics.get(
+                "average_cost_per_placement", 0
+            )
             kraken_max_latency = best_metrics.get("max_latency", 0)
 
             # Strategy execution time
-            kraken_strategy_execution_time_seconds = strategy_data.get("execution_time_seconds", 0)
+            kraken_strategy_execution_time_seconds = strategy_data.get(
+                "execution_time_seconds", 0
+            )
         else:
             # No valid solution from Kraken
             best_metrics = {}
@@ -424,7 +439,9 @@ class SimplifiedCSVWriter:
         combigen_time_seconds = _safe_float_convert(ines_results[12])
         ines_placement_time_seconds = _safe_float_convert(ines_results[14])
         ines_push_pull_time_seconds = _safe_float_convert(ines_results[22])
-        ines_total_time_seconds = ines_placement_time_seconds + ines_push_pull_time_seconds
+        ines_total_time_seconds = (
+            ines_placement_time_seconds + ines_push_pull_time_seconds
+        )
         kraken_total_execution_time_seconds = integrated_operator_placement_results.get(
             "total_execution_time_seconds", 0
         )
@@ -609,10 +626,9 @@ def run_simulation_worker(job_data: Dict[str, Any]) -> Dict[str, Any]:
 
     except Exception as e:
         import traceback
+
         error_traceback = traceback.format_exc()
-        error_message = (
-            f"Exception in job {job_data.get('job_id', 'unknown')}: {str(e)}\n{error_traceback}"
-        )
+        error_message = f"Exception in job {job_data.get('job_id', 'unknown')}: {str(e)}\n{error_traceback}"
         logger.error(f"[WORKER_ERROR] {error_message}")
 
         return {
@@ -706,6 +722,7 @@ class ParallelSimulationExecutor:
         """
         # Ensure main process has correct path for unpickling
         import sys
+
         script_dir = os.path.dirname(os.path.abspath(__file__))
         parent_dir = os.path.dirname(script_dir)
         if parent_dir not in sys.path:
@@ -717,7 +734,7 @@ class ParallelSimulationExecutor:
         with ProcessPoolExecutor(
             max_workers=self.max_workers,
             initializer=_setup_worker_path,
-            initargs=(parent_dir,)
+            initargs=(parent_dir,),
         ) as executor:
             # Submit individual jobs (no batching)
             future_to_job = {
@@ -743,6 +760,7 @@ class ParallelSimulationExecutor:
 
                 except Exception as e:
                     import traceback
+
                     error_trace = traceback.format_exc()
                     logger.error(f"[ERROR] Job {job.job_id} execution failed: {str(e)}")
                     logger.error(f"[ERROR] Traceback:\n{error_trace}")
@@ -1021,7 +1039,7 @@ def main() -> None:
         num_event_types=6,
         event_skew=2.0,
         mode=SimulationMode.RANDOM,
-        enable_parallel=True,
+        enable_parallel=False,
         max_workers=14,
         xi=0,
     )

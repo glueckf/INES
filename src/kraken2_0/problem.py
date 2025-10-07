@@ -12,10 +12,15 @@ class PlacementProblem:
         self,
         processing_order: List[Any],
         context: Dict[str, Any],
+        enable_detailed_logging: bool = False,
     ):
-
         latency_threshold = context["latency_threshold"]
         """Initializes the entire problem context"""
+
+        # Logging configuration
+        self.logging_enabled = enable_detailed_logging
+        if self.logging_enabled:
+            self.detailed_log = []
 
         # --- Core Search & Problem Parameters ---
         self.processing_order = processing_order
@@ -109,12 +114,40 @@ class PlacementProblem:
                 # Perform the accurate, step-by-step latency check.
                 max_latency_so_far = s_next_temp.get_critical_path_latency(self)
 
+                # Determine if this decision will be pruned
+                is_pruned = False
+
                 if (
                     result["strategy"] == "all_push"
                     and max_latency_so_far > self.latency_threshold
                 ):
                     # Pruning condition achieved, we can prune everything.
                     pruning = True
+                    is_pruned = True
+
+                if max_latency_so_far > self.latency_threshold:
+                    is_pruned = True
+
+                # Log this placement decision if logging is enabled
+                if self.logging_enabled:
+                    log_entry = {
+                        "projection_index": projection_index,
+                        "projection": p,
+                        "candidate_node": n,
+                        "communication_strategy": result["strategy"],
+                        "individual_cost": result["individual_cost"],
+                        "transmission_latency": result["transmission_latency"],
+                        "processing_latency": result["processing_latency"],
+                        "cumulative_latency_so_far": max_latency_so_far,
+                        "is_pruned": is_pruned,
+                        "is_part_of_final_solution": False,  # Filled later
+                    }
+                    self.detailed_log.append(log_entry)
+
+                if (
+                    result["strategy"] == "all_push"
+                    and max_latency_so_far > self.latency_threshold
+                ):
                     break
 
                 if max_latency_so_far <= self.latency_threshold:

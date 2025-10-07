@@ -15,11 +15,13 @@ from allPairs import create_routing_dict
 
 from src.kraken2_0.problem import PlacementProblem
 from src.kraken2_0.state import SolutionCandidate
+from src.kraken2_0.results_logger import initialize_detailed_csv, write_detailed_log
 
 
 def run_kraken_solver(
     ines_context: Any,
     strategies_to_run: List[Any],
+    enable_detailed_logging: bool = False,
 ) -> Dict[str, Any]:
     """
     Main entry point for the Kraken 2.0 solver framework.
@@ -29,7 +31,7 @@ def run_kraken_solver(
     Args:
         ines_context: The INES simulation context object containing all problem data.
         strategies_to_run: List of PlacementAlgorithm enums specifying which strategies to execute.
-        latency_threshold: Maximum acceptable latency as a fraction of central latency (or None for no limit).
+        enable_detailed_logging: If True, logs every placement decision to CSV for analysis.
 
     Returns:
         Dictionary containing execution results with the following structure:
@@ -46,6 +48,10 @@ def run_kraken_solver(
     run_id = uuid.uuid4()
     start_time = time.time()
 
+    # Initialize detailed logging if enabled
+    if enable_detailed_logging:
+        initialize_detailed_csv()
+
     # Phase 1: Setup & Data Gathering
     context = _gather_problem_parameters(ines_context)
 
@@ -56,13 +62,18 @@ def run_kraken_solver(
     processing_order = sorted(dependencies.keys(), key=lambda x: dependencies[x])
 
     # Phase 2: Problem Instantiation
-    problem = PlacementProblem(processing_order, context)
+    problem = PlacementProblem(processing_order, context, enable_detailed_logging)
 
     # Phase 3: Strategy Execution Loop
     strategy_results = {}
+    master_log_data = []  # Accumulate logs across all strategies
 
     for strategy_enum in strategies_to_run:
-        strategy_name = str(strategy_enum.value) if hasattr(strategy_enum, 'value') else str(strategy_enum)
+        strategy_name = (
+            str(strategy_enum.value)
+            if hasattr(strategy_enum, "value")
+            else str(strategy_enum)
+        )
 
         # Select and execute strategy
         strategy_start = time.time()
@@ -81,6 +92,13 @@ def run_kraken_solver(
                 "execution_time_seconds": strategy_end - strategy_start,
             }
 
+            # Collect and enrich detailed logs if enabled
+            if enable_detailed_logging:
+                enriched_log = _enrich_log_with_solution(
+                    problem.detailed_log, solution, str(run_id), strategy_name
+                )
+                master_log_data.extend(enriched_log)
+
         except (ValueError, NotImplementedError) as e:
             strategy_end = time.time()
             strategy_results[strategy_name] = {
@@ -88,6 +106,10 @@ def run_kraken_solver(
                 "error": str(e),
                 "execution_time_seconds": strategy_end - strategy_start,
             }
+
+    # Write detailed logs to CSV if enabled
+    if enable_detailed_logging and master_log_data:
+        write_detailed_log(str(run_id), master_log_data)
 
     # Phase 4: Final Report Assembly
     end_time = time.time()
@@ -104,6 +126,7 @@ def run_kraken_solver(
             "num_queries": len(ines_context.query_workload),
             "latency_threshold": context.get("latency_threshold", None),
             "network_size": len(ines_context.network),
+            "detailed_logging_enabled": enable_detailed_logging,
         },
         "best_solution": best_solution,
     }
@@ -125,39 +148,31 @@ def _gather_problem_parameters(ines_context: Any) -> Dict[str, Any]:
         # Query and workload
         "query_workload": ines_context.query_workload,
         "dependencies_per_projection": ines_context.h_mycombi,
-
         # Network topology and routing
         "pairwise_distance_matrix": ines_context.allPairs,
         "all_pairs": ines_context.allPairs,  # Alias for cost calculator
         "graph": ines_context.graph,
         "routing_dict": create_routing_dict(ines_context.graph),
-
         # Network and event data
         "network_data": ines_context.h_network_data,
         "event_nodes": ines_context.h_eventNodes,
         "event_distribution_matrix": ines_context.h_eventNodes,
         "index_event_nodes": ines_context.h_IndexEventNodes,
         "global_event_rates": ines_context.h_rates_data,
-
         # Projection and selectivity
         "projection_rates_selectivity": ines_context.h_projrates,
         "pairwise_selectivities": ines_context.selectivities,
         "filter_by_projection": ines_context.h_projFilterDict,
-
         # Node information
         "network_data_nodes": ines_context.network,
         "primitive_events_per_projection": ines_context.h_primitive_events,
         "nodes_per_primitive_event": ines_context.h_nodes,
-
         # Sink nodes (cloud is typically node 0)
         "sink_nodes": [0],
-
         # Optimization structures
         "local_rate_lookup": ines_context.h_local_rate_lookup,
-
         # Simulation mode
         "simulation_mode": ines_context.config.mode,
-
         # Latency
         "latency_threshold": ines_context.config.latency_threshold,
         "latency_weighting_factor": ines_context.config.xi,
@@ -183,7 +198,11 @@ def _select_strategy(algorithm_enum: Any):
     from src.kraken2_0.search import GreedySearch
 
     # Get the algorithm name
-    algorithm_name = algorithm_enum.value if hasattr(algorithm_enum, 'value') else str(algorithm_enum)
+    algorithm_name = (
+        algorithm_enum.value
+        if hasattr(algorithm_enum, "value")
+        else str(algorithm_enum)
+    )
 
     if algorithm_name == "greedy":
         return GreedySearch()
@@ -279,8 +298,7 @@ def _select_best_solution(strategy_results: Dict[str, Any]) -> Dict[str, Any]:
 
     # Find solution with minimum workload cost
     best_name, best_result = min(
-        successful_results,
-        key=lambda x: x[1]["metrics"]["workload_cost"]
+        successful_results, key=lambda x: x[1]["metrics"]["workload_cost"]
     )
 
     return {
@@ -288,3 +306,49 @@ def _select_best_solution(strategy_results: Dict[str, Any]) -> Dict[str, Any]:
         "solution": best_result["solution"],
         "metrics": best_result["metrics"],
     }
+
+
+def _enrich_log_with_solution(
+    detailed_log: List[Dict[str, Any]],
+    solution: SolutionCandidate,
+    run_id: str,
+    strategy_name: str,
+) -> List[Dict[str, Any]]:
+    """
+    Enrich log entries with solution context and metadata.
+
+    Marks which placement decisions were part of the final solution path
+    and adds run identification metadata.
+
+    Args:
+        detailed_log: Raw log entries from problem expansion.
+        solution: The final solution candidate.
+        run_id: Unique identifier for this run.
+        strategy_name: Name of the strategy that generated this solution.
+
+    Returns:
+        List of enriched log entry dictionaries ready for CSV export.
+    """
+    # Create a set of (projection, node, strategy) tuples from final solution
+    solution_set = {
+        (info.projection, info.node, info.strategy)
+        for info in solution.placements.values()
+    }
+
+    enriched_log = []
+    for entry in detailed_log:
+        # Check if this decision was part of the final solution
+        decision_tuple = (
+            entry["projection"],
+            entry["candidate_node"],
+            entry["communication_strategy"],
+        )
+        entry["is_part_of_final_solution"] = decision_tuple in solution_set
+
+        # Add run metadata
+        entry["run_id"] = run_id
+        entry["strategy_name"] = strategy_name
+
+        enriched_log.append(entry)
+
+    return enriched_log
