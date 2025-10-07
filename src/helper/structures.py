@@ -7,7 +7,6 @@ Created on Thu Aug 19 11:45:00 2021
 """
 
 from helper.util import column1s, column
-from helper.parse_network import get_nodes
 import numpy as np
 
 
@@ -64,7 +63,7 @@ def addETB(etb, etype, EventNodes, IndexEventNodes, network):
     EventNodes.append(mylist)
     index = len(EventNodes) - 1
     IndexEventNodes[etb] = index
-    if not etype in IndexEventNodes:
+    if etype not in IndexEventNodes:
         IndexEventNodes[etype] = [etb]
     else:
         IndexEventNodes[etype].append(etb)
@@ -120,9 +119,9 @@ def NumETBsByKey(etb, projection, IndexEventNodes):
         return 1
     for i in range(1, len(etb)):
         if (
-            not etb[i] in projection.leafs()
+            etb[i] not in projection.leafs()
             and etb[index] in projection.leafs()
-            and not etb[index] in instancedEvents
+            and etb[index] not in instancedEvents
         ):
             instancedEvents.append(etb[index])
         elif etb[i] in projection.leafs():

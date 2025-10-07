@@ -38,7 +38,7 @@ def computePromisingType(self, projection):
 def numETBs(primEvents, projection, IndexEventNodes):
     count = 1
     for event in projection.leafs():
-        if not event in primEvents:
+        if event not in primEvents:
             count *= len(IndexEventNodes[event])
     return count
 
@@ -46,7 +46,7 @@ def numETBs(primEvents, projection, IndexEventNodes):
 def getDecomposed(primEvents, projection, singleSelectivities, rates):
     mysum = 0
     for event in projection.leafs():
-        if not event in primEvents:
+        if event not in primEvents:
             myKey = getKeySingleSelect(event, projection)
             mysum += singleSelectivities[myKey] * rates[event]
     return mysum
@@ -55,7 +55,7 @@ def getDecomposed(primEvents, projection, singleSelectivities, rates):
 def getDecomposedTotal(primEvents, projection, singleSelectivities, rates, instances):
     mysum = 0
     for event in [
-        x for x in projection.leafs() if not x in primEvents
+        x for x in projection.leafs() if x not in primEvents
     ]:  # implement for list of primEvents, to use during placement
         myKey = getKeySingleSelect(event, projection)
         mysum += singleSelectivities[myKey] * rates[event] * instances[event]

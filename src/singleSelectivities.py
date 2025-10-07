@@ -1,7 +1,6 @@
 import re
 import random
 from itertools import permutations
-import pickle
 
 NETWORK = "network"
 QUERIES = "queries"

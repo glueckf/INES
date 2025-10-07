@@ -1,5 +1,3 @@
-import sys
-import random
 import time
 from helper.filter import getMaximalFilter, getDecomposedTotal, returnProjFilterDict
 from helper.structures import getNumETBs
@@ -108,7 +106,7 @@ def promisingChainProjection(self, projection):
 
     cheapRests = {}
     for eventtype in query.leafs():
-        if not eventtype in projection.leafs():
+        if eventtype not in projection.leafs():
             for i in projFilterDict.keys():
                 if i == projection:
                     myproj = i
@@ -164,7 +162,7 @@ def extractMsOptions(self, query):
         dictionary = promisingChainProjection(self, projection)
         if dictionary.keys():
             for x in dictionary.keys():
-                if not x in MsOptions:
+                if x not in MsOptions:
                     MsOptions += x
     return MsOptions
 
@@ -244,7 +242,7 @@ def getSavings(
             + longestPath * optimisticTotalRate(self, projection)
         )
 
-    elif projection.get_original(wl) in wl and not partType in list(
+    elif projection.get_original(wl) in wl and partType not in list(
         map(lambda x: str(x), projection.get_original(wl).kleene_components())
     ):  # sink projection
         return longestPath * totalRate(self, partType, self.h_projrates) - (
@@ -294,7 +292,7 @@ def getBestChainCombis(self, query, shared, criticalMSTypes, noFilter):
             self, projection, projection.leafs(), self.h_projrates, criticalMSTypes
         )
         if partType:
-            rest = [x for x in projection.leafs() if not x in partType]
+            rest = [x for x in projection.leafs() if x not in partType]
             costs = getSavings(
                 self,
                 partType[0],
@@ -350,7 +348,7 @@ def getBestChainCombis(self, query, shared, criticalMSTypes, noFilter):
                         ):  # upstream projection also has a ms placement such that we already saved something here
                             curcosts += combiDict[mytuple[0]][2]
                         if curcosts > mycosts:  # update with new best chain combination
-                            if not projection in combiDict.keys():
+                            if projection not in combiDict.keys():
                                 combiDict[projection] = []
                             mycosts = curcosts
                             combiDict[projection] = (
@@ -359,7 +357,7 @@ def getBestChainCombis(self, query, shared, criticalMSTypes, noFilter):
                                 mycosts,
                             )
                             # if a component of the combination is not in combidict, this means that it has no ms placement, however, we need to add it to combidict, to exclude bad combinations later
-                            if not mytuple[0] in combiDict.keys():
+                            if mytuple[0] not in combiDict.keys():
                                 combiDict[mytuple[0]] = (mytuple[0].leafs(), [], 0)
 
         mylist = [
@@ -443,7 +441,7 @@ def getBestTreeCombiRec(
             if proj in combiDict.keys() and combiDict[proj][1]:
                 partProj = combiDict[proj][1][0]
                 subProjections = [
-                    x for x in subProjections if not partProj in x.leafs()
+                    x for x in subProjections if partProj not in x.leafs()
                 ]
                 # exclude case in which part proj of other projection in the list is part of projs leafs
                 subProjections = [
@@ -535,7 +533,7 @@ def getBestTreeCombiRec(
             )
 
             if (
-                not projection in combiDict.keys()
+                projection not in combiDict.keys()
             ):  # projection has only sis placement and thus was not in combidict before
                 combiDict[projection] = (mycombi, partEvent, mycosts)
             if mycosts > combiDict[projection][2]:

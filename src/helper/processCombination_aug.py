@@ -6,16 +6,13 @@ Created on Mon Aug 16 11:47:10 2021
 @author: samira
 """
 
-from functools import reduce
 
 # from generate_projections import *
 from projections import returnPartitioning, settoproj, totalRate
 import copy
 from helper.filter import (
     getMaximalFilter,
-    returnProjFilterDict,
     getDecomposed,
-    returnAdditionalFilterDict,
 )
 import string
 from helper.Tree import Tree
@@ -33,7 +30,7 @@ def compute_dependencies(
             levels[proj] = 0
 
     for proj in sorted(
-        [x for x in combiDict.keys() if not x in levels.keys()],
+        [x for x in combiDict.keys() if x not in levels.keys()],
         key=lambda z: len(z.leafs()),
     ):  # mit vorsicht zu genießen
         mymax = max(
@@ -89,7 +86,7 @@ def compute_dependencies_simple(combiDict):  # has as input a final combination
             levels[proj] = 0
 
     for proj in sorted(
-        [x for x in combiDict.keys() if not x in levels.keys()],
+        [x for x in combiDict.keys() if x not in levels.keys()],
         key=lambda z: len(z.leafs()),
     ):  # mit vorsicht zu genießen
         mymax = max(
@@ -117,7 +114,7 @@ def getSharedMSinput(self, combiDict, myProjFilters):
         if part:  # only MS projections
             # for event in combiDict[proj]:
             for event in combiDict[proj] + list(getMaximalFilter(myProjFilters, proj)):
-                if not event in sharedInput and not part[0] == event:
+                if event not in sharedInput and not part[0] == event:
                     sharedInput[event] = [part[0]]
                 elif not part[0] == event:
                     sharedInput[event].append(part[0])
@@ -132,13 +129,13 @@ def makeUnredundant(combi):
             outSet = set([x if len(x) == 1 else x.leafs() for x in [k]][0])
             if myset.issubset(outSet):
                 toRemove.append(i)
-    return [x for x in combi if not x in toRemove]
+    return [x for x in combi if x not in toRemove]
 
 
 def removeLayer(combiDict, layer):  # make sure, that no query is removed from
     levels = compute_dependencies_simple(combiDict)
     # levels = compute_dependencies(combiDict)
-    projections = [x for x in levels.keys() if levels[x] in layer and not x in wl]
+    projections = [x for x in levels.keys() if levels[x] in layer and x not in wl]
     myCombination = copy.deepcopy(combiDict)
     for l in sorted(layer):
         newCombination = {}
@@ -180,7 +177,7 @@ def removeProjection(combiDict, projection):
 def hasMSParent(projection):  # checks for a projection if it is input to a MS placement
     for i in mycombi.keys():
         if projection in mycombi[i]:
-            if originalDict[i][1] and not i in criticalMSProjections:
+            if originalDict[i][1] and i not in criticalMSProjections:
                 return True
     else:
         return False
@@ -198,7 +195,7 @@ def removeSisChains():
 
     for i in [x for x in newlevels.keys() if not x == max(newlevels.keys())]:
         count = 0
-        for proj in [x for x in newlevels[i] if not x in wl]:
+        for proj in [x for x in newlevels[i] if x not in wl]:
             if originalDict[proj][1] or hasMSParent(proj):  # has multisink placement
                 break
             elif proj in criticalMSProjections:
@@ -216,7 +213,7 @@ def removeSisChains():
 
 def removeSiSfamilies(combi):
     toRemove = []
-    for i in [x for x in combi.keys() if not x in wl]:
+    for i in [x for x in combi.keys() if x not in wl]:
         if not originalDict[i][1] and not hasMSParent(i):
             toRemove.append(i)
         elif i in criticalMSProjections:
@@ -236,9 +233,9 @@ def strToProj(subProj, projection):
         evlist = []
         for i in range(len(subProj)):
             if not (i == 0 or i == len(subProj) - 1):
-                if not subProj[i - 1] in list(string.ascii_uppercase) and not subProj[
+                if subProj[i - 1] not in list(string.ascii_uppercase) and subProj[
                     i + 1
-                ] in list(string.ascii_uppercase):
+                ] not in list(string.ascii_uppercase):
                     evlist.append(subProj[i])
         return settoproj(evlist, projection)
 
@@ -264,7 +261,7 @@ def getFilteredRate(projection, diamond, filtered):
     lst = [
         x for x in diamond.leafs() if x in filtered
     ]  # return list of filtered events contained in projection
-    filter_lst = [x for x in diamond.leafs() if not x in lst]
+    filter_lst = [x for x in diamond.leafs() if x not in lst]
     lst = list(
         map(lambda x: singleSelectivities[getKeySingleSelect(x, projection)], lst)
     )
@@ -349,7 +346,7 @@ def getMiniDiamonds_rec(projection, partType, combination, diamonds):
                 curMax -= 1
         diamondTuple = [combination[curMax], combination[curMin]]
         diamonds.append(diamondTuple)
-        combination = [x for x in combination if not x in diamondTuple]
+        combination = [x for x in combination if x not in diamondTuple]
         # print([x.leafs() if len(x)> 1 else [x] for x in diamondTuple])
         combination.append(
             settoproj(
@@ -369,7 +366,7 @@ def getMSInputs():
             myInputs = [
                 x
                 for x in mycombi[proj]
-                if not x == part[0] and len(x) == 1 and not part[0] in criticalMSTypes
+                if not x == part[0] and len(x) == 1 and part[0] not in criticalMSTypes
             ]
             out.append(myInputs)
     return sum(out, [])
@@ -382,7 +379,7 @@ def augmentProjFilters(old, additional, mylist):
             if event in additional[proj].keys():
                 additionalFilters.append(event)
         oldFilter = getMaximalFilter(old, proj, 0)
-        additionalFilters = [x for x in additionalFilters if not x in oldFilter]
+        additionalFilters = [x for x in additionalFilters if x not in oldFilter]
         newFilter = "".join(additionalFilters)
         old[proj][newFilter] = getDecomposed(additionalFilters, proj)
     return old

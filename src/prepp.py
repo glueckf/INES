@@ -1,12 +1,10 @@
 import re
-import argparse
-import math
 from timeit import default_timer as timer
 import random
 import copy
 import helper.push_pull_plan_generator as push_pull_plan_generator
 import time
-from itertools import permutations, chain, combinations
+from itertools import chain, combinations
 
 NETWORK = "network"
 QUERIES = "queries"
@@ -961,7 +959,7 @@ def generate_prePP(
                 continue
 
             if CURRENT_SECTION == NETWORK:
-                if not "Eventrates: [" in line:
+                if "Eventrates: [" not in line:
                     continue
                 output_rates = extract_network_node(line)
 
@@ -1017,7 +1015,7 @@ def generate_prePP(
                         else:
                             # print(f"[Warnung] No valid node block in '{{}}' found: '{on_split.strip()}'")
                             nodes = []
-                    except (IndexError, ValueError) as e:
+                    except (IndexError, ValueError):
                         # print(f"[Error] Parsing from line failed: '{line}' → {e}")
                         nodes = []
 

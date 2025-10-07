@@ -1,6 +1,5 @@
 from Benchmark import INES
 import traceback
-import logging
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
 import os
@@ -77,7 +76,7 @@ def start_simulation(
     runs,
 ):
     """Runs multiple simulations in parallel."""
-    file_name = f"INES-Benchmark" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"
+    file_name = "INES-Benchmark" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"
     result = run_simulation(
         nodes,
         node_event_ratio,
@@ -120,7 +119,7 @@ def start_simulation(
             except Exception as e:
                 print(f"⚠️ Error in process: {e}")
             except TimeoutError:
-                print(f"⏳ Timeout! Process took too long.")
+                print("⏳ Timeout! Process took too long.")
 
     # Combine all DataFrames and write to CSV
     if all_results:
@@ -134,7 +133,7 @@ def start_simulation(
 
 if __name__ == "__main__":
     # start_simulation(12, 0.5, 6, 0.3, 10, 3, 5, 4)
-    file_name = f"INES-benchmark_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"
+    file_name = "INES-benchmark_" + datetime.now().strftime("%d%m%Y%H%M%S") + ".csv"
     all_results = []
     for i in range(3):
         # parallel laufen lassen

@@ -5,7 +5,6 @@ Implementation of Query-Tree
 
 from helper.projString import filter_numbers, getdoubles_k
 import copy
-from helper.parse_network import get_rates
 import numpy as np
 
 

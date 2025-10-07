@@ -33,7 +33,7 @@ def traverseListTuples(source, mytuples):
                 myPairs.append(pair)
                 sources.append(pair[1])
                 toRemove.append(i)
-        mytuples = [x for x in mytuples if not x in toRemove]
+        mytuples = [x for x in mytuples if x not in toRemove]
     return myPairs
 
 
@@ -51,7 +51,7 @@ def processInstance(instance, forwardingDict):
             routingTuples.append(traverseListTuples(instance.sources, path))
     for path in routingTuples:
         for mytuple in path:
-            if not mytuple[0] in instanceDict.keys():
+            if mytuple[0] not in instanceDict.keys():
                 instanceDict[mytuple[0]] = []
             instanceDict[mytuple[0]].append(mytuple[1])
     return instanceDict
@@ -213,7 +213,7 @@ def adjustRoutingCentral(mydict, source):
             mysource = int(filter_literals(instance))
             routingTuples = traverseList([mysource], mydict[proj][instance])
             for mytuple in routingTuples:
-                if not mytuple[0] in outdict[proj][instance].keys():
+                if mytuple[0] not in outdict[proj][instance].keys():
                     outdict[proj][instance][mytuple[0]] = []
                 outdict[proj][instance][mytuple[0]].append(mytuple[1])
     return outdict
@@ -310,11 +310,11 @@ def generate_eval_plan(nw, selectivities, myPlan, centralPlan, workload):
                         sinkDict[str(myproj.name)][1] = instance.projname
         for instancelist in myproj.combination.keys():
             for instance in myproj.combination[instancelist]:
-                if not instance.projname in forwardingDict.keys():
+                if instance.projname not in forwardingDict.keys():
                     forwardingDict[instance.projname] = {}
                 if (
                     instance.projname in forwardingDict.keys()
-                    and not instance.name in forwardingDict[instance.projname].keys()
+                    and instance.name not in forwardingDict[instance.projname].keys()
                 ):
                     forwardingDict[instance.projname][instance.name] = {}
                 if list(instance.routingDict.keys()):

@@ -122,7 +122,7 @@ class Instance:  # single etbs, where they are from and how they are routed to t
 
     def update(self, newinstance):
         for newsource in newinstance.sources:
-            if not newsource in self.sources:
+            if newsource not in self.sources:
                 self.sources.append(newsource)
         for newkey in newinstance.routingDict.keys():
             self.routingDict[newkey] = newinstance.routingDict[newkey]

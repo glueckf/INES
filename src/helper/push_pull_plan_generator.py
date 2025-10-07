@@ -1,14 +1,12 @@
 import itertools
 import operator
 import copy
-import pickle
-import math
 
 import random
 
 
 import re
-from itertools import permutations, combinations, chain
+from itertools import combinations, chain
 
 
 class CachedOptimalStep:
@@ -841,7 +839,7 @@ class Initiate:
                         tmp_list[i] = self.single_eventtype_to_projection_map[
                             tmp_list[i]
                         ]
-                    except KeyError as e:
+                    except KeyError:
                         print(
                             f"[ERROR] KeyError in weak_ordered_plans_generator: key '{tmp_list[i]}' not found in single_eventtype_to_projection_map"
                         )

@@ -1,5 +1,4 @@
 import time
-import matplotlib.pyplot as plt
 from Node import Node
 from network import (
     generate_eventrates,
@@ -9,7 +8,6 @@ from network import (
     treeDict,
 )
 from graph import create_fog_graph
-from graph import draw_graph
 from allPairs import populate_allPairs
 from queryworkload import generate_workload
 from selectivity import initialize_selectivities
@@ -22,7 +20,6 @@ from helper.structures import getLongest
 from operatorplacement import calculate_operatorPlacement
 from generateEvalPlan import generate_eval_plan
 from prepp import generate_prePP
-import csv
 
 
 class INES:

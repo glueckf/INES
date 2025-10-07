@@ -5,8 +5,7 @@ from typing import TYPE_CHECKING
 from .base import SearchStrategy
 
 if TYPE_CHECKING:
-    from src.kraken2_0.problem import PlacementProblem
-    from src.kraken2_0.state import SolutionCandidate
+    pass
 
 
 # Uses a depth-first search of S.

@@ -9,7 +9,7 @@ import time
 import logging
 import threading
 
-from INES import INES, SimulationConfig, SimulationMode
+from INES import SimulationConfig, SimulationMode
 
 logger = logging.getLogger(__name__)
 

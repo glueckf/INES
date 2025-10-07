@@ -6,27 +6,19 @@ Created on Tue Aug 10 13:16:11 2021
 @author: samira
 """
 
-import math
-import multiprocessing
 
-import networkx
 
 # from helper.processCombination_aug import *
 from helper.filter import getMaximalFilter, getDecomposedTotal
 from helper.structures import getNodes, NumETBsByKey, setEventNodes, SiSManageETBs
 from projections import returnPartitioning
-from functools import partial
 from allPairs import find_shortest_path_or_ancestor
-import copy
 from EvaluationPlan import Instance, Projection
 import numpy as np
 from helper.filter import getKeySingleSelect
 import networkx as nx
 from helper.structures import MSManageETBs, getETBs
-from networkx.algorithms.approximation import steiner_tree
-from prepp import generate_prePP
 
-from EvaluationPlan import EvaluationPlan
 
 
 class PlacementDecision:
@@ -349,7 +341,7 @@ def NEWcomputeMSplacementCosts(
             MydestinationNodes = list(set(destinationNodes) - set(currentSources))
             if MydestinationNodes:
                 for dest in MydestinationNodes:
-                    if not dest in getNodes(etb, eventNodes, IndexEventNodes):
+                    if dest not in getNodes(etb, eventNodes, IndexEventNodes):
                         # node.append(destinationNodes)
                         mySource = currentSources[0]
                         for source in currentSources:
@@ -447,7 +439,7 @@ def NEWcomputeMSplacementCosts(
             ]
 
             for stop in shortestPath:
-                if not stop in getNodes(etb, eventNodes, IndexEventNodes):
+                if stop not in getNodes(etb, eventNodes, IndexEventNodes):
                     setEventNodes(stop, etb, eventNodes, IndexEventNodes)
 
         newInstances += curInstances  #!
@@ -500,7 +492,7 @@ def NEWcomputeMSplacementCosts_Path(
         )  # only consider nodes that do not already hold etb
         if MydestinationNodes:
             for dest in MydestinationNodes:
-                if not dest in getNodes(etb):
+                if dest not in getNodes(etb):
                     # are there ms nodes which did not receive etb before
                     node = findBestSource(
                         self, getNodes(etb), [dest]
@@ -547,7 +539,7 @@ def NEWcomputeMSplacementCosts_Path(
                     )  # destinations have different sources
 
                     for routingNode in shortestPath:
-                        if not routingNode in getNodes(etb):
+                        if routingNode not in getNodes(etb):
                             setEventNodes(routingNode, etb)
                     newInstance = True
         if newInstance:
@@ -787,7 +779,7 @@ def ComputeSingleSinkPlacement(
 
     myProjection.addSinks(node)  #!
 
-    print(f"\n[COST_DEBUG] === FINAL PLACEMENT RESULTS ===")
+    print("\n[COST_DEBUG] === FINAL PLACEMENT RESULTS ===")
     print(f"[COST_DEBUG] Best destination node: {node}")
     print(f"[COST_DEBUG] Best total cost: {costs}")
 
@@ -818,7 +810,7 @@ def ComputeSingleSinkPlacement(
             curInstances.append(newInstance)  #!
 
             for stop in shortestPath:
-                if not stop in getNodes(etb, EventNodes, IndexEventNodes):
+                if stop not in getNodes(etb, EventNodes, IndexEventNodes):
                     setEventNodes(stop, etb, EventNodes, IndexEventNodes)
 
         newInstances += curInstances  #!
@@ -857,7 +849,7 @@ def NEWcomputeCentralCosts(workload, IndexEventNodes, allPairs, rates, EventNode
     for i in workload:
         myevents = i.leafs()
         for e in myevents:
-            if not e in eventtypes:
+            if e not in eventtypes:
                 eventtypes.append(e)
     costs = np.inf
     node = 0

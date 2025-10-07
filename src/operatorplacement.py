@@ -7,11 +7,7 @@ from helper.placement_aug import (
 )
 from helper.processCombination_aug import compute_dependencies, getSharedMSinput
 import time
-import csv
-import sys
-import argparse
 from EvaluationPlan import EvaluationPlan
-import numpy as np
 from projections import returnPartitioning, totalRate
 
 
@@ -47,7 +43,7 @@ def getLowerBound(
         myprojs = []
 
         for p in filtered_projects_list:
-            if totalRate(self, p, self.h_projrates) < rates[e] and not e in p.leafs():
+            if totalRate(self, p, self.h_projrates) < rates[e] and e not in p.leafs():
                 myprojs.append(p)
         if myprojs:
             MS.append(e)
@@ -58,7 +54,7 @@ def getLowerBound(
 
             if e in part:
                 MS.append(e)
-    nonMS = [e for e in query.leafs() if not e in MS]
+    nonMS = [e for e in query.leafs() if e not in MS]
     if nonMS:
         minimalRate = (
             sum(
@@ -66,7 +62,7 @@ def getLowerBound(
                     [
                         totalRate(self, e, self.h_projrates)
                         for e in query.leafs()
-                        if not e in MS
+                        if e not in MS
                     ]
                 )
             )
@@ -132,7 +128,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
     )
     centralHopLatency = max(allPairs[ccosts[1]])
     numberHops = sum(allPairs[ccosts[1]])
-    print(f"\n[SEQUENTIAL] Central Placement Baseline:")
+    print("\n[SEQUENTIAL] Central Placement Baseline:")
     print(f"  Central Cost: {ccosts[0]:.2f}")
     print(f"  Central Node: {ccosts[1]}")
     print(f"  Total Hops: {numberHops}")
@@ -291,7 +287,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
                 placements_by_node[node] = []
             placements_by_node[node].append((projection, result["placement_costs"]))
 
-        print(f"\n[SEQUENTIAL] Placement Distribution Across Nodes:")
+        print("\n[SEQUENTIAL] Placement Distribution Across Nodes:")
         for node in sorted(placements_by_node.keys()):
             projections = placements_by_node[node]
             node_total_cost = sum(cost for _, cost in projections)
@@ -305,7 +301,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
 
     print("=" * 60 + "\n")
     mycosts = costs / ccosts[0]
-    print(f"[SEQUENTIAL] Final Aggregate Results:")
+    print("[SEQUENTIAL] Final Aggregate Results:")
     print(f"[SEQUENTIAL] Total Transmission Cost: {costs:.2f}")
     print(f"[SEQUENTIAL] Central Cost Baseline: {ccosts[0]:.2f}")
     print(f"[SEQUENTIAL] Cost Reduction Ratio: {mycosts:.4f}")
@@ -326,7 +322,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
 
     totaltime = str(round(time.time() - start_time, 2))
 
-    print(f"\n[SEQUENTIAL] Execution Summary:")
+    print("\n[SEQUENTIAL] Execution Summary:")
     print(f"  Execution Time: {totaltime} seconds")
     print(
         f"  Projections per Second: {len(temp_results_dict) / float(totaltime) if float(totaltime) > 0 else 0:.2f}"
@@ -338,7 +334,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
 
     ID = uuid.uuid4()
 
-    print(f"\n[SEQUENTIAL] Processing Order & Dependencies:")
+    print("\n[SEQUENTIAL] Processing Order & Dependencies:")
     print(f"  Processing Order: {[str(p) for p in processingOrder]}")
     print(f"  Dependency Levels: {len(set(dependencies.values()))} levels")
     # print(f"  Max Dependency Depth: {max_dependency:.1f}")
