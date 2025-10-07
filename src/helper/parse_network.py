@@ -1,11 +1,12 @@
 import string
 
 # Private global variables
-#_network = None
-#_rates = None
-#_primEvents = None
-#_instances = None
-#_nodes = None
+# _network = None
+# _rates = None
+# _primEvents = None
+# _instances = None
+# _nodes = None
+
 
 # Function to initialize global variables
 def initialize_globals(network_data):
@@ -41,39 +42,45 @@ def initialize_globals(network_data):
     for i in primEvents:
         instances[i] = len(nodes[i])
 
+    return network, rates, primEvents, instances, nodes
 
-    return network,rates,primEvents,instances,nodes
 
 # Getter functions with lazy initialization
 def get_network(network_data):
-    network,_,_,_,_ = initialize_globals(network_data)
+    network, _, _, _, _ = initialize_globals(network_data)
     return network
 
+
 def get_rates(network_data):
-    _,rates,_,_,_ = initialize_globals(network_data)
+    _, rates, _, _, _ = initialize_globals(network_data)
     return rates
 
+
 def get_primEvents(network_data):
-    _,_,primEvents,_,_ = initialize_globals(network_data)
+    _, _, primEvents, _, _ = initialize_globals(network_data)
     return primEvents
 
+
 def get_instances(network_data):
-    _,_,_,instances,_ = initialize_globals(network_data)
+    _, _, _, instances, _ = initialize_globals(network_data)
     return instances
 
+
 def get_nodes(network_data):
-    _,_,_,_,nodes = initialize_globals(network_data)
+    _, _, _, _, nodes = initialize_globals(network_data)
     return nodes
+
 
 # Utility function for accessing network events
 def events(node, network_data):
-    network,_,_,_,_ = initialize_globals(network_data)
+    network, _, _, _, _ = initialize_globals(network_data)
     return network[node]
 
+
 # Function to calculate instances from projections
-def instances_func(proj, network_data):    
-    _,_,_,_,nodes = initialize_globals(network_data)
-    
+def instances_func(proj, network_data):
+    _, _, _, _, nodes = initialize_globals(network_data)
+
     num = 1
     for i in proj:
         if len(i) == 1:

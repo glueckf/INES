@@ -5,9 +5,9 @@ logger = get_kraken_logger(__name__)
 
 
 def sort_candidate_nodes(
-        possible_placement_nodes,
-        current_projection,
-        primitive_events_per_projection,
+    possible_placement_nodes,
+    current_projection,
+    primitive_events_per_projection,
 ):
     logger.info("Sorting candidate nodes based on latency constraints")
 
@@ -44,9 +44,9 @@ def sort_candidate_nodes(
 
 
 def get_current_config_cost_and_latency(
-        current_projection,
-        stack_per_projection,
-        dependencies_per_projection,
+    current_projection,
+    stack_per_projection,
+    dependencies_per_projection,
 ):
     """
     Calculate total latency and cost for a projection's dependencies.
@@ -66,11 +66,12 @@ def get_current_config_cost_and_latency(
             - current_config_latency: Max latency among dependencies
             - current_config_cost: Sum of cumulative costs from dependencies
     """
-    dependencies_for_projection = dependencies_per_projection.get(current_projection, [])
+    dependencies_for_projection = dependencies_per_projection.get(
+        current_projection, []
+    )
 
     current_config_latency = 0.0
     current_config_cost = 0.0
-
 
     for dependency in dependencies_for_projection:
         if dependency in stack_per_projection:

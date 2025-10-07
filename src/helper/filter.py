@@ -1,49 +1,71 @@
 from helper.structures import getNumETBs
 
-def computePromisingType(self,projection):
+
+def computePromisingType(self, projection):
     projrates = self.h_projrates
     longestPath = self.h_longestPath
     rates = self.h_rates_data
-    IndexEventNodes= self.h_IndexEventNodes
+    IndexEventNodes = self.h_IndexEventNodes
     promisingEvent = "X"
     currentSave = 0
     for primEvent in projection.leafs():
-        decomposedSum = getDecomposedTotal([primEvent], projection,self.single_selectivity,rates,self.h_instances)
-        rateSaved = (projrates[projection][1] * numETBs("", projection,self.h_IndexEventNodes)) - ((longestPath * rates[primEvent] * len(IndexEventNodes[primEvent])) +  decomposedSum)
-        if rateSaved > currentSave and rateSaved > 0: #saved rate must include costs for routing promising event to dest, prob not necessary 
+        decomposedSum = getDecomposedTotal(
+            [primEvent], projection, self.single_selectivity, rates, self.h_instances
+        )
+        rateSaved = (
+            projrates[projection][1] * numETBs("", projection, self.h_IndexEventNodes)
+        ) - (
+            (longestPath * rates[primEvent] * len(IndexEventNodes[primEvent]))
+            + decomposedSum
+        )
+        if (
+            rateSaved > currentSave and rateSaved > 0
+        ):  # saved rate must include costs for routing promising event to dest, prob not necessary
             currentSave = rateSaved
             promisingEvent = primEvent
     if promisingEvent != "X":
-        return(promisingEvent, getDecomposed([promisingEvent], projection,self.single_selectivity,rates))
+        return (
+            promisingEvent,
+            getDecomposed([promisingEvent], projection, self.single_selectivity, rates),
+        )
     else:
-        return(promisingEvent, getDecomposed([promisingEvent], projection,self.single_selectivity,rates))
-        
-        
-def numETBs(primEvents, projection,IndexEventNodes):
+        return (
+            promisingEvent,
+            getDecomposed([promisingEvent], projection, self.single_selectivity, rates),
+        )
+
+
+def numETBs(primEvents, projection, IndexEventNodes):
     count = 1
     for event in projection.leafs():
         if not event in primEvents:
             count *= len(IndexEventNodes[event])
     return count
 
-def getDecomposed(primEvents, projection,singleSelectivities,rates):
+
+def getDecomposed(primEvents, projection, singleSelectivities, rates):
     mysum = 0
-    for event in  projection.leafs():
+    for event in projection.leafs():
         if not event in primEvents:
             myKey = getKeySingleSelect(event, projection)
             mysum += singleSelectivities[myKey] * rates[event]
-    return mysum        
+    return mysum
 
-def getDecomposedTotal(primEvents, projection,singleSelectivities,rates,instances): 
+
+def getDecomposedTotal(primEvents, projection, singleSelectivities, rates, instances):
     mysum = 0
-    for event in [x for x in projection.leafs() if not x in primEvents]:    # implement for list of primEvents, to use during placement    
-            myKey = getKeySingleSelect(event, projection)
-            mysum += singleSelectivities[myKey] * rates[event] * instances[event]
-    return mysum 
-            
+    for event in [
+        x for x in projection.leafs() if not x in primEvents
+    ]:  # implement for list of primEvents, to use during placement
+        myKey = getKeySingleSelect(event, projection)
+        mysum += singleSelectivities[myKey] * rates[event] * instances[event]
+    return mysum
+
+
 def getKeySingleSelect(primEvent, projection):
     myString = primEvent + "|" + "".join(sorted(projection.leafs()))
     return myString
+
 
 """ def additionalFilters(projection, promisingEvent):
     additionalFiltersList = []
@@ -61,28 +83,32 @@ def getKeySingleSelect(primEvent, projection):
     return additionalFiltersList 
  """
 
-def returnProjFilterDict(self,projection):
-            ''' return for a projection with different subsets of primitive events that can be used as filters and the resulting rate of the projection '''
-            ProjFilterDict = {}
-            projrates  = self.h_projrates
-            #totalRate = numETBs("", projection) * projrates[projection][1]
-            totalRate = projrates[projection][1] #singleRate
-            ProjFilterDict[projection] = {}
-            ProjFilterDict[projection][""] = (totalRate, 0)
-            promising = computePromisingType(self,projection)
-            
-            if promising[0] != "X" :
-               currentKey = promising[0]
-               currentRate = promising[1] 
-               ProjFilterDict[projection][currentKey] = (currentRate, 0) 
 
-            return ProjFilterDict    
-               
+def returnProjFilterDict(self, projection):
+    """return for a projection with different subsets of primitive events that can be used as filters and the resulting rate of the projection"""
+    ProjFilterDict = {}
+    projrates = self.h_projrates
+    # totalRate = numETBs("", projection) * projrates[projection][1]
+    totalRate = projrates[projection][1]  # singleRate
+    ProjFilterDict[projection] = {}
+    ProjFilterDict[projection][""] = (totalRate, 0)
+    promising = computePromisingType(self, projection)
+
+    if promising[0] != "X":
+        currentKey = promising[0]
+        currentRate = promising[1]
+        ProjFilterDict[projection][currentKey] = (currentRate, 0)
+
+    return ProjFilterDict
+
+
 def getMaximalFilter(filterdict, proj, *args):
     if args:
         if args[0] == 1:
-            return sorted(filterdict[proj].keys(), key = len)[0]   # USED TO SUPRESS FILTER!!!
-    return sorted(filterdict[proj].keys(), key = len, reverse = True)[0]          
+            return sorted(filterdict[proj].keys(), key=len)[
+                0
+            ]  # USED TO SUPRESS FILTER!!!
+    return sorted(filterdict[proj].keys(), key=len, reverse=True)[0]
 
 
 def getPMs(projection, myfilter):
@@ -94,9 +120,18 @@ def returnAdditionalFilterDict(self):
     projrates = self.h_projrates
     additional = {}
     for i in projrates.keys():
-      additional[i] = {}
-      myrate = projrates[i][1] * getNumETBs(i)
-      for k in i.leafs():
-          if getDecomposedTotal([k], i,self.single_selectivity,self.h_rates_data,self.h_instances) < myrate:
-              additional[i][k] = getDecomposed([k], i),self.single_selectivity,self.h_rates_data
+        additional[i] = {}
+        myrate = projrates[i][1] * getNumETBs(i)
+        for k in i.leafs():
+            if (
+                getDecomposedTotal(
+                    [k], i, self.single_selectivity, self.h_rates_data, self.h_instances
+                )
+                < myrate
+            ):
+                additional[i][k] = (
+                    getDecomposed([k], i),
+                    self.single_selectivity,
+                    self.h_rates_data,
+                )
     return additional

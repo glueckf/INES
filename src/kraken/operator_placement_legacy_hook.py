@@ -183,8 +183,6 @@ def format_results_for_comparison(
 
 
 def calculate_integrated_approach(self, file_path: str, max_parents: int):
-
-
     query_workload = self.query_workload
     filter_by_projection = self.h_projFilterDict
     index_event_nodes = self.h_IndexEventNodes
@@ -208,7 +206,7 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     nodes_per_primitive_event = self.h_nodes
 
     # Debug: Check if h_local_rate_lookup exists and is properly initialized
-    if hasattr(self, 'h_local_rate_lookup'):
+    if hasattr(self, "h_local_rate_lookup"):
         local_rate_lookup = self.h_local_rate_lookup
         logger.info(f"local_rate_lookup initialized: {local_rate_lookup is not None}")
         if local_rate_lookup:
@@ -241,7 +239,6 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     number_of_hops = sum(pairwise_distance_matrix[central_computation_node])
     ms_placements = {}
     start_time = time.time()
-
 
     # Calculate latency threshold for this run
     if latency_threshold is not None:
@@ -363,32 +360,30 @@ def calculate_integrated_approach(self, file_path: str, max_parents: int):
     else:
         # Start latency aware kraken
         logger.info("Starting latency-aware integrated placement...")
-        best_placement_stack = (
-            run_backtracking_kraken_with_latency(
-                query_workload,
-                pairwise_selectivity,
-                dependencies_per_projection,
-                simulation_mode,
-                processing_order,
-                unfolded,
-                no_filter,
-                filter_by_projection,
-                event_distribution_matrix,
-                index_event_nodes,
-                network_data,
-                pairwise_distance_matrix,
-                global_event_rates,
-                projection_rates_selectivity,
-                graph,
-                network_data_nodes,
-                latency_threshold,
-                part_type,
-                primitive_events_per_projection,
-                routing_dict,
-                nodes_per_primitive_event,
-                self,
-                local_rate_lookup=local_rate_lookup,
-            )
+        best_placement_stack = run_backtracking_kraken_with_latency(
+            query_workload,
+            pairwise_selectivity,
+            dependencies_per_projection,
+            simulation_mode,
+            processing_order,
+            unfolded,
+            no_filter,
+            filter_by_projection,
+            event_distribution_matrix,
+            index_event_nodes,
+            network_data,
+            pairwise_distance_matrix,
+            global_event_rates,
+            projection_rates_selectivity,
+            graph,
+            network_data_nodes,
+            latency_threshold,
+            part_type,
+            primitive_events_per_projection,
+            routing_dict,
+            nodes_per_primitive_event,
+            self,
+            local_rate_lookup=local_rate_lookup,
         )
 
         print(best_placement_stack)

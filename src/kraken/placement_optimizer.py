@@ -36,7 +36,9 @@ class PlacementOptimizer:
     def _get_reachable_nodes(self, source_node: int) -> frozenset:
         """Cache reachable nodes for each source to avoid recomputation"""
         try:
-            reachable = set(nx.single_source_shortest_path_length(self.nx_graph, source_node).keys())
+            reachable = set(
+                nx.single_source_shortest_path_length(self.nx_graph, source_node).keys()
+            )
             return frozenset(reachable)
         except nx.NetworkXError:
             return frozenset()
@@ -59,13 +61,13 @@ class PlacementOptimizer:
         return common_reachable
 
     def get_possible_placement_nodes_optimized(
-            self,
-            current_projection: Any,
-            primitive_events_per_projection: Dict[str, List[Any]],
-            network_data: Dict[int, List[str]],
-            index_event_nodes: Dict[str, List[Any]],
-            event_distribution_matrix: List[List[Any]],
-            placed_subqueries: Dict[Any, int]
+        self,
+        current_projection: Any,
+        primitive_events_per_projection: Dict[str, List[Any]],
+        network_data: Dict[int, List[str]],
+        index_event_nodes: Dict[str, List[Any]],
+        event_distribution_matrix: List[List[Any]],
+        placed_subqueries: Dict[Any, int],
     ) -> List[int]:
         """
         Optimized version that combines all filtering steps and uses caching.

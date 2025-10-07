@@ -720,12 +720,16 @@ def log_algorithm_summary(
 
     if len(best_placement_stack) == len(processing_order):
         # Solution found - placement structure: (node, strategy, individual_cost, cumulative_cost, latency, acquisition_steps)
-        total_individual_cost = sum(placement[2] for placement in best_placement_stack.values())
+        total_individual_cost = sum(
+            placement[2] for placement in best_placement_stack.values()
+        )
         max_latency = max(placement[4] for placement in best_placement_stack.values())
         avg_cost = total_individual_cost / len(best_placement_stack)
 
         logger.info("\\nSOLUTION METRICS:")
-        logger.info(f"  Total individual cost (no double-counting): {total_individual_cost:.6f}")
+        logger.info(
+            f"  Total individual cost (no double-counting): {total_individual_cost:.6f}"
+        )
         logger.info(f"  Average cost per projection: {avg_cost:.6f}")
         logger.info(f"  Maximum latency: {max_latency}")
 

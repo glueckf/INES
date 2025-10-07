@@ -3,12 +3,12 @@ import random
 from itertools import permutations
 import pickle
 
-NETWORK = 'network'
-QUERIES = 'queries'
-MUSE_GRAPH = 'muse graph'
-SELECTIVITIES = 'selectivities'
+NETWORK = "network"
+QUERIES = "queries"
+MUSE_GRAPH = "muse graph"
+SELECTIVITIES = "selectivities"
 
-#CURRENT_SECTION = ''
+# CURRENT_SECTION = ''
 
 network = []
 
@@ -33,7 +33,7 @@ eventtype_to_sources_map = {}
 eventtype_to_nodes = {}
 
 
-class Query_fragment():
+class Query_fragment:
     def __init__(self, query, projections, node_placement, forbidden_event_types):
         self.query = query
         self.projections = projections
@@ -42,20 +42,20 @@ class Query_fragment():
 
 
 def get_current_section(CURRENT_SECTION, line):
-    if line == 'network\n':
+    if line == "network\n":
         return NETWORK
-    elif line == 'queries\n':
+    elif line == "queries\n":
         return QUERIES
-    elif line == 'muse graph\n':
+    elif line == "muse graph\n":
         return MUSE_GRAPH
-    elif line == 'selectivities\n':
+    elif line == "selectivities\n":
         return SELECTIVITIES
     return CURRENT_SECTION
 
 
 def extract_network_node(line):
-    if line.find('[') != -1:
-        return list(map(float, line[line.find('[') + 1:line.find(']')].split(", ")))
+    if line.find("[") != -1:
+        return list(map(float, line[line.find("[") + 1 : line.find("]")].split(", ")))
 
 
 def extract_node_events_produced(output_rates, current_node):
@@ -65,54 +65,57 @@ def extract_node_events_produced(output_rates, current_node):
     eventtypes_produced = []
     for output_rate in output_rates:
         if output_rate > 0:
-            all_eventtype_output_rates[(chr(ord('A') + char_counter))] = output_rate
+            all_eventtype_output_rates[(chr(ord("A") + char_counter))] = output_rate
 
-            if chr(ord('A') + char_counter) not in eventtype_to_sources_map:
-                eventtype_to_sources_map[chr(ord('A') + char_counter)] = []
-                eventtype_to_sources_map[chr(ord('A') + char_counter)].append(current_node)
+            if chr(ord("A") + char_counter) not in eventtype_to_sources_map:
+                eventtype_to_sources_map[chr(ord("A") + char_counter)] = []
+                eventtype_to_sources_map[chr(ord("A") + char_counter)].append(
+                    current_node
+                )
             else:
-                eventtype_to_sources_map[chr(ord('A') + char_counter)].append(current_node)
+                eventtype_to_sources_map[chr(ord("A") + char_counter)].append(
+                    current_node
+                )
 
-            eventtypes_produced.append(chr(ord('A') + char_counter))
+            eventtypes_produced.append(chr(ord("A") + char_counter))
         char_counter += 1
 
     return eventtypes_produced
 
 
-#AND(B1, SEQ(F, AND(G1, SEQ(G2, AND(I1, I2, B2)))))
+# AND(B1, SEQ(F, AND(G1, SEQ(G2, AND(I1, I2, B2)))))
 def get_all_query_components(query):
-    operators = ['AND', 'SEQ']
+    operators = ["AND", "SEQ"]
 
-    #adjust query format -> no digits/whitespaces
-    query = re.sub(r'[0-9]+', '', query)
-    query = query.replace(' ', '')
+    # adjust query format -> no digits/whitespaces
+    query = re.sub(r"[0-9]+", "", query)
+    query = query.replace(" ", "")
 
-    #current_pos += 4 jumps over the first L_PAREN -> 1
+    # current_pos += 4 jumps over the first L_PAREN -> 1
     open_parentheses = 1
     current_pos = 4
     query_components = []
 
     for idx in range(current_pos, len(query)):
-
-        if query[current_pos:current_pos + 3] in operators:
+        if query[current_pos : current_pos + 3] in operators:
             first_pos = current_pos
 
-            #set to pos x in AND(x / SEQ(x
+            # set to pos x in AND(x / SEQ(x
             current_pos += 4
             while open_parentheses >= 1:
-                if query[current_pos:current_pos + 3] in operators:
+                if query[current_pos : current_pos + 3] in operators:
                     current_pos += 3
 
-                if query[current_pos] == '(':
+                if query[current_pos] == "(":
                     open_parentheses += 1
 
-                if query[current_pos] == ')':
+                if query[current_pos] == ")":
                     open_parentheses -= 1
 
                 current_pos += 1
 
             eventtype = query[first_pos:current_pos]
-            eventtype = re.sub(r'[0-9]+', '', eventtype)
+            eventtype = re.sub(r"[0-9]+", "", eventtype)
             query_components.append(eventtype)
         else:
             if current_pos + 1 < len(query):
@@ -128,12 +131,16 @@ def is_complex_eventtype(eventtype):
     return len(eventtype) > 1
 
 
-def determine_query_output_rate(query, multi_sink_placement_eventtype, is_single_sink_placement):
-    query = re.sub(r'[0-9]+', '', query)
+def determine_query_output_rate(
+    query, multi_sink_placement_eventtype, is_single_sink_placement
+):
+    query = re.sub(r"[0-9]+", "", query)
 
     if not is_complex_eventtype(query):
         if query != multi_sink_placement_eventtype or is_single_sink_placement:
-            return all_eventtype_output_rates[query] * len(eventtype_to_sources_map[query])
+            return all_eventtype_output_rates[query] * len(
+                eventtype_to_sources_map[query]
+            )
         else:
             return all_eventtype_output_rates[query]
 
@@ -141,43 +148,49 @@ def determine_query_output_rate(query, multi_sink_placement_eventtype, is_single
     first_operator = query[0:3]
     all_query_components = get_all_query_components(query)
     for eventtype in all_query_components:
-        output_rate *= determine_query_output_rate(eventtype, multi_sink_placement_eventtype, is_single_sink_placement)
+        output_rate *= determine_query_output_rate(
+            eventtype, multi_sink_placement_eventtype, is_single_sink_placement
+        )
 
-    if first_operator == 'SEQ':
+    if first_operator == "SEQ":
         return output_rate
 
-    if first_operator == 'AND':
+    if first_operator == "AND":
         operand_count = len(all_query_components)
         return operand_count * output_rate
 
 
 def determine_all_primitive_events_of_projection(projection):
-    given_predicates = projection.replace('AND', '')
-    given_predicates = given_predicates.replace('SEQ', '')
-    given_predicates = given_predicates.replace('(', '')
-    given_predicates = given_predicates.replace(')', '')
-    given_predicates = re.sub(r'[0-9]+', '', given_predicates)
-    given_predicates = given_predicates.replace(' ', '')
-    return given_predicates.split(',')
+    given_predicates = projection.replace("AND", "")
+    given_predicates = given_predicates.replace("SEQ", "")
+    given_predicates = given_predicates.replace("(", "")
+    given_predicates = given_predicates.replace(")", "")
+    given_predicates = re.sub(r"[0-9]+", "", given_predicates)
+    given_predicates = given_predicates.replace(" ", "")
+    return given_predicates.split(",")
 
 
-#takes a preprocessed string (instead of list) and computes the total selectivity 
+# takes a preprocessed string (instead of list) and computes the total selectivity
 def determine_total_query_selectivity(query):
     selectivity = 1.0
 
     for i in range(0, len(query) - 1):
         for k in range(i + 1, len(query)):
-            selectivity *= float(eventtype_pair_to_selectivity[str(query[i]) + str(query[k])])
+            selectivity *= float(
+                eventtype_pair_to_selectivity[str(query[i]) + str(query[k])]
+            )
 
     return selectivity
 
 
-#takes a preprocessed string (instead of projection with operators etc.) and computes the total outputrate 
+# takes a preprocessed string (instead of projection with operators etc.) and computes the total outputrate
 def determine_total_query_outputrate(query):
     outputrate = 1.0
 
     for eventtype in query:
-        outputrate *= all_eventtype_output_rates[eventtype] * len(eventtype_to_sources_map[eventtype])
+        outputrate *= all_eventtype_output_rates[eventtype] * len(
+            eventtype_to_sources_map[eventtype]
+        )
 
     return outputrate
 
@@ -191,34 +204,34 @@ def extract_queries(line):
 
 
 def extract_muse_graph_queries(line):
-    if line.find('SELECT') != -1:
-        return line[line.find('SELECT') + 7:line.find('FROM') - 1]
+    if line.find("SELECT") != -1:
+        return line[line.find("SELECT") + 7 : line.find("FROM") - 1]
 
 
 def extract_muse_graph_sub_queries(line):
-    if line.find('FROM') != -1:
-        return line[line.find('FROM') + 5:line.find('ON') - 1].split("; ")
+    if line.find("FROM") != -1:
+        return line[line.find("FROM") + 5 : line.find("ON") - 1].split("; ")
 
 
 def extract_muse_graph_sources(line):
-    if line.find('{') != -1:
-        return list(map(int, line[line.find('{') + 1:line.find('}')].split(", ")))
+    if line.find("{") != -1:
+        return list(map(int, line[line.find("{") + 1 : line.find("}")].split(", ")))
 
 
 def extract_muse_graph_forbidden(line):
-    if line.find('/n(') != -1:
-        if line.find('WITH') != -1:
-            return line[line.find('/n(') + 3:line.find('WITH') - 2]
+    if line.find("/n(") != -1:
+        if line.find("WITH") != -1:
+            return line[line.find("/n(") + 3 : line.find("WITH") - 2]
         else:
-            return line[line.find('/n(') + 3:len(line) - 2]
+            return line[line.find("/n(") + 3 : len(line) - 2]
 
 
 def extract_muse_graph_selectivities(line):
     """Extract event selectivities from a muse graph line.
-    
+
     Parses a line containing event combinations and their selectivities,
     extracting both event products and their associated selectivity values.
-    
+
     Args:
         line: String line containing event combinations and selectivities
     """
@@ -238,14 +251,18 @@ def extract_muse_graph_selectivities(line):
     # Find separator positions (commas and closing braces)
     separator_positions = _find_separator_positions(line)
 
-    logger.debug(f"Found {len(quote_positions)} quote positions and {len(separator_positions)} separators")
+    logger.debug(
+        f"Found {len(quote_positions)} quote positions and {len(separator_positions)} separators"
+    )
 
     # Process each event product-selectivity pair
     position_offset = 0
     for pair_index in range(len(separator_positions)):
         try:
             # Extract event product name
-            event_product = _extract_event_product(line, quote_positions, position_offset)
+            event_product = _extract_event_product(
+                line, quote_positions, position_offset
+            )
 
             # Track event combinations (every other event product)
             if _should_track_combination(position_offset):
@@ -284,7 +301,7 @@ def _extract_event_product(line, quote_positions, position_offset):
     """Extract event product name between quotes."""
     start_pos = quote_positions[0 + position_offset]
     end_pos = quote_positions[1 + position_offset]
-    return line[start_pos + 1:end_pos]
+    return line[start_pos + 1 : end_pos]
 
 
 def _should_track_combination(position_offset):
@@ -292,7 +309,9 @@ def _should_track_combination(position_offset):
     return (position_offset // 2) % 2 == 0
 
 
-def _extract_selectivity_value(line, quote_positions, separator_positions, position_offset, pair_index):
+def _extract_selectivity_value(
+    line, quote_positions, separator_positions, position_offset, pair_index
+):
     """Extract selectivity value from between quote and separator."""
     start_pos = quote_positions[1 + position_offset] + 3  # Skip quote and ": "
     end_pos = separator_positions[pair_index]
@@ -312,42 +331,48 @@ def _store_selectivity_mappings(event_product, selectivity_value):
     eventtype_pair_to_selectivity[single_event_key] = 1
 
 
-#return the current upper bound for a given eventtype based on all possible lower bounds of size n-1
+# return the current upper bound for a given eventtype based on all possible lower bounds of size n-1
 def return_minimum_upper_bound(upper_bounds, eventtype):
     lowest_upper_bound = 1.0
 
     for _list in upper_bounds:
         for ele in _list:
-
             if ele == eventtype:
-                key = str(eventtype) + '|' + str(_list)
+                key = str(eventtype) + "|" + str(_list)
 
-                #this is because of missing keys caused by projections with r(p) < 1..
+                # this is because of missing keys caused by projections with r(p) < 1..
                 if key in single_selectivity_of_eventtype_within_projection:
-                    if lowest_upper_bound > single_selectivity_of_eventtype_within_projection[key]:
-                        lowest_upper_bound = single_selectivity_of_eventtype_within_projection[key]
+                    if (
+                        lowest_upper_bound
+                        > single_selectivity_of_eventtype_within_projection[key]
+                    ):
+                        lowest_upper_bound = (
+                            single_selectivity_of_eventtype_within_projection[key]
+                        )
     return lowest_upper_bound
 
 
 def no_better_option_found_handling(query, upper_bounds_keys):
     for idx in range(0, len(query)):
         upper_bound = return_minimum_upper_bound(upper_bounds_keys, query[idx])
-        key = str(query[idx]) + '|' + str(query)
+        key = str(query[idx]) + "|" + str(query)
 
         # Preserve specific low selectivity for A|AB combination
-        if key == 'A|AB':
+        if key == "A|AB":
             single_selectivity_of_eventtype_within_projection[key] = 0.0013437
         else:
             single_selectivity_of_eventtype_within_projection[key] = upper_bound
 
 
-def determine_randomized_single_selectivities_within_all_projections(query, upper_bounds_keys, is_deterministic=False):
+def determine_randomized_single_selectivities_within_all_projections(
+    query, upper_bounds_keys, is_deterministic=False
+):
     # print(f"[SELECTIVITY_DEBUG] determine_randomized_single_selectivities called for query={''.join(query)}, is_deterministic={is_deterministic}")
 
     # Ensure deterministic behavior with consistent seed for each query
     if is_deterministic:
         # Use a hash of the query to get consistent but query-specific deterministic values
-        query_hash = hash(''.join(sorted(query)))
+        query_hash = hash("".join(sorted(query)))
         # print(f"[SELECTIVITY_DEBUG] Setting deterministic seed: 42 + {query_hash} = {42 + query_hash}")
         random.seed(42 + query_hash)
 
@@ -358,7 +383,11 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
     outputrates = []
     for primitive_eventtype in query:
         outputrates.append(
-            (all_eventtype_output_rates[primitive_eventtype] * len(eventtype_to_sources_map[primitive_eventtype])))
+            (
+                all_eventtype_output_rates[primitive_eventtype]
+                * len(eventtype_to_sources_map[primitive_eventtype])
+            )
+        )
 
     limit = len(query)
 
@@ -382,12 +411,14 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
 
         for n in range(0, len(chosen_indices) - 1):
             if delta == 1000:
-                #if no better option was found, use same bounds as for the previous level of selectivities
+                # if no better option was found, use same bounds as for the previous level of selectivities
                 no_better_option_found_handling(query, upper_bounds_keys)
                 return
 
             lower_bound = total_sel
-            upper_bound = return_minimum_upper_bound(upper_bounds_keys, query[chosen_indices[n]])
+            upper_bound = return_minimum_upper_bound(
+                upper_bounds_keys, query[chosen_indices[n]]
+            )
 
             if is_deterministic:
                 # Use deterministic value: halfway between bounds
@@ -403,22 +434,28 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
         if total_sel / product <= 1.0:
             solution_found = True
             first_n_random_values.append(total_sel / product)
-            #print("first_n_random_values~~:", first_n_random_values)
+            # print("first_n_random_values~~:", first_n_random_values)
 
             idx = 0
 
             for random_value in first_n_random_values:
                 if total_outputrate > 1.0:
-                    #constraint 1 => if the outputrate of a projection is > 1, then all primitive events it consists of  times their single selectivities
-                    #have to be bigger than one or..
-                    #constraint 2 => the outputrate times the single selectivity for a given eventtype can not be bigger than the outputrate of the
-                    #projection
-                    if (random_value * outputrates[chosen_indices[idx]] < 1.0 and projection_outputrate > 1.0) or (
-                            random_value * outputrates[chosen_indices[idx]]) > projection_outputrate:
+                    # constraint 1 => if the outputrate of a projection is > 1, then all primitive events it consists of  times their single selectivities
+                    # have to be bigger than one or..
+                    # constraint 2 => the outputrate times the single selectivity for a given eventtype can not be bigger than the outputrate of the
+                    # projection
+                    if (
+                        random_value * outputrates[chosen_indices[idx]] < 1.0
+                        and projection_outputrate > 1.0
+                    ) or (
+                        random_value * outputrates[chosen_indices[idx]]
+                    ) > projection_outputrate:
                         solution_found = False
                         break
                 else:
-                    if (random_value * outputrates[chosen_indices[idx]]) > projection_outputrate:
+                    if (
+                        random_value * outputrates[chosen_indices[idx]]
+                    ) > projection_outputrate:
                         solution_found = False
                         break
                 idx += 1
@@ -426,13 +463,17 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
     idx = 0
     # print(f"[SELECTIVITY_DEBUG] Final selectivity assignments:")
     for random_value in first_n_random_values:
-        projection_key = str(query[chosen_indices[idx]]) + '|' + str(query)
+        projection_key = str(query[chosen_indices[idx]]) + "|" + str(query)
 
         # Preserve specific low selectivity for A|AB combination
-        if projection_key == 'A|AB':
-            single_selectivity_of_eventtype_within_projection[projection_key] = 0.0013437
+        if projection_key == "A|AB":
+            single_selectivity_of_eventtype_within_projection[projection_key] = (
+                0.0013437
+            )
         else:
-            single_selectivity_of_eventtype_within_projection[projection_key] = first_n_random_values[idx]
+            single_selectivity_of_eventtype_within_projection[projection_key] = (
+                first_n_random_values[idx]
+            )
         # print(f"[SELECTIVITY_DEBUG] {projection_key} = {first_n_random_values[idx]}")
         idx += 1
 
@@ -440,29 +481,29 @@ def determine_randomized_single_selectivities_within_all_projections(query, uppe
 def determine_permutations_of_all_relevant_lengths(eventtypes):
     result = []
     already_created = {}
-    tmp = ''
+    tmp = ""
     purged_result = []
 
-    #decreases the number of single selectivties that have to be calculated
-    #in order to speed up the sampling of different selectivities
+    # decreases the number of single selectivties that have to be calculated
+    # in order to speed up the sampling of different selectivities
     for current_length in range(2, len(eventtypes) + 1):
-        #group of eventtypes to permutate, desired permutation length
+        # group of eventtypes to permutate, desired permutation length
         for permutation in permutations(eventtypes, current_length):
-            #save memory, as selectivities/outputrates are commutative
-            #and therefore memoize only ordered pairs of concatenated eventtypes
+            # save memory, as selectivities/outputrates are commutative
+            # and therefore memoize only ordered pairs of concatenated eventtypes
             for ele in permutation:
                 tmp += str(ele)
-            tmp = ''.join(sorted(tmp))
+            tmp = "".join(sorted(tmp))
 
-            #save them once
+            # save them once
             if tmp in already_created:
-                tmp = ''
+                tmp = ""
                 continue
-            already_created[tmp] = 'key created!'
+            already_created[tmp] = "key created!"
             result.append(tmp)
-            tmp = ''
+            tmp = ""
 
-        res = ''
+        res = ""
 
     return result
 
@@ -470,26 +511,26 @@ def determine_permutations_of_all_relevant_lengths(eventtypes):
 def determine_next_smaller_dependencies(eventtypes):
     result = []
     already_created = {}
-    tmp = ''
+    tmp = ""
     purged_result = []
     start = len(eventtypes) - 1
     length = len(eventtypes)
     for current_length in range(start, length):
-        #group of eventtypes to permutate, desired permutation length
+        # group of eventtypes to permutate, desired permutation length
         for permutation in permutations(eventtypes, current_length):
             for ele in permutation:
                 tmp += str(ele)
-            tmp = ''.join(sorted(tmp))
+            tmp = "".join(sorted(tmp))
 
-            #save them once
+            # save them once
             if tmp in already_created:
-                tmp = ''
+                tmp = ""
                 continue
-            already_created[tmp] = 'key created!'
+            already_created[tmp] = "key created!"
             result.append(tmp)
-            tmp = ''
+            tmp = ""
 
-        res = ''
+        res = ""
 
     return result
 
@@ -502,10 +543,12 @@ def get_all_distinct_eventtypes_of_used_queries():
             if _item not in total_list:
                 total_list.append(_item)
 
-    return ''.join(sorted(total_list))
+    return "".join(sorted(total_list))
 
 
-def determine_all_single_selectivities_for_projection(projection, is_deterministic=False):
+def determine_all_single_selectivities_for_projection(
+    projection, is_deterministic=False
+):
     if isinstance(projection, list):
         tmp = projection
     else:
@@ -531,26 +574,40 @@ def determine_all_single_selectivities_for_projection(projection, is_determinist
         else:
             current_length_projections.append(possible_projection)
 
-    all_different_projection_lengths.append([all_possible_projections[len(all_possible_projections) - 1]])
+    all_different_projection_lengths.append(
+        [all_possible_projections[len(all_possible_projections) - 1]]
+    )
     for current_length_projections in all_different_projection_lengths:
         for projection in current_length_projections:
             upper_bound_keys = []
 
             if len(projection) > 2:
-                #determine all upper bounds of the previous length (e.g., AB, AC, for A in ABC)
+                # determine all upper bounds of the previous length (e.g., AB, AC, for A in ABC)
                 upper_bound_keys = determine_next_smaller_dependencies(projection)
 
-            determine_randomized_single_selectivities_within_all_projections(projection, upper_bound_keys,
-                                                                             is_deterministic)
+            determine_randomized_single_selectivities_within_all_projections(
+                projection, upper_bound_keys, is_deterministic
+            )
 
 
-def initializeSingleSelectivity(CURRENT_SECTION, config_single, workload, is_deterministic=False,
-                                all_events_array_string=None):
+def initializeSingleSelectivity(
+    CURRENT_SECTION,
+    config_single,
+    workload,
+    is_deterministic=False,
+    all_events_array_string=None,
+):
     # print(f"[SELECTIVITY_DEBUG] initializeSingleSelectivity called with is_deterministic={is_deterministic}")
 
     # Clear all global variables to ensure clean state
-    global network, eventtypes_single_selectivities, single_selectivity_of_eventtype_within_projection
-    global projection_dependencies_map, all_event_combinations, all_eventtype_output_rates
+    global \
+        network, \
+        eventtypes_single_selectivities, \
+        single_selectivity_of_eventtype_within_projection
+    global \
+        projection_dependencies_map, \
+        all_event_combinations, \
+        all_eventtype_output_rates
     global eventtype_to_sources_map, eventtype_to_nodes
 
     # print(f"[SELECTIVITY_DEBUG] Clearing global variables...")
@@ -579,17 +636,19 @@ def initializeSingleSelectivity(CURRENT_SECTION, config_single, workload, is_det
             continue
 
         if CURRENT_SECTION == NETWORK:
-            result = extract_node_events_produced(extract_network_node(line), current_node)
+            result = extract_node_events_produced(
+                extract_network_node(line), current_node
+            )
             current_node += 1
             if result != 0:
                 network.append(result)
-        #print(result)
+        # print(result)
 
         if CURRENT_SECTION == QUERIES:
             print(extract_queries(line))
 
         if CURRENT_SECTION == MUSE_GRAPH:
-            print('-----')
+            print("-----")
             query = Query_fragment("", [], [], "")
             if extract_muse_graph_queries(line) is not None:
                 query.query = extract_muse_graph_queries(line)

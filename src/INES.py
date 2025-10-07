@@ -275,7 +275,7 @@ def generate_hardcoded_workload():
     queries.append(q5)
 
     # Query 6: AND(A, B, C)
-    q6 = AND(PrimEvent('A'), PrimEvent('B'), PrimEvent('C'))
+    q6 = AND(PrimEvent("A"), PrimEvent("B"), PrimEvent("C"))
     q6 = number_children(q6)
     queries.append(q6)
 
@@ -683,6 +683,7 @@ class INES:
 
         # Call kraken2_0
         from src.kraken2_0.run import run_kraken_solver
+
         results = run_kraken_solver(self, ["greedy"])
 
         self.kraken_results = results
@@ -720,7 +721,12 @@ class INES:
         prepp_results = update_prepp_results(self, prepp_results)
         self.prepp_results_for_debugging = prepp_results
 
-        kraken_cost = self.kraken_results.get('strategies').get('greedy').get('solution').cumulative_cost
+        kraken_cost = (
+            self.kraken_results.get("strategies")
+            .get("greedy")
+            .get("solution")
+            .cumulative_cost
+        )
         ines_cost = prepp_results[0]
         print(ines_cost)
 
@@ -746,11 +752,12 @@ class INES:
     def _debug_print_all_data(self):
         """Print all available data types and their structures for debugging."""
         import pprint
+
         pp = pprint.PrettyPrinter(indent=2, width=120, depth=4)
 
-        print("\n" + "="*100)
+        print("\n" + "=" * 100)
         print("DEBUG: COMPLETE DATA DUMP AT INTEGRATED APPROACH CALL")
-        print("="*100 + "\n")
+        print("=" * 100 + "\n")
 
         def safe_repr(obj, max_items=5):
             """Safely represent an object with type and content info."""
@@ -767,78 +774,74 @@ class INES:
         # Collect all attributes to print
         attrs_to_print = [
             # Configuration
-            ('config', self.config),
-            ('nwSize', self.nwSize),
-            ('node_event_ratio', self.node_event_ratio),
-            ('number_eventtypes', self.number_eventtypes),
-            ('eventskew', self.eventskew),
-            ('max_parents', self.max_parents),
-            ('query_size', self.query_size),
-            ('query_length', self.query_length),
-            ('latency_threshold', self.latency_threshold),
-
+            ("config", self.config),
+            ("nwSize", self.nwSize),
+            ("node_event_ratio", self.node_event_ratio),
+            ("number_eventtypes", self.number_eventtypes),
+            ("eventskew", self.eventskew),
+            ("max_parents", self.max_parents),
+            ("query_size", self.query_size),
+            ("query_length", self.query_length),
+            ("latency_threshold", self.latency_threshold),
             # Network structure
-            ('network', self.network),
-            ('root', self.root),
-            ('eList', self.eList),
-            ('graph', self.graph),
-            ('graph_density', self.graph_density),
-            ('allPairs', self.allPairs),
-
+            ("network", self.network),
+            ("root", self.root),
+            ("eList", self.eList),
+            ("graph", self.graph),
+            ("graph_density", self.graph_density),
+            ("allPairs", self.allPairs),
             # Event data
-            ('eventrates', self.eventrates),
-            ('primitiveEvents', self.primitiveEvents),
-
+            ("eventrates", self.eventrates),
+            ("primitiveEvents", self.primitiveEvents),
             # Query and selectivities
-            ('query_workload', self.query_workload),
-            ('selectivities', self.selectivities),
-            ('selectivitiesExperimentData', self.selectivitiesExperimentData),
-            ('single_selectivity', self.single_selectivity),
-
+            ("query_workload", self.query_workload),
+            ("selectivities", self.selectivities),
+            ("selectivitiesExperimentData", self.selectivitiesExperimentData),
+            ("single_selectivity", self.single_selectivity),
             # Helper variables
-            ('h_network_data', self.h_network_data),
-            ('h_rates_data', self.h_rates_data),
-            ('h_primEvents', self.h_primEvents),
-            ('h_instances', self.h_instances),
-            ('h_nodes', self.h_nodes),
-            ('h_eventNodes', self.h_eventNodes),
-            ('h_IndexEventNodes', self.h_IndexEventNodes),
-
+            ("h_network_data", self.h_network_data),
+            ("h_rates_data", self.h_rates_data),
+            ("h_primEvents", self.h_primEvents),
+            ("h_instances", self.h_instances),
+            ("h_nodes", self.h_nodes),
+            ("h_eventNodes", self.h_eventNodes),
+            ("h_IndexEventNodes", self.h_IndexEventNodes),
             # Projections
-            ('h_projlist', self.h_projlist),
-            ('h_projrates', self.h_projrates),
-            ('h_projsPerQuery', self.h_projsPerQuery),
-            ('h_sharedProjectionsDict', self.h_sharedProjectionsDict),
-            ('h_sharedProjectionsList', self.h_sharedProjectionsList),
-            ('h_projFilterDict', self.h_projFilterDict),
-
+            ("h_projlist", self.h_projlist),
+            ("h_projrates", self.h_projrates),
+            ("h_projsPerQuery", self.h_projsPerQuery),
+            ("h_sharedProjectionsDict", self.h_sharedProjectionsDict),
+            ("h_sharedProjectionsList", self.h_sharedProjectionsList),
+            ("h_projFilterDict", self.h_projFilterDict),
             # Combigen
-            ('h_mycombi', self.h_mycombi),
-            ('h_combiDict', self.h_combiDict),
-            ('h_criticalMSTypes', self.h_criticalMSTypes),
-            ('h_criticalMSProjs', self.h_criticalMSProjs),
-            ('h_combiExperimentData', self.h_combiExperimentData),
-            ('h_primitive_events', self.h_primitive_events if hasattr(self, 'h_primitive_events') else None),
-
+            ("h_mycombi", self.h_mycombi),
+            ("h_combiDict", self.h_combiDict),
+            ("h_criticalMSTypes", self.h_criticalMSTypes),
+            ("h_criticalMSProjs", self.h_criticalMSProjs),
+            ("h_combiExperimentData", self.h_combiExperimentData),
+            (
+                "h_primitive_events",
+                self.h_primitive_events
+                if hasattr(self, "h_primitive_events")
+                else None,
+            ),
             # Rate lookup and paths
-            ('h_local_rate_lookup', self.h_local_rate_lookup),
-            ('h_longestPath', self.h_longestPath),
-
+            ("h_local_rate_lookup", self.h_local_rate_lookup),
+            ("h_longestPath", self.h_longestPath),
             # Tree and placement
-            ('h_treeDict', self.h_treeDict),
-            ('h_globalPartitioninInputTypes', self.h_globalPartitioninInputTypes),
-            ('h_globalSiSInputTypes', self.h_globalSiSInputTypes),
-            ('h_placementTreeDict', self.h_placementTreeDict),
-
+            ("h_treeDict", self.h_treeDict),
+            ("h_globalPartitioninInputTypes", self.h_globalPartitioninInputTypes),
+            ("h_globalSiSInputTypes", self.h_globalSiSInputTypes),
+            ("h_placementTreeDict", self.h_placementTreeDict),
             # Other
-            ('networkParams', self.networkParams),
-            ('schema', self.schema),
-            ('config_single', self.config_single),
-            ('CURRENT_SECTION', self.CURRENT_SECTION),
-            ('prim', self.prim),
-            ('eval_plan', self.eval_plan),
-            ('central_eval_plan', self.central_eval_plan),
-            ('experiment_result', self.experiment_result),
+            ("networkParams", self.networkParams),
+            ("schema", self.schema),
+            ("config_single", self.config_single),
+            ("CURRENT_SECTION", self.CURRENT_SECTION),
+            ("prim", self.prim),
+            ("eval_plan", self.eval_plan),
+            ("central_eval_plan", self.central_eval_plan),
+            ("experiment_result", self.experiment_result),
         ]
 
         # Print each attribute
@@ -864,10 +867,12 @@ class INES:
                     print(f"    ... ({len(attr_value) - 5} more items)")
 
             elif isinstance(attr_value, np.ndarray):
-                print(f"  Type: ndarray, Shape: {attr_value.shape}, Dtype: {attr_value.dtype}")
+                print(
+                    f"  Type: ndarray, Shape: {attr_value.shape}, Dtype: {attr_value.dtype}"
+                )
                 print(f"  Data: {attr_value}")
 
-            elif hasattr(attr_value, '__dict__') and attr_name == 'config':
+            elif hasattr(attr_value, "__dict__") and attr_name == "config":
                 # Special handling for SimulationConfig
                 print(f"  Type: {type(attr_value).__name__}")
                 for key, val in vars(attr_value).items():
@@ -882,14 +887,18 @@ class INES:
                 print(f"  computational_power: {node.computational_power}")
                 print(f"  memory: {node.memory}")
                 print(f"  eventrates: {node.eventrates}")
-                print(f"  Parent: {[p.id if hasattr(p, 'id') else p for p in (node.Parent if node.Parent else [])]}")
-                print(f"  Child: {[c.id if hasattr(c, 'id') else c for c in (node.Child if node.Child else [])]}")
+                print(
+                    f"  Parent: {[p.id if hasattr(p, 'id') else p for p in (node.Parent if node.Parent else [])]}"
+                )
+                print(
+                    f"  Child: {[c.id if hasattr(c, 'id') else c for c in (node.Child if node.Child else [])]}"
+                )
             if len(self.network) > 3:
                 print(f"\n  ... ({len(self.network) - 3} more nodes)")
 
-        print("\n" + "="*100)
+        print("\n" + "=" * 100)
         print("END COMPLETE DATA DUMP")
-        print("="*100 + "\n")
+        print("=" * 100 + "\n")
 
     def _create_optimized_rate_lookup(self) -> Dict[str, Dict[int, float]]:
         """

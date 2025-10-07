@@ -11,17 +11,33 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-def plot_percentile_bars(input_files, y_columns, x_column, labels, output_file, colors=None, x_label=None, y_label=None, legend_title="Data Sets"):
-    if len(labels) != len(input_files) * len(y_columns):
-        raise ValueError("Number of labels must match the number of (input file × y_column) combinations.")
 
+def plot_percentile_bars(
+    input_files,
+    y_columns,
+    x_column,
+    labels,
+    output_file,
+    colors=None,
+    x_label=None,
+    y_label=None,
+    legend_title="Data Sets",
+):
+    if len(labels) != len(input_files) * len(y_columns):
+        raise ValueError(
+            "Number of labels must match the number of (input file × y_column) combinations."
+        )
 
     n_combinations = len(input_files) * len(y_columns)
     if colors and len(colors) != n_combinations:
-        raise ValueError("The number of colors must match the number of (input file, Y column) combinations.")
+        raise ValueError(
+            "The number of colors must match the number of (input file, Y column) combinations."
+        )
 
     if not colors:
-        colors = plt.rcParams['axes.prop_cycle'].by_key()['color'] * (n_combinations // len(plt.rcParams['axes.prop_cycle'].by_key()['color']) + 1)
+        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"] * (
+            n_combinations // len(plt.rcParams["axes.prop_cycle"].by_key()["color"]) + 1
+        )
 
     data_dict = {}
 
@@ -36,7 +52,12 @@ def plot_percentile_bars(input_files, y_columns, x_column, labels, output_file, 
                 p90 = np.percentile(group, 90)
                 min_value = group.min()
                 max_value = group.max()
-                data_dict[key] = {'p10': p10, 'p90': p90, 'min': min_value, 'max': max_value}
+                data_dict[key] = {
+                    "p10": p10,
+                    "p90": p90,
+                    "min": min_value,
+                    "max": max_value,
+                }
 
     x_points = sorted(set([key[0] for key in data_dict.keys()]))
     positions = np.arange(len(x_points))
@@ -50,7 +71,7 @@ def plot_percentile_bars(input_files, y_columns, x_column, labels, output_file, 
     upper_whisker = []
     legend_labels = []
 
-    plt.rcParams.update({'font.size': 17})
+    plt.rcParams.update({"font.size": 17})
 
     for i in range(n_combinations):
         idx_file = i // len(y_columns)
@@ -66,10 +87,10 @@ def plot_percentile_bars(input_files, y_columns, x_column, labels, output_file, 
         for x_point in x_points:
             key = (x_point, label)
             if key in data_dict:
-                p10 = data_dict[key]['p10']
-                p90 = data_dict[key]['p90']
-                min_value = data_dict[key]['min']
-                max_value = data_dict[key]['max']
+                p10 = data_dict[key]["p10"]
+                p90 = data_dict[key]["p90"]
+                min_value = data_dict[key]["min"]
+                max_value = data_dict[key]["max"]
                 bar_height = p90 - p10
                 minimal_height = 0.015
                 if round(bar_height, 2) == 0.0:
@@ -103,16 +124,48 @@ def plot_percentile_bars(input_files, y_columns, x_column, labels, output_file, 
         lower = lower_whisker[i]
         upper = upper_whisker[i]
 
-        ax.bar(x_pos, heights, width=bar_width, bottom=bottoms, color=colors[i], label=legend_labels[i], zorder=2)
+        ax.bar(
+            x_pos,
+            heights,
+            width=bar_width,
+            bottom=bottoms,
+            color=colors[i],
+            label=legend_labels[i],
+            zorder=2,
+        )
 
         for j in range(len(x_pos)):
             if not np.isnan(bottoms[j]):
                 if lower[j] is not None:
-                    ax.vlines(x_pos[j], bottoms[j] - lower[j], bottoms[j], color='black', zorder=3)
-                    ax.hlines(bottoms[j] - lower[j], x_pos[j] - capwidth / 2, x_pos[j] + capwidth / 2, color='black', zorder=3)
+                    ax.vlines(
+                        x_pos[j],
+                        bottoms[j] - lower[j],
+                        bottoms[j],
+                        color="black",
+                        zorder=3,
+                    )
+                    ax.hlines(
+                        bottoms[j] - lower[j],
+                        x_pos[j] - capwidth / 2,
+                        x_pos[j] + capwidth / 2,
+                        color="black",
+                        zorder=3,
+                    )
                 if upper[j] is not None:
-                    ax.vlines(x_pos[j], bottoms[j] + heights[j], bottoms[j] + heights[j] + upper[j], color='black', zorder=3)
-                    ax.hlines(bottoms[j] + heights[j] + upper[j], x_pos[j] - capwidth / 2, x_pos[j] + capwidth / 2, color='black', zorder=3)
+                    ax.vlines(
+                        x_pos[j],
+                        bottoms[j] + heights[j],
+                        bottoms[j] + heights[j] + upper[j],
+                        color="black",
+                        zorder=3,
+                    )
+                    ax.hlines(
+                        bottoms[j] + heights[j] + upper[j],
+                        x_pos[j] - capwidth / 2,
+                        x_pos[j] + capwidth / 2,
+                        color="black",
+                        zorder=3,
+                    )
 
     ax.set_ylim(0, 1.05)
     ax.set_yticks(np.linspace(0, 1, 11))
@@ -121,23 +174,44 @@ def plot_percentile_bars(input_files, y_columns, x_column, labels, output_file, 
     ax.set_xticklabels([str(x) for x in x_points], fontsize=23)
     plt.xlabel(x_label if x_label else x_column, fontsize=25)
     plt.ylabel(y_label if y_label else ", ".join(y_columns), fontsize=25)
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.18), ncol=3, fontsize=16, title=legend_title)
+    plt.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.18),
+        ncol=3,
+        fontsize=16,
+        title=legend_title,
+    )
     plt.tight_layout()
-    plt.savefig(output_file, format='png', bbox_inches='tight')
+    plt.savefig(output_file, format="png", bbox_inches="tight")
     plt.close()
     print(f"Plot saved as {output_file}")
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Plot a bar graph with 80% range bars and outliers.")
-    parser.add_argument('-i', '--input_files', nargs='+', required=True, help="Input CSV files.")
-    parser.add_argument('-y', '--y_column', nargs='+', required=True, help="Y-axis column name(s).")
-    parser.add_argument('-x', '--x_column', required=True, help="X-axis column name.")
-    parser.add_argument('-l', '--labels', nargs='+', required=True, help="Labels for the input files.")
-    parser.add_argument('-o', '--output_file', required=True, help="Output file for the plot.")
-    parser.add_argument('-c', '--colors', nargs='+', help="Colors for the bars (optional).")
-    parser.add_argument('--x_label', help="Custom x-axis label (optional).")
-    parser.add_argument('--y_label', help="Custom y-axis label (optional).")
-    parser.add_argument('--legend_title', default="Legend", help="Title for the legend (optional).")
+    parser = argparse.ArgumentParser(
+        description="Plot a bar graph with 80% range bars and outliers."
+    )
+    parser.add_argument(
+        "-i", "--input_files", nargs="+", required=True, help="Input CSV files."
+    )
+    parser.add_argument(
+        "-y", "--y_column", nargs="+", required=True, help="Y-axis column name(s)."
+    )
+    parser.add_argument("-x", "--x_column", required=True, help="X-axis column name.")
+    parser.add_argument(
+        "-l", "--labels", nargs="+", required=True, help="Labels for the input files."
+    )
+    parser.add_argument(
+        "-o", "--output_file", required=True, help="Output file for the plot."
+    )
+    parser.add_argument(
+        "-c", "--colors", nargs="+", help="Colors for the bars (optional)."
+    )
+    parser.add_argument("--x_label", help="Custom x-axis label (optional).")
+    parser.add_argument("--y_label", help="Custom y-axis label (optional).")
+    parser.add_argument(
+        "--legend_title", default="Legend", help="Title for the legend (optional)."
+    )
 
     args = parser.parse_args()
 
@@ -150,8 +224,9 @@ def main():
         colors=args.colors,
         x_label=args.x_label,
         y_label=args.y_label,
-        legend_title=args.legend_title
+        legend_title=args.legend_title,
     )
+
 
 if __name__ == "__main__":
     main()

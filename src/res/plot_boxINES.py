@@ -15,10 +15,20 @@ import numpy as np
 from matplotlib.patches import Patch
 import os
 
-def plot_percentile_bars(input_files, y_column, x_column, labels, output_file,
-                         colors=None, hatches=None, styles=None,
-                         x_label=None, y_label=None, legend_title="Data Sets"):
 
+def plot_percentile_bars(
+    input_files,
+    y_column,
+    x_column,
+    labels,
+    output_file,
+    colors=None,
+    hatches=None,
+    styles=None,
+    x_label=None,
+    y_label=None,
+    legend_title="Data Sets",
+):
     if len(input_files) != len(labels):
         raise ValueError("Number of input files and labels must match.")
 
@@ -33,11 +43,11 @@ def plot_percentile_bars(input_files, y_column, x_column, labels, output_file,
 
     # Defaults
     if not colors:
-        colors = plt.rcParams['axes.prop_cycle'].by_key()['color'] * 2
+        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"] * 2
     if not hatches:
-        hatches = [''] * len(labels)
+        hatches = [""] * len(labels)
     if not styles:
-        styles = ['-'] * len(labels)
+        styles = ["-"] * len(labels)
 
     # Load data
     data_dict = {}
@@ -48,10 +58,10 @@ def plot_percentile_bars(input_files, y_column, x_column, labels, output_file,
         for x_val, group in grouped:
             key = (x_val, label)
             data_dict[key] = {
-                'p10': np.percentile(group, 10),
-                'p90': np.percentile(group, 90),
-                'min': group.min(),
-                'max': group.max()
+                "p10": np.percentile(group, 10),
+                "p90": np.percentile(group, 90),
+                "min": group.min(),
+                "max": group.max(),
             }
 
     # Setup
@@ -63,12 +73,12 @@ def plot_percentile_bars(input_files, y_column, x_column, labels, output_file,
     capwidth = bar_width * 0.4
 
     fig, ax = plt.subplots(figsize=(12, 6))
-    plt.rcParams.update({'font.size': 17})
+    plt.rcParams.update({"font.size": 17})
 
     legend_elements = []
 
     for i, label in enumerate(labels):
-        x_offsets = positions - total_width/2 + bar_width/2 + i * bar_width
+        x_offsets = positions - total_width / 2 + bar_width / 2 + i * bar_width
         color = colors[i]
         hatch = hatches[i]
         linestyle = styles[i]
@@ -79,13 +89,13 @@ def plot_percentile_bars(input_files, y_column, x_column, labels, output_file,
             key = (x, label)
             stats = data_dict.get(key)
             if stats:
-                p10, p90 = stats['p10'], stats['p90']
+                p10, p90 = stats["p10"], stats["p90"]
                 h = max(p90 - p10, 0.015)
                 b = p10 if h > 0.015 else p10 - h / 2
                 heights.append(h)
                 bottoms.append(b)
-                err_lower.append(p10 - stats['min'] if p10 > stats['min'] else None)
-                err_upper.append(stats['max'] - p90 if p90 < stats['max'] else None)
+                err_lower.append(p10 - stats["min"] if p10 > stats["min"] else None)
+                err_upper.append(stats["max"] - p90 if p90 < stats["max"] else None)
             else:
                 heights.append(np.nan)
                 bottoms.append(np.nan)
@@ -93,8 +103,17 @@ def plot_percentile_bars(input_files, y_column, x_column, labels, output_file,
                 err_upper.append(None)
 
         # Bars
-        ax.bar(x_offsets, heights, width=bar_width, bottom=bottoms,
-               color=color, hatch=hatch, edgecolor='black', align='center', zorder=2)
+        ax.bar(
+            x_offsets,
+            heights,
+            width=bar_width,
+            bottom=bottoms,
+            color=color,
+            hatch=hatch,
+            edgecolor="black",
+            align="center",
+            zorder=2,
+        )
 
         # Whiskers
         for j, x_pos in enumerate(x_offsets):
@@ -103,23 +122,44 @@ def plot_percentile_bars(input_files, y_column, x_column, labels, output_file,
 
             # Lower
             if err_lower[j] is not None:
-                ax.vlines(x_pos, bottoms[j] - err_lower[j], bottoms[j],
-                          color='black', linestyle=linestyle, zorder=3)
-                ax.hlines(bottoms[j] - err_lower[j],
-                          x_pos - capwidth/2, x_pos + capwidth/2,
-                          color='black', zorder=3)
+                ax.vlines(
+                    x_pos,
+                    bottoms[j] - err_lower[j],
+                    bottoms[j],
+                    color="black",
+                    linestyle=linestyle,
+                    zorder=3,
+                )
+                ax.hlines(
+                    bottoms[j] - err_lower[j],
+                    x_pos - capwidth / 2,
+                    x_pos + capwidth / 2,
+                    color="black",
+                    zorder=3,
+                )
 
             # Upper
             if err_upper[j] is not None:
-                ax.vlines(x_pos, bottoms[j] + heights[j],
-                          bottoms[j] + heights[j] + err_upper[j],
-                          color='black', linestyle=linestyle, zorder=3)
-                ax.hlines(bottoms[j] + heights[j] + err_upper[j],
-                          x_pos - capwidth/2, x_pos + capwidth/2,
-                          color='black', zorder=3)
+                ax.vlines(
+                    x_pos,
+                    bottoms[j] + heights[j],
+                    bottoms[j] + heights[j] + err_upper[j],
+                    color="black",
+                    linestyle=linestyle,
+                    zorder=3,
+                )
+                ax.hlines(
+                    bottoms[j] + heights[j] + err_upper[j],
+                    x_pos - capwidth / 2,
+                    x_pos + capwidth / 2,
+                    color="black",
+                    zorder=3,
+                )
 
         # Legend patch
-        legend_elements.append(Patch(facecolor=color, edgecolor='black', hatch=hatch, label=label))
+        legend_elements.append(
+            Patch(facecolor=color, edgecolor="black", hatch=hatch, label=label)
+        )
 
     # Axis
     ax.set_xticks(positions)
@@ -133,28 +173,38 @@ def plot_percentile_bars(input_files, y_column, x_column, labels, output_file,
         ax.set_ylabel(y_label, fontsize=25)
 
     ax.set_ylim(0, 1.05)
-    plt.legend(handles=legend_elements, loc='upper center',
-               bbox_to_anchor=(0.5, 1.25), ncol=3, frameon=True)
+    plt.legend(
+        handles=legend_elements,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.25),
+        ncol=3,
+        frameon=True,
+    )
 
     plt.tight_layout()
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    plt.savefig(output_file, format='png', bbox_inches='tight')
+    plt.savefig(output_file, format="png", bbox_inches="tight")
     plt.close()
     print(f"Plot saved to {output_file}")
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Percentile bar plot with color, hatch and line style.")
-    parser.add_argument('-i', '--input_files', nargs='+', required=True)
-    parser.add_argument('-y', '--y_column', required=True)
-    parser.add_argument('-x', '--x_column', required=True)
-    parser.add_argument('-l', '--labels', nargs='+', required=True)
-    parser.add_argument('-o', '--output_file', required=True)
-    parser.add_argument('-c', '--colors', nargs='+')
-    parser.add_argument('-t', '--hatches', nargs='+')
-    parser.add_argument('-s', '--styles', nargs='+', help="Line styles for whiskers (e.g. '-', '--')")
-    parser.add_argument('--x_label')
-    parser.add_argument('--y_label')
-    parser.add_argument('--legend_title', default="Legend")
+    parser = argparse.ArgumentParser(
+        description="Percentile bar plot with color, hatch and line style."
+    )
+    parser.add_argument("-i", "--input_files", nargs="+", required=True)
+    parser.add_argument("-y", "--y_column", required=True)
+    parser.add_argument("-x", "--x_column", required=True)
+    parser.add_argument("-l", "--labels", nargs="+", required=True)
+    parser.add_argument("-o", "--output_file", required=True)
+    parser.add_argument("-c", "--colors", nargs="+")
+    parser.add_argument("-t", "--hatches", nargs="+")
+    parser.add_argument(
+        "-s", "--styles", nargs="+", help="Line styles for whiskers (e.g. '-', '--')"
+    )
+    parser.add_argument("--x_label")
+    parser.add_argument("--y_label")
+    parser.add_argument("--legend_title", default="Legend")
 
     args = parser.parse_args()
 
@@ -169,8 +219,9 @@ def main():
         styles=args.styles,
         x_label=args.x_label,
         y_label=args.y_label,
-        legend_title=args.legend_title
+        legend_title=args.legend_title,
     )
+
 
 if __name__ == "__main__":
     main()
