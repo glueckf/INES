@@ -29,7 +29,9 @@ class PlacementInfo:
     individual_transmission_latency: float  # l_t(v)
     individual_processing_latency: float  # l_p(v)
 
-    acquisition_steps: AcquisitionSet  # Acquisition steps for this vertex v and its inputs
+    acquisition_steps: (
+        AcquisitionSet  # Acquisition steps for this vertex v and its inputs
+    )
 
 
 @dataclass(slots=True)
@@ -44,6 +46,9 @@ class SolutionCandidate:
 
     # The sum of individual_cost for all placements so far.
     cumulative_cost: float = 0.0
+
+    # The sum of individual_processing_latency for all placements so far.
+    cumulative_processing_latency: float = 0.0
 
     # The state of events on the physical network T for this solution state s.
     event_stack: Dict[int, Dict[str, Any]] = field(default_factory=dict)
