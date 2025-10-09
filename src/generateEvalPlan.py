@@ -262,11 +262,12 @@ def generatePlan(
     text = ""
     text += networkText(network) + "\n"
     text += selectivitiesText(selectivities) + "\n"
+    reused_text = text
     text += queriesText(workload) + "\n"
     #    text +="Randomized Rate-Based Primitive Event Generation\n"
     #    text +="-----------\n"
     text += processingText(combinationDict, sinkDict, selectionRate)
-    return text
+    return text, reused_text
 
 
 def generate_eval_plan(nw, selectivities, myPlan, centralPlan, workload):
@@ -324,10 +325,8 @@ def generate_eval_plan(nw, selectivities, myPlan, centralPlan, workload):
 
     config_buffer = io.StringIO()
 
-    config_buffer.write(
-        generatePlan(
-            nw, selectivities, workload, combinationDict, sinkDict, selectionRate
-        )
-    )
+    text_buffer, reused_text = generatePlan(nw, selectivities, workload, combinationDict, sinkDict, selectionRate)
+
+    config_buffer.write(text_buffer)
     config_buffer.seek(0)
-    return config_buffer
+    return config_buffer, reused_text
