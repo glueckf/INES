@@ -165,6 +165,9 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
     self.processing_order = processingOrder
     costs = 0
 
+    # Processing Latency
+    processing_latency = 0
+
     central_eval_plan = [ccosts[1], ccosts[3], wl]
 
     temp_results_dict = {}
@@ -248,6 +251,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
                 projrates,
                 self.graph,
                 self.network,
+                self
             )
 
             placement_costs = result[0]
@@ -256,6 +260,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
                 "placement_node": placement_node,
                 "placement_costs": placement_costs,
             }
+            processing_latency += result[6]
             additional = result[0]
             costs += additional
             hopLatency[projection] += result[2]
@@ -371,4 +376,13 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
 
     eval_Plan = [myPlan, ID, MSPlacements]
     experiment_result = [ID, costs]
-    return eval_Plan, central_eval_plan, experiment_result, myResult
+
+    end_time = time.time()
+    logging_result_inev = {
+        "cost": mycosts,
+        "transmission_latency": hopLatency,
+        "processing_latency": processing_latency,
+        "computing_time": start_time - end_time,
+        "status": "success"
+    }
+    return eval_Plan, central_eval_plan, experiment_result, myResult, logging_result_inev

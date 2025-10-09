@@ -9,7 +9,7 @@ import time
 import logging
 import threading
 
-from INES import SimulationConfig, SimulationMode
+from simulation_environment import SimulationConfig, SimulationMode, Simulation
 
 logger = logging.getLogger(__name__)
 
@@ -81,14 +81,14 @@ def _initialize_worker() -> None:
             try:
                 import networkx as nx
                 import numpy as np
-                from INES import INES, calculate_graph_density
+                from simulation_environment import Simulation, calculate_graph_density
 
                 _worker_state.update(
                     {
                         "initialized": True,
                         "networkx": nx,
                         "numpy": np,
-                        "INES": INES,
+                        "Simulation": Simulation,
                         "calculate_graph_density": calculate_graph_density,
                         "job_count": 0,
                     }
@@ -602,11 +602,14 @@ def run_simulation_worker(job_data: Dict[str, Any]) -> Dict[str, Any]:
         parameter_set_id = job_data["parameter_set_id"]
 
         # Use cached modules from worker state
-        INES_class = _worker_state["INES"]
+        Simulation_class = _worker_state["Simulation"]
         calculate_graph_density = _worker_state["calculate_graph_density"]
 
-        # Execute INES simulation using cached class
-        simulation = INES_class(config)
+        # Execute simulation using cached class
+        simulation = Simulation_class(config)
+
+        # Run all placement strategies sequentially
+        simulation.run()
 
         # Calculate graph density using cached function
         graph_density = calculate_graph_density(simulation.graph)

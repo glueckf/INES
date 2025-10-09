@@ -16,7 +16,7 @@ from .logging import get_kraken_logger
 
 # Import SimulationMode for deterministic mode checking
 try:
-    from INES import SimulationMode
+    from simulation_environment import SimulationMode
 
 except ImportError:
     # Fallback if import fails

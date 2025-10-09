@@ -644,6 +644,7 @@ def ComputeSingleSinkPlacement(
     projrates,
     Graph,
     network,
+    self = None
 ):
     from allPairs import create_routing_dict
 
@@ -654,6 +655,11 @@ def ComputeSingleSinkPlacement(
     # routingDict = dict(nx.all_pairs_shortest_path(Graph))
     # print(routingDict)
     routingAlgo = dict(nx.all_pairs_shortest_path(Graph))
+
+    # Calculate the processing latency
+    output_rate = projrates[projection][1]
+    baseline_input_events = self.sum_of_input_rates_per_query[projection]
+    actual_input_rates = 0
 
     # add filters of projections to eventtpes in combi, if filters added, use costs of filter -> compute costs for single etbs of projrates
     intercombi = []
@@ -756,12 +762,14 @@ def ComputeSingleSinkPlacement(
 
                 elif eventtype in rates.keys():  # case primitive event
                     rate = rates[eventtype]
+                    actual_input_rates += rate
                     distance = allPairs[destination][mySource]
                     etb_cost = rate * distance
 
                 else:  # case projection
                     num = NumETBsByKey(etb, eventtype, IndexEventNodes)
                     proj_rate = projrates[eventtype][1]
+                    actual_input_rates += num * proj_rate
                     distance = allPairs[destination][mySource]
                     etb_cost = proj_rate * distance * num
 
@@ -835,7 +843,11 @@ def ComputeSingleSinkPlacement(
         output_rate = projrates[projection][1]
         extra_costs = output_rate * hops
         costs += extra_costs
-    return costs, node, longestPath, myProjection, newInstances, Filters
+
+    # Calculate the processing latency
+    processing_latency = output_rate * (actual_input_rates / baseline_input_events)
+
+    return costs, node, longestPath, myProjection, newInstances, Filters, processing_latency
 
 
 def NEWcomputeCentralCosts(workload, IndexEventNodes, allPairs, rates, EventNodes, G):
