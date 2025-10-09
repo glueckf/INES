@@ -6,8 +6,6 @@ Created on Tue Aug 10 13:16:11 2021
 @author: samira
 """
 
-
-
 # from helper.processCombination_aug import *
 from helper.filter import getMaximalFilter, getDecomposedTotal
 from helper.structures import getNodes, NumETBsByKey, setEventNodes, SiSManageETBs
@@ -18,7 +16,6 @@ import numpy as np
 from helper.filter import getKeySingleSelect
 import networkx as nx
 from helper.structures import MSManageETBs, getETBs
-
 
 
 class PlacementDecision:
