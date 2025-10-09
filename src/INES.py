@@ -684,7 +684,11 @@ class INES:
         # Call kraken2_0
         from src.kraken2_0.run import run_kraken_solver
 
-        results = run_kraken_solver(self, ["greedy"], enable_detailed_logging=True)
+        results = run_kraken_solver(
+            ines_context=self,
+            strategies_to_run=["greedy"],
+            enable_detailed_logging=False,
+        )
 
         self.kraken_results = results
 
@@ -698,7 +702,7 @@ class INES:
         # Add prepp results to complete the schema (4 additional columns)
         from generateEvalPlan import generate_eval_plan
 
-        self.plan = generate_eval_plan(
+        self.plan, reused_buffer_section = generate_eval_plan(
             self.network,
             self.selectivities,
             self.eval_plan,
