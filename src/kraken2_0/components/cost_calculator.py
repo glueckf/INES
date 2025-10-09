@@ -5,6 +5,12 @@ import hashlib
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from src.kraken2_0.acquisition_step import (
+    AcquisitionSet,
+    AcquisitionStep,
+    PullRequest,
+    PullResponse,
+)
 from src.kraken2_0.state import SolutionCandidate
 from src.prepp import generate_prePP
 
@@ -158,15 +164,17 @@ class CostCalculator:
 
         # Calculate adjustment based on strategy type
         strategy_name = strategy_result["strategy"]
-        acquisition_steps = strategy_result["acquisition_steps"]
+        acquisition_set = strategy_result["acquisition_steps"]
 
         if strategy_name == "all_push":
+            # Pass the dictionary representation from the first step
             cost_adj, lat_adj = self._compute_all_push_adjustment(
-                acquisition_steps, events_already_available
+                {0: acquisition_set.steps[0].pull_response.detailed_costs}, events_already_available
             )
         else:  # push_pull
+            # Pass the list of step objects
             cost_adj, lat_adj = self._compute_acquisition_adjustment(
-                acquisition_steps, events_already_available, n, s_current
+                acquisition_set.steps, events_already_available, n, s_current
             )
 
         # Apply adjustments
@@ -454,21 +462,20 @@ class CostCalculator:
                 "sources": sources_info,
             }
 
-        # Structure the single "all_push" step to mimic a multi-step push-pull plan
-        acquisition_step = {
-            "events_to_pull": [str(dep) for dep in dependencies],
-            "pull_set": [],  # No pull set needed for all_push
-            "pull_request_costs": 0.0,
-            "pull_request_latency": 0,
-            "pull_response_costs": total_cost,
-            "pull_response_latency": max_transmission_latency,
-            "total_step_costs": total_cost,
-            "total_latency": max_transmission_latency,
-            "detailed_cost_contribution": {
-                "pull_request": {},
-                "pull_response": pull_response_details,
-            },
-        }
+        # Build dataclass-based acquisition step
+        pull_response = PullResponse(
+            cost=total_cost,
+            latency=max_transmission_latency,
+            detailed_costs=pull_response_details,
+        )
+
+        acquisition_step = AcquisitionStep(
+            pull_request=None,  # No pull request in "all-push"
+            pull_response=pull_response,
+            events_to_pull=[str(dep) for dep in dependencies],
+        )
+
+        acquisition_set = AcquisitionSet(steps=[acquisition_step])
 
         push_processing_latency = self.params["projection_rates_selectivity"].get(
             p, (0.0, 0.0)
@@ -479,7 +486,7 @@ class CostCalculator:
             "individual_cost": total_cost,
             "transmission_latency": max_transmission_latency,
             "processing_latency": push_processing_latency,
-            "acquisition_steps": {0: acquisition_step},  # Nest it under step 0
+            "acquisition_steps": acquisition_set,
         }
 
     def _process_prepp_output(
@@ -502,17 +509,22 @@ class CostCalculator:
         if not steps_by_proj or qkey not in steps_by_proj:
             return None
 
-        steps = steps_by_proj[qkey]
-        total_plan_costs = sum(s.get("total_step_costs", 0) for s in steps.values())
-        total_plan_latency = sum(s.get("total_latency", 0) for s in steps.values())
+        # prepp.py now returns AcquisitionSet objects directly
+        acquisition_set = steps_by_proj[qkey]
+
+        # Check if it's an error dict (legacy error handling)
+        if isinstance(acquisition_set, dict) and "error" in acquisition_set:
+            return None
+
+        total_plan_costs = sum(step.total_cost for step in acquisition_set.steps)
+        total_plan_latency = sum(step.total_latency for step in acquisition_set.steps)
 
         all_push_processing_latency = self.params["projection_rates_selectivity"].get(
             p, (0.0, 0.0)
         )[1]
 
         # Calculate the processing latency
-        acquisition_steps = prepp_output[6][str(p)]
-        sum_input_rates = sum(step.get("pull_response_costs", 0) for step in acquisition_steps.values())
+        sum_input_rates = sum(step.pull_response.cost for step in acquisition_set.steps)
         input_ratio = sum_input_rates / all_push_base_cost
 
         push_pull_processing_latency = input_ratio * all_push_processing_latency
@@ -522,7 +534,7 @@ class CostCalculator:
             "individual_cost": total_plan_costs,
             "transmission_latency": total_plan_latency,
             "processing_latency": push_pull_processing_latency,
-            "acquisition_steps": steps,
+            "acquisition_steps": acquisition_set,
         }
 
     def _extract_needed_events(self, p: Any) -> Set[str]:
@@ -551,7 +563,7 @@ class CostCalculator:
 
     def _compute_acquisition_adjustment(
         self,
-        acquisition_steps: Dict[int, Dict[str, Any]],
+        acquisition_steps: List[AcquisitionStep],
         events_already_available: Set[str],
         n: int,
         s_current: SolutionCandidate,
@@ -559,7 +571,7 @@ class CostCalculator:
         """Compute cost/latency adjustment for locally available events.
 
         Args:
-            acquisition_steps: Acquisition steps from PrePP
+            acquisition_steps: List of AcquisitionStep objects
             events_already_available: Events available at node
             n: Node ID
             s_current: Current solution state
@@ -570,8 +582,8 @@ class CostCalculator:
         total_cost_adj = 0.0
         total_lat_adj = 0.0
 
-        for step_details in acquisition_steps.values():
-            events_to_pull = step_details.get("events_to_pull", [])
+        for step in acquisition_steps:
+            events_to_pull = step.events_to_pull
             if not events_to_pull:
                 continue
 
@@ -582,20 +594,20 @@ class CostCalculator:
                 continue
 
             # Update metadata
-            step_details["already_at_node"] = list(events_we_can_skip)
-            step_details["acquired_by_query"] = self._get_query_sources(
+            step.already_at_node = list(events_we_can_skip)
+            step.acquired_by_query = self._get_query_sources(
                 events_we_can_skip, n, s_current
             )
 
             # Calculate adjustment
             if all_primitives <= events_already_available:
                 # All events available
-                total_cost_adj += step_details.get("total_step_costs", 0.0)
-                total_lat_adj += step_details.get("total_latency", 0.0)
+                total_cost_adj += step.total_cost
+                total_lat_adj += step.total_latency
             else:
-                # Partial availability
+                # Partial availability - pass pull_response detailed_costs
                 total_cost_adj += self._compute_partial_cost_adjustment(
-                    step_details, events_we_can_skip, all_primitives
+                    step.pull_response.detailed_costs, events_we_can_skip, all_primitives, step.total_cost
                 )
 
         return total_cost_adj, total_lat_adj
@@ -689,31 +701,29 @@ class CostCalculator:
 
     def _compute_partial_cost_adjustment(
         self,
-        step_details: Dict[str, Any],
+        pull_response_details: Dict[str, Any],
         events_we_can_skip: Set[str],
         all_primitives: Set[str],
+        total_step_cost: float,
     ) -> float:
         """Compute partial cost adjustment.
 
         Args:
-            step_details: Step details
+            pull_response_details: Pull response detailed costs
             events_we_can_skip: Events available
             all_primitives: All primitive events
+            total_step_cost: Total cost for this step
 
         Returns:
             Cost adjustment amount
         """
-        pull_response = step_details.get("detailed_cost_contribution", {}).get(
-            "pull_response", {}
-        )
-
         total_adj = 0.0
         for event in events_we_can_skip:
-            if event in pull_response:
-                total_adj += pull_response[event].get("cost_with_selectivity", 0.0)
+            if event in pull_response_details:
+                total_adj += pull_response_details[event].get("cost_with_selectivity", 0.0)
             else:
                 fraction = len(events_we_can_skip) / len(all_primitives)
-                total_adj += step_details.get("total_step_costs", 0.0) * fraction
+                total_adj += total_step_cost * fraction
                 break
 
         return total_adj

@@ -6,6 +6,8 @@ import helper.push_pull_plan_generator as push_pull_plan_generator
 import time
 from itertools import chain, combinations
 
+from src.kraken2_0.acquisition_step import AcquisitionStep, AcquisitionSet, PullRequest, PullResponse
+
 NETWORK = "network"
 QUERIES = "queries"
 MUSE_GRAPH = "muse graph"
@@ -546,7 +548,7 @@ def determine_randomized_distribution_push_pull_costs(
                         print(
                             "[DEBUG] Adjusted used_eventtypes_to_pull to match exact_push_pull_plan_for_a_projection length"
                         )
-                    aquisition_steps[query.query] = {}
+                    acquisition_set = AcquisitionSet(steps=[])
                     received_eventtypes = []
                     latency = 0
                     for i, aquired_eventtype in enumerate(
@@ -582,24 +584,29 @@ def determine_randomized_distribution_push_pull_costs(
                             current_node=current_node,
                         )
 
-                        aquisition_steps[query.query][i] = {
-                            "pull_set": used_eventtypes_to_pull[i],
-                            "events_to_pull": aquired_eventtype,
-                            "pull_request_costs": pull_request_costs,
-                            "pull_request_latency": pull_request_latency,
-                            "pull_response_costs": pull_response_costs,
-                            "pull_response_latency": pull_response_latency,
-                            "total_step_costs": pull_request_costs
-                            + pull_response_costs,
-                            "total_latency": pull_request_latency
-                            + pull_response_latency,
-                            "already_at_node": None,
-                            "acquired_by_query": None,
-                            "detailed_cost_contribution": {
-                                "pull_request": pull_request_detailed_costs,
-                                "pull_response": pull_response_detailed_costs,
-                            },
-                        }
+                        # Build dataclass objects
+                        pull_request = None
+                        if used_eventtypes_to_pull[i]:
+                            pull_request = PullRequest(
+                                cost=pull_request_costs,
+                                latency=pull_request_latency,
+                                events=used_eventtypes_to_pull[i],
+                                detailed_costs=pull_request_detailed_costs,
+                            )
+
+                        pull_response = PullResponse(
+                            cost=pull_response_costs,
+                            latency=pull_response_latency,
+                            detailed_costs=pull_response_detailed_costs,
+                        )
+
+                        acquisition_step = AcquisitionStep(
+                            pull_request=pull_request,
+                            pull_response=pull_response,
+                            events_to_pull=aquired_eventtype,
+                        )
+
+                        acquisition_set.steps.append(acquisition_step)
 
                         for eventtype in aquired_eventtype:
                             eventtypes = push_pull_plan_generator_exact.determine_all_primitive_events_of_projection(
@@ -610,6 +617,9 @@ def determine_randomized_distribution_push_pull_costs(
                                     received_eventtypes.append(event)
 
                         latency += pull_request_latency + pull_response_latency
+
+                    # Store the AcquisitionSet in the dictionary
+                    aquisition_steps[query.query] = acquisition_set
                 else:
                     # raise ValueError("Length of push pull plan and events to pull do not match!")
                     # Fail silently and just add an error message to the acquisition steps

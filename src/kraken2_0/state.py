@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
+from .acquisition_step import AcquisitionSet
+
 
 # Forward declaration to allow type hinting PlacementProblem within SolutionCandidate
 class PlacementProblem:
@@ -27,7 +29,7 @@ class PlacementInfo:
     individual_transmission_latency: float  # l_t(v)
     individual_processing_latency: float  # l_p(v)
 
-    acquisition_steps: dict  # Acquisition steps for this vertex v and its inputs
+    acquisition_steps: AcquisitionSet  # Acquisition steps for this vertex v and its inputs
 
 
 @dataclass(slots=True)
