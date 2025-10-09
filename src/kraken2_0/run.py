@@ -63,6 +63,7 @@ def run_kraken_solver(
     dependencies = compute_dependencies(
         ines_context, ines_context.h_mycombi, ines_context.h_criticalMSTypes
     )
+
     processing_order = sorted(dependencies.keys(), key=lambda x: dependencies[x])
 
     # Phase 2: Problem Instantiation
@@ -182,6 +183,7 @@ def _gather_problem_parameters(ines_context: Any) -> Dict[str, Any]:
         "sink_nodes": [0],
         # Optimization structures
         "local_rate_lookup": ines_context.h_local_rate_lookup,
+        "sum_of_input_rates_per_query": ines_context.sum_of_input_rates_per_query,
         # Simulation mode
         "simulation_mode": ines_context.config.mode,
         # Latency
