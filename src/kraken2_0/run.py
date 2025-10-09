@@ -248,6 +248,7 @@ def _calculate_solution_metrics(
         - total_cost: Total cost across all placements
         - workload_cost: Cost only for workload root queries
         - max_latency: Maximum end-to-end latency
+        - cumulative_processing_latency: Total processing latency across all placements
         - num_placements: Number of placement decisions
         - placements_at_cloud: Number of placements at cloud node (0)
         - average_cost_per_placement: Mean cost per placement
@@ -265,6 +266,9 @@ def _calculate_solution_metrics(
     # Calculate maximum latency
     max_latency = solution.get_critical_path_latency(problem)
 
+    # Get cumulative processing latency
+    cumulative_processing_latency = solution.cumulative_processing_latency
+
     # Count placements at cloud
     placements_at_cloud = sum(
         1 for info in solution.placements.values() if info.node == 0
@@ -278,6 +282,7 @@ def _calculate_solution_metrics(
         "total_cost": total_cost,
         "workload_cost": workload_cost,
         "max_latency": max_latency,
+        "cumulative_processing_latency": cumulative_processing_latency,
         "num_placements": num_placements,
         "placements_at_cloud": placements_at_cloud,
         "average_cost_per_placement": avg_cost,
@@ -410,10 +415,11 @@ def _prepare_run_results_summary(
                 {
                     "total_cost": metrics["total_cost"],
                     "workload_cost": metrics["workload_cost"],
+                    "average_cost_per_placement": metrics["average_cost_per_placement"],
                     "max_latency": metrics["max_latency"],
+                    "cumulative_processing_latency": metrics["cumulative_processing_latency"],
                     "num_placements": metrics["num_placements"],
                     "placements_at_cloud": metrics["placements_at_cloud"],
-                    "average_cost_per_placement": metrics["average_cost_per_placement"],
                 }
             )
         else:
@@ -422,10 +428,11 @@ def _prepare_run_results_summary(
                 {
                     "total_cost": None,
                     "workload_cost": None,
+                    "average_cost_per_placement": None,
                     "max_latency": None,
+                    "cumulative_processing_latency": None,
                     "num_placements": None,
                     "placements_at_cloud": None,
-                    "average_cost_per_placement": None,
                 }
             )
 

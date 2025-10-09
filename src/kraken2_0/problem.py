@@ -139,20 +139,22 @@ class PlacementProblem:
                         "communication_strategy": result["strategy"],
                         "is_pruned": is_pruned,
                         "is_part_of_final_solution": False,  # Filled later
-                        # Cost & Latency
+                        # Individual cost and latency
                         "individual_cost": result.get("individual_cost"),
-                        "cumulative_cost_before": s_current.cumulative_cost,
-                        "cumulative_cost_after": s_next_temp.cumulative_cost,
                         "individual_transmission_latency": result.get(
                             "transmission_latency"
                         ),
                         "individual_processing_latency": result.get(
                             "processing_latency"
                         ),
+                        # Cumulative metrics before this placement
+                        "cumulative_cost_before": s_current.cumulative_cost,
+                        "cumulative_processing_latency_before": s_current.cumulative_processing_latency,
+                        # Cumulative metrics after this placement
+                        "cumulative_cost_after": s_next_temp.cumulative_cost,
+                        "cumulative_processing_latency_after": s_next_temp.cumulative_processing_latency,
+                        # Overall latency
                         "max_latency_so_far": max_latency_so_far,
-                        "acquisition_steps_with_details": result.get(
-                            "acquisition_steps", {}
-                        ),
                     }
                     self.detailed_log.append(log_entry)
 

@@ -14,34 +14,50 @@ from typing import Any, Dict, List
 
 # Header Definitions (maintain exact column names for compatibility)
 DETAILED_LOG_HEADER = [
+    # Run metadata
     "run_id",
     "strategy_name",
     "workload",
     "processing_order",
+    # Placement identifiers
     "projection_index",
     "projection",
     "candidate_node",
+    # Decision
     "communication_strategy",
-    "individual_cost",
-    "transmission_latency",
-    "processing_latency",
-    "cumulative_latency_so_far",
     "is_pruned",
     "is_part_of_final_solution",
+    # Individual cost and latency
+    "individual_cost",
+    "individual_transmission_latency",
+    "individual_processing_latency",
+    # Cumulative metrics before this placement
+    "cumulative_cost_before",
+    "cumulative_processing_latency_before",
+    # Cumulative metrics after this placement
+    "cumulative_cost_after",
+    "cumulative_processing_latency_after",
+    # Overall latency
+    "max_latency_so_far",
 ]
 
 RUN_RESULTS_HEADER = [
+    # Run metadata
     "run_id",
     "strategy_name",
     "workload",
+    "status",
+    "execution_time_seconds",
+    # Cost metrics
     "total_cost",
     "workload_cost",
+    "average_cost_per_placement",
+    # Latency metrics
     "max_latency",
+    "cumulative_processing_latency",
+    # Placement metrics
     "num_placements",
     "placements_at_cloud",
-    "average_cost_per_placement",
-    "execution_time_seconds",
-    "status",
 ]
 
 OUTPUT_DIRECTORY = "kraken2_0/result"
