@@ -50,6 +50,8 @@ class CostCalculator:
         for strategy in raw_strategies:
             adjusted = self._adjust_for_local_events(strategy, p, n, s_current)
             final = self._add_sink_costs(adjusted, p, n)
+
+            # final = self._add_sink_costs(strategy, p, n)
             final_strategies.append(final)
 
         return final_strategies
@@ -377,9 +379,11 @@ class CostCalculator:
         )
 
     def _compute_all_push_costs(
-        self, p: Any, n: int, s_current: SolutionCandidate
+            self, p: Any, n: int, s_current: SolutionCandidate
     ) -> Dict[str, Any]:
-        """Compute all-push strategy costs using state information.
+        """
+        Compute all-push strategy costs using state information, formatting the
+        output to match the detailed structure of a push-pull acquisition step.
 
         Args:
             p: Projection being placed
@@ -387,7 +391,7 @@ class CostCalculator:
             s_current: Current solution state
 
         Returns:
-            Dictionary containing all-push strategy with standardized format
+            Dictionary containing all-push strategy with a standardized format.
         """
         context = self._get_placement_context(p, s_current)
         dependencies = context["dependencies"].get(p, [])
@@ -395,64 +399,87 @@ class CostCalculator:
 
         total_cost = 0.0
         max_transmission_latency = 0.0
-        pull_response = {}
+        pull_response_details = {}
 
         for dependency in dependencies:
             dep_str = str(dependency)
+            dep_total_cost = 0.0
+            dep_max_latency = 0
+            sources_info = []
 
             if dependency in context["local_rate_lookup"]:
-                # Primitive event with multiple sources - aggregate them
-                dep_cost = 0.0
-                dep_latency = 0
-
-                for source_node, rate in context["local_rate_lookup"][
-                    dependency
-                ].items():
+                # Case 1: Primitive event with potentially multiple sources
+                for source_node, rate in context["local_rate_lookup"][dependency].items():
                     hops = distances[source_node][n]
-                    dep_cost += hops * rate
-                    dep_latency = max(dep_latency, hops)
-
-                total_cost += dep_cost
-                max_transmission_latency = max(max_transmission_latency, dep_latency)
-
-                pull_response[dep_str] = {
-                    "cost_with_selectivity": dep_cost,
-                    "latency": dep_latency,
-                }
+                    cost = hops * rate
+                    dep_total_cost += cost
+                    dep_max_latency = max(dep_max_latency, hops)
+                    sources_info.append({
+                        "source_node": source_node,
+                        "distance": hops,
+                        "base_rate": rate,
+                        "raw_cost": cost,
+                    })
+                selectivity = 1.0  # Primitive events have no further selectivity applied here
 
             elif dependency in context["placed_subqueries"]:
-                # Already placed subquery - single source
+                # Case 2: Already placed subquery (virtual event) from a single source
                 source_node = context["placed_subqueries"][dependency]
+                # Output rate of the dependency is the input rate for the current projection
                 rate = context["projection_rates"].get(dependency, (0, 1))[1]
                 hops = distances[source_node][n]
-                dep_cost = hops * rate
+                cost = hops * rate
+                dep_total_cost = cost
+                dep_max_latency = hops
+                sources_info.append({
+                    "source_node": source_node,
+                    "distance": hops,
+                    "base_rate": rate,
+                    "raw_cost": cost,
+                })
+                # Here selectivity would be 1.0 as the cost is already based on the dependency's output rate
+                selectivity = 1.0
+            else:
+                # Skip if dependency is not found (should not happen in a valid graph)
+                continue
 
-                total_cost += dep_cost
-                max_transmission_latency = max(max_transmission_latency, hops)
+            total_cost += dep_total_cost
+            max_transmission_latency = max(max_transmission_latency, dep_max_latency)
 
-                pull_response[dep_str] = {
-                    "cost_with_selectivity": dep_cost,
-                    "latency": hops,
-                }
+            pull_response_details[dep_str] = {
+                "cost_with_selectivity": dep_total_cost,
+                "latency": dep_max_latency,
+                "raw_cost": dep_total_cost,
+                "selectivity_applied": selectivity,
+                "sources": sources_info,
+            }
+
+        # Structure the single "all_push" step to mimic a multi-step push-pull plan
+        acquisition_step = {
+            "events_to_pull": [str(dep) for dep in dependencies],
+            "pull_set": [],  # No pull set needed for all_push
+            "pull_request_costs": 0.0,
+            "pull_request_latency": 0,
+            "pull_response_costs": total_cost,
+            "pull_response_latency": max_transmission_latency,
+            "total_step_costs": total_cost,
+            "total_latency": max_transmission_latency,
+            "detailed_cost_contribution": {
+                "pull_request": {},
+                "pull_response": pull_response_details,
+            },
+        }
 
         push_processing_latency = self.params["projection_rates_selectivity"].get(
             p, (0.0, 0.0)
         )[1]
-
-        acquisition_steps = {
-            0: {
-                "detailed_cost_contribution": {"pull_response": pull_response},
-                "total_step_costs": total_cost,
-                "total_latency": max_transmission_latency,
-            }
-        }
 
         return {
             "strategy": "all_push",
             "individual_cost": total_cost,
             "transmission_latency": max_transmission_latency,
             "processing_latency": push_processing_latency,
-            "acquisition_steps": acquisition_steps,
+            "acquisition_steps": {0: acquisition_step},  # Nest it under step 0
         }
 
     def _process_prepp_output(
@@ -479,15 +506,16 @@ class CostCalculator:
         total_plan_costs = sum(s.get("total_step_costs", 0) for s in steps.values())
         total_plan_latency = sum(s.get("total_latency", 0) for s in steps.values())
 
-        # Calculate processing latency based on transmission ratio
-        transmission_ratio = (
-            (total_plan_costs / all_push_base_cost) if all_push_base_cost else 0.0
-        )
-
         all_push_processing_latency = self.params["projection_rates_selectivity"].get(
             p, (0.0, 0.0)
         )[1]
-        push_pull_processing_latency = transmission_ratio * all_push_processing_latency
+
+        # Calculate the processing latency
+        acquisition_steps = prepp_output[6][str(p)]
+        sum_input_rates = sum(step.get("pull_response_costs", 0) for step in acquisition_steps.values())
+        input_ratio = sum_input_rates / all_push_base_cost
+
+        push_pull_processing_latency = input_ratio * all_push_processing_latency
 
         return {
             "strategy": "push_pull",
