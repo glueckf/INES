@@ -6,7 +6,6 @@ Created on Mon Aug 16 11:47:10 2021
 @author: samira
 """
 
-
 # from generate_projections import *
 from projections import returnPartitioning, settoproj, totalRate
 import copy

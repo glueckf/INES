@@ -111,7 +111,7 @@ class PlacementProblem:
                 # Here we need to create this next state to check its true latency
                 s_next_temp = self._create_next_candidate(s_current, p, n, result)
 
-                # Perform the accurate, step-by-step latency check.
+                # Perform the accurate, step-by-step latency checkx.
                 max_latency_so_far = s_next_temp.get_critical_path_latency(self)
 
                 # Determine if this decision will be pruned
@@ -131,16 +131,27 @@ class PlacementProblem:
                 # Log this placement decision if logging is enabled
                 if self.logging_enabled:
                     log_entry = {
+                        # Identifiers
                         "projection_index": projection_index,
                         "projection": p,
                         "candidate_node": n,
+
+                        # Decision
                         "communication_strategy": result["strategy"],
-                        "individual_cost": result["individual_cost"],
-                        "transmission_latency": result["transmission_latency"],
-                        "processing_latency": result["processing_latency"],
-                        "cumulative_latency_so_far": max_latency_so_far,
                         "is_pruned": is_pruned,
                         "is_part_of_final_solution": False,  # Filled later
+
+                        # Cost & Latency
+                        "individual_cost": result.get("individual_cost"),
+                        "cumulative_cost_before": s_current.cumulative_cost,
+                        "cumulative_cost_after": s_next_temp.cumulative_cost,
+
+                        "individual_transmission_latency": result.get("transmission_latency"),
+                        "individual_processing_latency": result.get("processing_latency"),
+                        "max_latency_so_far": max_latency_so_far,
+
+                        "acquisition_steps_with_details": result.get("acquisition_steps", {})
+
                     }
                     self.detailed_log.append(log_entry)
 

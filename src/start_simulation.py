@@ -1030,11 +1030,11 @@ def main() -> None:
 
     # Option 2: Full parameter study (active by default)
     run_parameter_study(
-        network_sizes=[10, 30, 50, 100],
+        network_sizes=[10, 30, 50, 100, 200, 500, 1000,],
         workload_sizes=[3, 5, 8],
         parent_factors=[1.8],
         query_lengths=[3, 5, 8],
-        runs_per_combination=4,
+        runs_per_combination=50,
         node_event_ratio=0.5,
         num_event_types=6,
         event_skew=2.0,
