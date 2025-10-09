@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from src.kraken2_0.acquisition_step import (
     AcquisitionSet,
     AcquisitionStep,
-    PullRequest,
     PullResponse,
 )
 from src.kraken2_0.state import SolutionCandidate
@@ -169,7 +168,8 @@ class CostCalculator:
         if strategy_name == "all_push":
             # Pass the dictionary representation from the first step
             cost_adj, lat_adj = self._compute_all_push_adjustment(
-                {0: acquisition_set.steps[0].pull_response.detailed_costs}, events_already_available
+                {0: acquisition_set.steps[0].pull_response.detailed_costs},
+                events_already_available,
             )
         else:  # push_pull
             # Pass the list of step objects
@@ -387,7 +387,7 @@ class CostCalculator:
         )
 
     def _compute_all_push_costs(
-            self, p: Any, n: int, s_current: SolutionCandidate
+        self, p: Any, n: int, s_current: SolutionCandidate
     ) -> Dict[str, Any]:
         """
         Compute all-push strategy costs using state information, formatting the
@@ -417,18 +417,24 @@ class CostCalculator:
 
             if dependency in context["local_rate_lookup"]:
                 # Case 1: Primitive event with potentially multiple sources
-                for source_node, rate in context["local_rate_lookup"][dependency].items():
+                for source_node, rate in context["local_rate_lookup"][
+                    dependency
+                ].items():
                     hops = distances[source_node][n]
                     cost = hops * rate
                     dep_total_cost += cost
                     dep_max_latency = max(dep_max_latency, hops)
-                    sources_info.append({
-                        "source_node": source_node,
-                        "distance": hops,
-                        "base_rate": rate,
-                        "raw_cost": cost,
-                    })
-                selectivity = 1.0  # Primitive events have no further selectivity applied here
+                    sources_info.append(
+                        {
+                            "source_node": source_node,
+                            "distance": hops,
+                            "base_rate": rate,
+                            "raw_cost": cost,
+                        }
+                    )
+                selectivity = (
+                    1.0  # Primitive events have no further selectivity applied here
+                )
 
             elif dependency in context["placed_subqueries"]:
                 # Case 2: Already placed subquery (virtual event) from a single source
@@ -439,12 +445,14 @@ class CostCalculator:
                 cost = hops * rate
                 dep_total_cost = cost
                 dep_max_latency = hops
-                sources_info.append({
-                    "source_node": source_node,
-                    "distance": hops,
-                    "base_rate": rate,
-                    "raw_cost": cost,
-                })
+                sources_info.append(
+                    {
+                        "source_node": source_node,
+                        "distance": hops,
+                        "base_rate": rate,
+                        "raw_cost": cost,
+                    }
+                )
                 # Here selectivity would be 1.0 as the cost is already based on the dependency's output rate
                 selectivity = 1.0
             else:
@@ -524,8 +532,17 @@ class CostCalculator:
         )[1]
 
         # Calculate the processing latency
-        sum_input_rates = sum(step.pull_response.cost for step in acquisition_set.steps)
-        input_ratio = sum_input_rates / all_push_base_cost
+        # The ratio is: (sum of pull response costs) / (sum of all primitive input rates for query)
+        sum_of_input_rates_for_strategy = sum(step.pull_response.cost for step in acquisition_set.steps)
+
+        sum_of_input_rates_for_primitive_strategy = self.params["sum_of_input_rates_per_query"][p]
+
+        # Calculate the input ratio based on actual primitive event rates
+        input_ratio = (
+            sum_of_input_rates_for_strategy / sum_of_input_rates_for_primitive_strategy
+            if sum_of_input_rates_for_primitive_strategy > 0
+            else 0.0
+        )
 
         push_pull_processing_latency = input_ratio * all_push_processing_latency
 
@@ -607,7 +624,10 @@ class CostCalculator:
             else:
                 # Partial availability - pass pull_response detailed_costs
                 total_cost_adj += self._compute_partial_cost_adjustment(
-                    step.pull_response.detailed_costs, events_we_can_skip, all_primitives, step.total_cost
+                    step.pull_response.detailed_costs,
+                    events_we_can_skip,
+                    all_primitives,
+                    step.total_cost,
                 )
 
         return total_cost_adj, total_lat_adj
@@ -720,7 +740,9 @@ class CostCalculator:
         total_adj = 0.0
         for event in events_we_can_skip:
             if event in pull_response_details:
-                total_adj += pull_response_details[event].get("cost_with_selectivity", 0.0)
+                total_adj += pull_response_details[event].get(
+                    "cost_with_selectivity", 0.0
+                )
             else:
                 fraction = len(events_we_can_skip) / len(all_primitives)
                 total_adj += total_step_cost * fraction
