@@ -730,33 +730,9 @@ class INES:
         prepp_results = update_prepp_results(self, prepp_results)
         self.prepp_results_for_debugging = prepp_results
 
-        kraken_cost = (
-            self.kraken_results.get("strategies")
-            .get("greedy")
-            .get("solution")
-            .cumulative_cost
-        )
-        ines_cost = prepp_results[0]
-        print(ines_cost)
-
-        # __costs_integrated = int(integrated_operator_placement_results['formatted_results']['summary']['total_cost'])
-        __sequential_costs = int(prepp_results[0])
-
         # Only take the first 4 results to match the schema
         self.results += prepp_results[0:4]
 
-        # different_placements = calculate_different_placement(
-        #     self.eval_plan, integrated_operator_placement_results
-        # )
-        # integrated_operator_placement_results["formatted_results"]["summary"][
-        #     "placement_difference_count"
-        # ] = different_placements
-        #
-        # # Get the ID from the INES simulation as a foreign key, to later map both
-        # ines_simulation_id = self.results[0]
-
-        # I/O operations moved to start_simulation.py for consolidated processing
-        # Results are now available via self.integrated_operator_placement_results
 
     def _calculate_sum_of_primitive_input_rates_per_query(self) -> Dict:
         """
