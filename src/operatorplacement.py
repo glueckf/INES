@@ -162,6 +162,7 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
     processingOrder = sorted(
         dependencies.keys(), key=lambda x: dependencies[x]
     )  # unfolded enthält kombi
+    self.processing_order = processingOrder
     costs = 0
 
     central_eval_plan = [ccosts[1], ccosts[3], wl]
