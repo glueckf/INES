@@ -678,6 +678,11 @@ class INES:
         # Create optimized rate lookup structure for fast dependency rate calculations
         self.h_local_rate_lookup = self._create_optimized_rate_lookup()
 
+        # Calculate sum of primitive input rates per query for processing latency calculations
+        self.sum_of_input_rates_per_query = (
+            self._calculate_sum_of_primitive_input_rates_per_query()
+        )
+
         # DEBUG: Print all available data types and their structures
         # self._debug_print_all_data()
 
@@ -752,6 +757,40 @@ class INES:
 
         # I/O operations moved to start_simulation.py for consolidated processing
         # Results are now available via self.integrated_operator_placement_results
+
+    def _calculate_sum_of_primitive_input_rates_per_query(self) -> Dict:
+        """
+        Calculate the sum of all primitive input rates for each query.
+
+        For each query, this method identifies all primitive events used in the query
+        and sums their global input rates. This value represents the total data volume
+        that would be transmitted if all primitive events were pushed to the query
+        processing location.
+
+        Returns:
+            Dictionary mapping each query object to the sum of its primitive event rates.
+            Example: {query1: 1845.0, query2: 1002.0, ...}
+        """
+        from helper.projString import filter_numbers
+
+
+        sum_of_input_rates = {}
+
+        for query in self.h_mycombi:
+            # Get unique event types (e.g., ['A1', 'A2', 'B'] -> {0, 1} for A and B)
+            unique_indices = {
+                ord(filter_numbers(event_name)) - ord("A")
+                for event_name in query.leafs()
+            }
+
+            # Sum rates for unique indices
+            sum_of_input_rates[query] = sum(
+                self.primitiveEvents[idx]
+                for idx in unique_indices
+                if idx < len(self.primitiveEvents)
+            )
+
+        return sum_of_input_rates
 
     def _debug_print_all_data(self):
         """Print all available data types and their structures for debugging."""
