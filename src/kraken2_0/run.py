@@ -417,7 +417,9 @@ def _prepare_run_results_summary(
                     "workload_cost": metrics["workload_cost"],
                     "average_cost_per_placement": metrics["average_cost_per_placement"],
                     "max_latency": metrics["max_latency"],
-                    "cumulative_processing_latency": metrics["cumulative_processing_latency"],
+                    "cumulative_processing_latency": metrics[
+                        "cumulative_processing_latency"
+                    ],
                     "num_placements": metrics["num_placements"],
                     "placements_at_cloud": metrics["placements_at_cloud"],
                 }
