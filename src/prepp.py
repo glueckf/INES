@@ -463,15 +463,18 @@ def determine_randomized_distribution_push_pull_costs(
     total_sampling_costs = 0
     aquisition_steps = {}
 
-    push_pull_plan_generator_exact = push_pull_plan_generator.Initiate(
-        eventtype_pair_to_selectivity,
-        eventtype_to_sources_map,
-        all_eventtype_output_rates,
-        eventtypes_single_selectivities,
-        single_selectivity_of_eventtype_within_projection,
-        eventtype_combinations,
-        highest_primitive_eventtype_to_be_processed,
-    )
+    try:
+        push_pull_plan_generator_exact = push_pull_plan_generator.Initiate(
+            eventtype_pair_to_selectivity,
+            eventtype_to_sources_map,
+            all_eventtype_output_rates,
+            eventtypes_single_selectivities,
+            single_selectivity_of_eventtype_within_projection,
+            eventtype_combinations,
+            highest_primitive_eventtype_to_be_processed,
+        )
+    except Exception as e:
+        print(e)
 
     greedy_exec_times = []
     exact_exec_times = []
@@ -485,150 +488,156 @@ def determine_randomized_distribution_push_pull_costs(
     max_latency = (None, 0)  # (node, latency)
     # print(f"[DEBUG] Processing {len(queries)} queries")
     # sort queries by size:
-    queries = sorted(
-        queries,
-        key=lambda q: len(determine_all_primitive_events_of_projection(q.query)),
-    )
-    for i, query in enumerate(queries):
-        # print(f"[DEBUG] Query {i}: '{query.query}', node_placement: {getattr(query, 'node_placement', 'None')}")
-        if query.query == "":
-            # print(f"[DEBUG] Skipping empty query {i}")
-            continue
-        old_copy = copy.deepcopy(query.primitive_operators)
-        top_k = int(k)
+    try:
+        queries = sorted(
+            queries,
+            key=lambda q: len(determine_all_primitive_events_of_projection(q.query)),
+        )
+    except Exception as e:
+        print(e)
 
-        for current_node in query.node_placement:
-            query.primitive_operators = copy.deepcopy(old_copy)
+    try:
+        for i, query in enumerate(queries):
+            # print(f"[DEBUG] Query {i}: '{query.query}', node_placement: {getattr(query, 'node_placement', 'None')}")
+            if query.query == "":
+                # print(f"[DEBUG] Skipping empty query {i}")
+                continue
+            old_copy = copy.deepcopy(query.primitive_operators)
+            top_k = int(k)
 
-            if algorithm == "e":
-                start_exact = timer()
-                exact_push_pull_plan_for_a_projection, exact_costs = (
-                    push_pull_plan_generator_exact.determine_exact_push_pull_plan(
-                        query, current_node, allPairs
-                    )
-                )
-
-                end_exact = timer()
-                exact_exec_times.append(end_exact - start_exact)
+            for current_node in query.node_placement:
                 query.primitive_operators = copy.deepcopy(old_copy)
 
-                # Costs seem fishy, skip this function for now and use the determine exact push pull plan function
-                # exact_costs, used_eventtypes_to_pull,latency = push_pull_plan_generator_exact.determine_costs_for_projection_on_node(exact_push_pull_plan_for_a_projection, query, current_node, already_received_eventtypes,allPairs)
-                (costs, used_eventtypes_to_pull, latency, node_received_eventtypes) = (
-                    push_pull_plan_generator_exact.determine_costs_for_projection_on_node(
-                        exact_push_pull_plan_for_a_projection,
-                        query,
-                        current_node,
-                        already_received_eventtypes,
-                        allPairs,
+                if algorithm == "e":
+                    start_exact = timer()
+                    exact_push_pull_plan_for_a_projection, exact_costs = (
+                        push_pull_plan_generator_exact.determine_exact_push_pull_plan(
+                            query, current_node, allPairs
+                        )
                     )
-                )
-                if latency > max_latency[1]:
-                    max_latency = (current_node, latency)
 
-                # ===========================================
-                # FINAL PREPP RESULT LOGGING
-                # ===========================================
-                print(
-                    f"PLACEMENT: {query.query} -> Node {current_node} (Cost: {exact_costs:.2f})"
-                )
+                    end_exact = timer()
+                    exact_exec_times.append(end_exact - start_exact)
+                    query.primitive_operators = copy.deepcopy(old_copy)
 
-                # already_aquired_eventtypes = already_received_eventtypes[current_node]
-
-                if len(exact_push_pull_plan_for_a_projection) == len(
-                    used_eventtypes_to_pull
-                ) or used_eventtypes_to_pull == [[]]:
-                    if used_eventtypes_to_pull == [[]]:
-                        # Every Aquisition step is a push aquisition step. We just need to expand the size of the list
-                        # to match the exact_push_pull_plan_for_a_projection
-                        used_eventtypes_to_pull = [
-                            []
-                            for _ in range(len(exact_push_pull_plan_for_a_projection))
-                        ]
-                        print(
-                            "[DEBUG] Adjusted used_eventtypes_to_pull to match exact_push_pull_plan_for_a_projection length"
+                    # Costs seem fishy, skip this function for now and use the determine exact push pull plan function
+                    # exact_costs, used_eventtypes_to_pull,latency = push_pull_plan_generator_exact.determine_costs_for_projection_on_node(exact_push_pull_plan_for_a_projection, query, current_node, already_received_eventtypes,allPairs)
+                    (costs, used_eventtypes_to_pull, latency, node_received_eventtypes) = (
+                        push_pull_plan_generator_exact.determine_costs_for_projection_on_node(
+                            exact_push_pull_plan_for_a_projection,
+                            query,
+                            current_node,
+                            already_received_eventtypes,
+                            allPairs,
                         )
-                    acquisition_set = AcquisitionSet(steps=[])
-                    received_eventtypes = []
-                    latency = 0
-                    for i, aquired_eventtype in enumerate(
-                        exact_push_pull_plan_for_a_projection
-                    ):
-                        (
-                            pull_request_costs,
-                            pull_request_latency,
-                            pull_request_detailed_costs,
-                        ) = push_pull_plan_generator_exact.determine_costs_for_pull_request(
-                            eventtypes_in_pull_request=used_eventtypes_to_pull[i],
-                            eventtypes_to_acquire=aquired_eventtype,
-                            eventtype_to_sources_map=eventtype_to_sources_map,
-                            received_eventtypes=received_eventtypes,
-                            eventtypes_single_selectivities=eventtypes_single_selectivities,
-                            all_eventtype_output_rates=all_eventtype_output_rates,
-                            allPairs=allPairs,
-                            current_node=current_node,
-                            aquisition_steps=aquisition_steps,
-                        )
+                    )
+                    if latency > max_latency[1]:
+                        max_latency = (current_node, latency)
 
-                        (
-                            pull_response_costs,
-                            pull_response_latency,
-                            pull_response_detailed_costs,
-                        ) = push_pull_plan_generator_exact.determine_costs_for_pull_response(
-                            eventtypes_in_pull_request=used_eventtypes_to_pull[i],
-                            eventtypes_to_acquire=aquired_eventtype,
-                            eventtype_to_sources_map=eventtype_to_sources_map,
-                            eventtypes_single_selectivities=eventtypes_single_selectivities,
-                            all_eventtype_output_rates=all_eventtype_output_rates,
-                            allPairs=allPairs,
-                            current_node=current_node,
-                        )
+                    # ===========================================
+                    # FINAL PREPP RESULT LOGGING
+                    # ===========================================
+                    print(
+                        f"PLACEMENT: {query.query} -> Node {current_node} (Cost: {exact_costs:.2f})"
+                    )
 
-                        # Build dataclass objects
-                        pull_request = None
-                        if used_eventtypes_to_pull[i]:
-                            pull_request = PullRequest(
-                                cost=pull_request_costs,
-                                latency=pull_request_latency,
-                                events=used_eventtypes_to_pull[i],
-                                detailed_costs=pull_request_detailed_costs,
+                    # already_aquired_eventtypes = already_received_eventtypes[current_node]
+
+                    if len(exact_push_pull_plan_for_a_projection) == len(
+                        used_eventtypes_to_pull
+                    ) or used_eventtypes_to_pull == [[]]:
+                        if used_eventtypes_to_pull == [[]]:
+                            # Every Aquisition step is a push aquisition step. We just need to expand the size of the list
+                            # to match the exact_push_pull_plan_for_a_projection
+                            used_eventtypes_to_pull = [
+                                []
+                                for _ in range(len(exact_push_pull_plan_for_a_projection))
+                            ]
+                            print(
+                                "[DEBUG] Adjusted used_eventtypes_to_pull to match exact_push_pull_plan_for_a_projection length"
+                            )
+                        acquisition_set = AcquisitionSet(steps=[])
+                        received_eventtypes = []
+                        latency = 0
+                        for i, aquired_eventtype in enumerate(
+                            exact_push_pull_plan_for_a_projection
+                        ):
+                            (
+                                pull_request_costs,
+                                pull_request_latency,
+                                pull_request_detailed_costs,
+                            ) = push_pull_plan_generator_exact.determine_costs_for_pull_request(
+                                eventtypes_in_pull_request=used_eventtypes_to_pull[i],
+                                eventtypes_to_acquire=aquired_eventtype,
+                                eventtype_to_sources_map=eventtype_to_sources_map,
+                                received_eventtypes=received_eventtypes,
+                                eventtypes_single_selectivities=eventtypes_single_selectivities,
+                                all_eventtype_output_rates=all_eventtype_output_rates,
+                                allPairs=allPairs,
+                                current_node=current_node,
+                                aquisition_steps=aquisition_steps,
                             )
 
-                        pull_response = PullResponse(
-                            cost=pull_response_costs,
-                            latency=pull_response_latency,
-                            detailed_costs=pull_response_detailed_costs,
-                        )
-
-                        acquisition_step = AcquisitionStep(
-                            pull_request=pull_request,
-                            pull_response=pull_response,
-                            events_to_pull=aquired_eventtype,
-                        )
-
-                        acquisition_set.steps.append(acquisition_step)
-
-                        for eventtype in aquired_eventtype:
-                            eventtypes = push_pull_plan_generator_exact.determine_all_primitive_events_of_projection(
-                                eventtype
+                            (
+                                pull_response_costs,
+                                pull_response_latency,
+                                pull_response_detailed_costs,
+                            ) = push_pull_plan_generator_exact.determine_costs_for_pull_response(
+                                eventtypes_in_pull_request=used_eventtypes_to_pull[i],
+                                eventtypes_to_acquire=aquired_eventtype,
+                                eventtype_to_sources_map=eventtype_to_sources_map,
+                                eventtypes_single_selectivities=eventtypes_single_selectivities,
+                                all_eventtype_output_rates=all_eventtype_output_rates,
+                                allPairs=allPairs,
+                                current_node=current_node,
                             )
-                            for event in eventtypes:
-                                if event not in received_eventtypes:
-                                    received_eventtypes.append(event)
 
-                        latency += pull_request_latency + pull_response_latency
+                            # Build dataclass objects
+                            pull_request = None
+                            if used_eventtypes_to_pull[i]:
+                                pull_request = PullRequest(
+                                    cost=pull_request_costs,
+                                    latency=pull_request_latency,
+                                    events=used_eventtypes_to_pull[i],
+                                    detailed_costs=pull_request_detailed_costs,
+                                )
 
-                    # Store the AcquisitionSet in the dictionary
-                    aquisition_steps[query.query] = acquisition_set
-                else:
-                    # raise ValueError("Length of push pull plan and events to pull do not match!")
-                    # Fail silently and just add an error message to the acquisition steps
-                    aquisition_steps[query.query] = {
-                        "error": "Length of push pull plan and events to pull do not match!"
-                    }
+                            pull_response = PullResponse(
+                                cost=pull_response_costs,
+                                latency=pull_response_latency,
+                                detailed_costs=pull_response_detailed_costs,
+                            )
 
-                total_exact_costs += exact_costs
+                            acquisition_step = AcquisitionStep(
+                                pull_request=pull_request,
+                                pull_response=pull_response,
+                                events_to_pull=aquired_eventtype,
+                            )
 
+                            acquisition_set.steps.append(acquisition_step)
+
+                            for eventtype in aquired_eventtype:
+                                eventtypes = push_pull_plan_generator_exact.determine_all_primitive_events_of_projection(
+                                    eventtype
+                                )
+                                for event in eventtypes:
+                                    if event not in received_eventtypes:
+                                        received_eventtypes.append(event)
+
+                            latency += pull_request_latency + pull_response_latency
+
+                        # Store the AcquisitionSet in the dictionary
+                        aquisition_steps[query.query] = acquisition_set
+                    else:
+                        # raise ValueError("Length of push pull plan and events to pull do not match!")
+                        # Fail silently and just add an error message to the acquisition steps
+                        aquisition_steps[query.query] = {
+                            "error": "Length of push pull plan and events to pull do not match!"
+                        }
+
+                    total_exact_costs += exact_costs
+    except Exception as e:
+        print(e)
     return (
         total_greedy_costs,
         total_sampling_costs,
@@ -1262,22 +1271,26 @@ def generate_prePP(
                 pass
 
             if method == "ppmuse":
-                result = determine_randomized_distribution_push_pull_costs(
-                    q_network,
-                    eventtype_combinations,
-                    highest_primitive_eventtype_to_be_processed,
-                    algorithm,
-                    samples,
-                    topk,
-                    plan_print,
-                    allPairs,
-                    eventtype_pair_to_selectivity,
-                    eventtype_to_sources_map,
-                    all_eventtype_output_rates,
-                    eventtypes_single_selectivities,
-                    single_selectivity_of_eventtype_within_projection,
-                    CLOUD_EVALUATION_NODE,
-                )
+                try:
+                    result = determine_randomized_distribution_push_pull_costs(
+                        q_network,
+                        eventtype_combinations,
+                        highest_primitive_eventtype_to_be_processed,
+                        algorithm,
+                        samples,
+                        topk,
+                        plan_print,
+                        allPairs,
+                        eventtype_pair_to_selectivity,
+                        eventtype_to_sources_map,
+                        all_eventtype_output_rates,
+                        eventtypes_single_selectivities,
+                        single_selectivity_of_eventtype_within_projection,
+                        CLOUD_EVALUATION_NODE,
+                    )
+                except Exception as e:
+                    print(e)
+
 
                 (
                     greedy_costs,

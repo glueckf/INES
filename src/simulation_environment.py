@@ -5,7 +5,7 @@ This module provides a clean, well-structured orchestrator for the entire simula
 It separates the simulation setup phase from the execution phase, where different placement
 strategies are run sequentially.
 """
-
+import io
 import string
 import math
 import time
@@ -203,79 +203,223 @@ def compute_all_push(context):
 
 
 def calculate_prepp_from_cloud(context, reused_buffer_section):
-    """Placeholder for the 'Solely PrePP' (all cloud) scenario."""
-    print("--- Running Solely PrePP from Cloud Scenario (Placeholder) ---")
-    return {"results": "prepp_from_cloud_results", "status": "success"}
-
-
-def update_prepp_results(context, prepp_results):
-    """
-    Update prepp results to include cloud transmission costs and latency calculation.
+    """Calculate PrePP placement with all queries placed on cloud (node 0).
 
     Args:
-        prepp_results: Results from generate_prePP containing:
-            [0] exact_cost (total costs)
-            [1] pushPullTime (calculation time)
-            [2] maxPushPullLatency (correct latency value)
-            [3] endTransmissionRatio
-            [4] total_cost
-            [5] node_received_eventtypes
-            [6] acquisition_steps
+        context: Simulation context containing network, workload, and rate data
+        reused_buffer_section: String containing pre-built network and selectivities sections
 
     Returns:
-        Tuple of (updated_costs, calculation_time, latency, final_transmission_ratio)
+        Dictionary containing PrePP results with cost, latency, and status
+    """
+    print("--- Running Solely PrePP from Cloud Scenario ---")
+
+    # Build buffer content using list for efficient concatenation
+    buffer_lines = [reused_buffer_section]
+
+    # Add queries section
+    buffer_lines.append("queries")
+    for query in context.query_workload:
+        buffer_lines.append(str(query))
+    buffer_lines.append("")  # Empty line after queries
+
+    # Add muse graph section
+    buffer_lines.append("muse graph")
+    for query in context.query_workload:
+        primitive_events = context.h_primitive_events[str(query)]
+
+        # Build primitive events list with proper formatting
+        list_str = "; ".join(str(event) for event in primitive_events)
+
+        # Build the SELECT line (all queries placed on cloud node 0)
+        selection_rate = context.h_projrates[query][0]
+        line = f"SELECT {str(query)} FROM {list_str} ON {{0}} WITH selectionRate= {selection_rate}"
+        buffer_lines.append(line)
+
+    # Create buffer with proper initialization
+    buffer = io.StringIO()
+    buffer.write("\n".join(buffer_lines))
+    buffer.seek(0)  # CRITICAL: Reset to start for reading
+
+    # Determine if running in deterministic mode
+    is_deterministic = context.config.mode.value == "deterministic"
+
+    # Run PrePP for cloud-only placement
+    prepp_results = generate_prePP(
+        input_buffer=buffer,
+        method="ppmuse",
+        algorithm="e",
+        samples=1,
+        top_k=0,
+        runs=1,
+        plan_print=True,
+        allPairs=context.allPairs,
+        is_deterministic=is_deterministic
+    )
+
+    if prepp_results is None or len(prepp_results) < 7:
+        return {"cost": 0, "transmission_latency": 0, "processing_latency": 0,
+                "computing_time": 0, "status": "failed"}
+
+    # Extract results (prepp_results format: [cost, time, latency, ratio, push_costs, central_latency, steps])
+    exact_cost = prepp_results[0]
+    computing_time = prepp_results[1]
+    max_latency_tuple = prepp_results[2]
+    acquisition_steps = prepp_results[6]  # Dictionary: {query_str: AcquisitionSet}
+
+    # Extract transmission latency
+    if isinstance(max_latency_tuple, tuple):
+        transmission_latency = max_latency_tuple[1]  # Latency value from tuple
+    else:
+        transmission_latency = max_latency_tuple
+
+    # Calculate processing latency using acquisition steps
+    # For each query: output_rate * (sum_of_acquisition_response_costs / sum_of_primitive_input_rates)
+    processing_latency = 0.0
+    max_latency = 0.0
+    for query in context.query_workload:
+        query_str = str(query)
+
+        # Get the acquisition set for this query
+        if query_str not in acquisition_steps:
+            continue
+
+        acquisition_set = acquisition_steps[query_str]
+
+        # Handle error case where acquisition_set is a dict with "error" key
+        if isinstance(acquisition_set, dict) and "error" in acquisition_set:
+            continue
+
+        # Sum the pull response costs from all acquisition steps
+        sum_of_acquisition_step_response_cost = sum(
+            step.pull_response.cost for step in acquisition_set.steps
+        )
+
+        transmission_latency = sum(
+            step.total_latency for step in acquisition_set.steps
+        )
+
+        max_latency = max(max_latency, transmission_latency)
+
+        # Get the sum of primitive input rates for this query
+        sum_input_rates_per_query = context.sum_of_input_rates_per_query.get(query, 1.0)
+
+        # Calculate the input ratio
+        if sum_input_rates_per_query > 0:
+            input_ratio = sum_of_acquisition_step_response_cost / sum_input_rates_per_query
+        else:
+            input_ratio = 0.0
+
+        # Get the output rate for this query
+        output_rate = context.h_projrates[query][1]
+
+        # Calculate processing latency contribution for this query
+        query_processing_latency = output_rate * input_ratio
+        processing_latency += query_processing_latency
+
+    return {
+        "cost": exact_cost,
+        "transmission_latency": max_latency,
+        "processing_latency": processing_latency,
+        "computing_time": computing_time,
+        "status": "success"
+    }
+
+
+def update_results_for_topology(context, ines_results, inev_results):
+    """
+    Update INES and INEv results to include cloud transmission costs and latency.
+
+    Both strategies use the same placement (INES is built on top of INEv), so the
+    topology adjustments (costs for sending to cloud) are identical for both.
+
+    Args:
+        context: Simulation context with network topology and query workload
+        ines_results: Results from INES (PrePP) containing:
+            [0] exact_cost (total costs)
+            [1] pushPullTime (calculation time)
+            [2] maxPushPullLatency (latency value or tuple)
+            [3] endTransmissionRatio
+            [4] total_push_costs (all-push costs)
+            [5] node_received_eventtypes
+            [6] acquisition_steps
+        inev_results: Results from INEv with similar structure
+
+    Returns:
+        Tuple of (ines_dict, inev_dict) where each dict contains:
+        {
+            "cost": costs,
+            "transmission_latency": transmission_latency,
+            "processing_latency": processing_latency,
+            "computing_time": computing_time,
+            "status": "success"
+        }
     """
     CLOUD_NODE_ID = 0
 
     query_workload = context.query_workload
-    prepp_eval_plan = context.eval_plan[0].projections
+    ines_eval_plan = context.eval_plan[0].projections
 
-    total_costs = prepp_results[0]
-    calculation_time = prepp_results[1]
-    max_push_pull_latency_tuple = prepp_results[
-        2
-    ]  # This is now a tuple (node, latency) from generate_prePP
-    max_push_pull_latency = (
-        max_push_pull_latency_tuple[1]
-        if isinstance(max_push_pull_latency_tuple, tuple)
-        else max_push_pull_latency_tuple
-    )  # Extract latency for backwards compatibility
-    total_push_costs = prepp_results[4]
-    acquisition_steps = prepp_results[6]
+    # Extract INES data
+    ines_total_costs = ines_results[0]
+    ines_calculation_time = ines_results[1]
+    ines_max_latency_tuple = ines_results[2]
 
-    # We need to add the costs of sending the events to the cloud to the prepp results
+    # Calculate INES latencies (returns tuple of transmission and processing latencies)
+    ines_transmission_latency, ines_processing_latency = calculate_ines_max_latency(context, ines_results)
 
-    all_sinks_from_workload = []
+    # Extract INEv data
+    inev_total_costs = inev_results['cost']
+    inev_calculation_time = inev_results['computing_time']
+    inev_transmission_latency = inev_results['transmission_latency']
+    inev_processing_latency = inev_results['processing_latency']
 
-    for i in prepp_eval_plan:
-        projection = i.name.name
-        if projection in query_workload:
-            # Here we need to calculate the costs for sending query from placement to sink:
-            placement_nodes = i.name.sinks
+    # Calculate additional costs for sending query results to cloud
+    # This is the same for both INES and INEv since they use the same placement
+    additional_costs = 0
+
+    for projection in ines_eval_plan:
+        projection_name = projection.name.name
+        if projection_name in query_workload:
+            placement_nodes = projection.name.sinks
             for placed_node in placement_nodes:
-                all_sinks_from_workload.append(placed_node)
                 hops_from_node_to_cloud = context.allPairs[placed_node][CLOUD_NODE_ID]
-                query_output_rate = context.h_projrates.get(projection, 1.0)[1]
-                total_costs += hops_from_node_to_cloud * query_output_rate
+                query_output_rate = context.h_projrates.get(projection_name, (1.0, 1.0))[1]
+                additional_costs += hops_from_node_to_cloud * query_output_rate
 
-    final_transmission_ratio = (
-        total_costs / total_push_costs if total_push_costs > 0 else 0
-    )
+    # Update costs for both strategies
+    ines_total_costs += additional_costs
+    inev_total_costs += additional_costs
 
-    # Now we need to update our latency calculation to include the hops to the cloud
-    # Herefore I've modified the max_push_pull_latency to be a tuple (node, latency)
-    # Then node represents the node, where the highest latency was "measured"
-    if max_push_pull_latency_tuple and isinstance(max_push_pull_latency_tuple, tuple):
-        max_push_pull_latency += context.allPairs[max_push_pull_latency_tuple[0]][
-            CLOUD_NODE_ID
-        ]
-    return (
-        total_costs,
-        calculation_time,
-        max_push_pull_latency,
-        final_transmission_ratio,
-        acquisition_steps,
-    )
+    # Calculate additional latency for sending to cloud
+    # Find the maximum latency contribution from any placement to cloud
+    additional_latency = 0
+    if isinstance(ines_max_latency_tuple, tuple):
+        node_with_max_latency = ines_max_latency_tuple[0]
+        additional_latency = context.allPairs[node_with_max_latency][CLOUD_NODE_ID]
+
+    # Update transmission latency for both strategies (add cloud transmission)
+    ines_transmission_latency += additional_latency
+    inev_transmission_latency += additional_latency
+
+    # Create return dictionaries
+    ines_dict = {
+        "cost": ines_total_costs,
+        "transmission_latency": ines_transmission_latency,
+        "processing_latency": ines_processing_latency,
+        "computing_time": ines_calculation_time,
+        "status": "success"
+    }
+
+    inev_dict = {
+        "cost": inev_total_costs,
+        "transmission_latency": inev_transmission_latency,
+        "processing_latency": inev_processing_latency,
+        "computing_time": inev_calculation_time,
+        "status": "success"
+    }
+
+    return ines_dict, inev_dict
 
 
 # ==================== HARDCODED TOPOLOGY/WORKLOAD FUNCTIONS ====================
@@ -513,6 +657,148 @@ def generate_hardcoded_selectivities():
 
     return selectivities, selectivitiesExperimentData
 
+def calculate_ines_max_latency(context, ines_results):
+    """
+    Calculate the maximum latency for INES strategy considering both transmission
+    and processing latencies across the query dependency tree.
+
+    Args:
+        context: Simulation context with workload and projection data
+        ines_results: INES results containing acquisition steps
+
+    Returns:
+        Tuple of (max_transmission_latency, max_processing_latency) across all queries
+    """
+    acquisition_steps = ines_results[6]
+
+    # Extract transmission latency and input costs per projection
+    transmission_and_processing_latency_per_projection = {}
+    for projection in context.processing_order:
+        proj_str = str(projection)
+
+        # Check if acquisition steps exist for this projection
+        if proj_str not in acquisition_steps:
+            continue
+
+        steps = acquisition_steps[proj_str]
+
+        # Handle error case where steps is a dict with "error" key
+        if isinstance(steps, dict) and "error" in steps:
+            continue
+
+        total_transmission_latency = 0.0
+        inputs_cost = 0.0
+
+        # Access the AcquisitionSet.steps attribute
+        try:
+            for step in steps.steps:
+                total_transmission_latency += step.total_latency
+                # Sum up pull response costs to get total inputs
+                inputs_cost += step.pull_response.cost
+        except (AttributeError, TypeError) as e:
+            # If steps doesn't have .steps attribute or iteration fails, skip
+            continue
+
+        transmission_and_processing_latency_per_projection[projection] = (
+            total_transmission_latency,
+            inputs_cost
+        )
+
+    # Recursive function to calculate cumulative latencies for a projection
+    def calculate_cumulative_latency(projection, memo=None):
+        """
+        Recursively calculate transmission and processing latency for a projection.
+
+        Returns:
+            Tuple of (transmission_latency, processing_latency)
+        """
+        if memo is None:
+            memo = {}
+
+        if projection in memo:
+            return memo[projection]
+
+        # Get transmission latency and inputs for this projection
+        transmission_latency, inputs_cost = transmission_and_processing_latency_per_projection.get(
+            projection, (0.0, 0.0)
+        )
+
+        # Get dependencies for this projection
+        dependencies = context.h_combiDict.get(projection, [])
+
+        # Convert list dependencies to strings for hashable keys
+        normalized_dependencies = []
+        for dep in dependencies:
+            if isinstance(dep, list):
+                # Convert list to string representation
+                normalized_dependencies.append(str(dep))
+            else:
+                normalized_dependencies.append(dep)
+
+        # Check if this projection has only primitive events (leaf node)
+        has_only_primitives = all(
+            isinstance(dep, str) and len(dep) == 1  # Primitive events are single chars
+            for dep in normalized_dependencies
+        )
+
+        if has_only_primitives or not normalized_dependencies:
+            # Leaf node: calculate processing latency
+            sum_of_inputs = context.sum_of_input_rates_per_query.get(projection, 1.0)
+            output_rate = context.h_projrates.get(projection, (1.0, 1.0))[1]
+
+            # Processing latency = output_rate * (inputs / sum_of_inputs)
+            if sum_of_inputs > 0:
+                processing_latency = output_rate * (inputs_cost / sum_of_inputs)
+            else:
+                processing_latency = 0.0
+
+            result = (transmission_latency, processing_latency)
+        else:
+            # Intermediate node: aggregate from children
+            child_transmission_latencies = []
+            child_processing_latencies = []
+
+            for dependency in normalized_dependencies:
+                if dependency in transmission_and_processing_latency_per_projection:
+                    child_trans, child_proc = calculate_cumulative_latency(dependency, memo)
+                    child_transmission_latencies.append(child_trans)
+                    child_processing_latencies.append(child_proc)
+
+            # Transmission latency = max of all child transmission latencies
+            max_child_transmission = max(child_transmission_latencies) if child_transmission_latencies else 0.0
+
+            # Processing latency = sum of all child processing latencies + own processing
+            sum_child_processing = sum(child_processing_latencies) if child_processing_latencies else 0.0
+
+            # Calculate own processing latency
+            sum_of_inputs = context.sum_of_input_rates_per_query.get(projection, 1.0)
+            output_rate = context.h_projrates.get(projection, (1.0, 1.0))[1]
+
+            if sum_of_inputs > 0:
+                own_processing_latency = output_rate * (inputs_cost / sum_of_inputs)
+            else:
+                own_processing_latency = 0.0
+
+            result = (
+                max(transmission_latency, max_child_transmission),
+                sum_child_processing + own_processing_latency
+            )
+
+        memo[projection] = result
+        return result
+
+    # Calculate latencies for each query in workload (keep them separate)
+    max_transmission_latency = 0.0
+    max_processing_latency = 0.0
+
+    for query in context.query_workload:
+        if query in transmission_and_processing_latency_per_projection:
+            transmission_latency, processing_latency = calculate_cumulative_latency(query)
+            max_transmission_latency = max(max_transmission_latency, transmission_latency)
+            max_processing_latency = max(max_processing_latency, processing_latency)
+
+    # Return as tuple: (transmission_latency, processing_latency) - DO NOT ADD THEM
+    return (max_transmission_latency, max_processing_latency)
 
 def generate_hardcoded_primitive_events():
     """
@@ -794,12 +1080,15 @@ class Simulation:
             self.central_eval_plan, self.query_workload
         )
         deterministic_flag = self.config.is_selectivities_fixed()
-        prepp_results = generate_prePP(
+        ines_results = generate_prePP(
             plan, "ppmuse", "e", 1, 0, 1, True, self.allPairs, deterministic_flag
         )
-        prepp_results = update_prepp_results(self, prepp_results)
-        self.results += prepp_results[0:4]
-        self.ines_results = {"results": prepp_results}  # Storing for clarity
+
+        # Update both INES and INEv results with topology adjustments
+        ines_dict, inev_dict = update_results_for_topology(self, ines_results, self.inev_results)
+        self.ines_results = ines_dict
+        self.inev_results = inev_dict
+
         print("--- INES COMPUTATION COMPLETE ---")
 
         # ----- SOLELY PREPP COMPUTATION (from cloud) -----#

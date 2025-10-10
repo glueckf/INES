@@ -379,10 +379,10 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
 
     end_time = time.time()
     logging_result_inev = {
-        "cost": mycosts,
-        "transmission_latency": hopLatency,
+        "cost": costs,
+        "transmission_latency": centralHopLatency,
         "processing_latency": processing_latency,
-        "computing_time": start_time - end_time,
+        "computing_time": end_time - start_time,
         "status": "success"
     }
     return eval_Plan, central_eval_plan, experiment_result, myResult, logging_result_inev
