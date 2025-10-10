@@ -6,6 +6,7 @@ It separates the simulation setup phase from the execution phase, where differen
 strategies are run sequentially.
 """
 import io
+import logging
 import string
 import math
 import time
@@ -34,6 +35,7 @@ from generateEvalPlan import generate_eval_plan
 
 # ==================== SIMULATION CONFIGURATION ====================
 
+logger = logging.getLogger(__name__)
 
 class SimulationMode(Enum):
     """Defines different simulation configuration modes for reproducible experiments."""
@@ -133,73 +135,82 @@ def compute_all_push(context):
     Returns:
         Dictionary containing cost, latency, node, routing_dict, and status
     """
-    print("--- Running All Push Scenario ---")
+    try:
+        print("--- Running All Push Scenario ---")
 
-    import networkx as nx
+        import networkx as nx
 
-    start_time = time.time()
+        start_time = time.time()
 
-    destination = 0  # Cloud node
+        destination = 0  # Cloud node
 
-    # Pre-compute: Get all event types and processing latency in one pass
-    eventtypes = set()
-    processing_latency = 0
-    for query in context.query_workload:
-        processing_latency += context.h_projrates[query][1]
-        eventtypes.update(query.leafs())
+        # Pre-compute: Get all event types and processing latency in one pass
+        eventtypes = set()
+        processing_latency = 0
+        for query in context.query_workload:
+            qkey = str(query)
+            # Use .get() with default to handle missing queries
+            query_rates = context.h_projrates.get(qkey, (0.0, 0.0))
+            processing_latency += query_rates[1]
+            eventtypes.update(query.leafs())
 
-    eventtypes = list(eventtypes)  # Convert back to list if needed
+        eventtypes = list(eventtypes)  # Convert back to list if needed
 
-    # Pre-fetch destination distances once (instead of accessing allPairs repeatedly)
-    dest_distances = context.allPairs[destination]
+        # Pre-fetch destination distances once (instead of accessing allPairs repeatedly)
+        dest_distances = context.allPairs[destination]
 
-    # Calculate costs for central placement at cloud (node 0)
-    mycosts = 0
-    routing_dict = {}
+        # Calculate costs for central placement at cloud (node 0)
+        mycosts = 0
+        routing_dict = {}
 
-    for eventtype in eventtypes:
-        event_rate = context.h_rates_data[eventtype]
-        routing_dict[eventtype] = {}
+        for eventtype in eventtypes:
+            event_rate = context.h_rates_data[eventtype]
+            routing_dict[eventtype] = {}
 
-        for etb in context.h_IndexEventNodes[eventtype]:
-            # Get event node indices directly
-            index = context.h_IndexEventNodes[etb]
-            node_list = context.h_eventNodes[index]
+            for etb in context.h_IndexEventNodes[eventtype]:
+                # Get event node indices directly
+                index = context.h_IndexEventNodes[etb]
+                node_list = context.h_eventNodes[index]
 
-            # Find source with minimum distance in one pass
-            min_distance = float('inf')
-            best_source = None
+                # Find source with minimum distance in one pass
+                min_distance = float('inf')
+                best_source = None
 
-            for node_id, has_event in enumerate(node_list):
-                if has_event == 1:
-                    distance = dest_distances[node_id]
-                    if distance < min_distance:
-                        min_distance = distance
-                        best_source = node_id
+                for node_id, has_event in enumerate(node_list):
+                    if has_event == 1:
+                        distance = dest_distances[node_id]
+                        if distance < min_distance:
+                            min_distance = distance
+                            best_source = node_id
 
-            # Add transmission cost: rate × distance
-            mycosts += event_rate * min_distance
+                # Add transmission cost: rate × distance
+                mycosts += event_rate * min_distance
 
-            # Compute shortest path only once per event instance
-            shortest_path = nx.shortest_path(
-                context.graph, best_source, destination, method="dijkstra"
-            )
-            routing_dict[eventtype][etb] = shortest_path
+                # Compute shortest path only once per event instance
+                shortest_path = nx.shortest_path(
+                    context.graph, best_source, destination, method="dijkstra"
+                )
+                routing_dict[eventtype][etb] = shortest_path
 
-    # Longest path is simply the maximum distance from destination
-    longest_path = max(dest_distances)
+        # Longest path is simply the maximum distance from destination
+        longest_path = max(dest_distances)
 
-    end_time = time.time()
+        end_time = time.time()
 
-    print(f"--- All Push Complete: Cost={mycosts:.2f}, Latency={longest_path} ---")
+        print(f"--- All Push Complete: Cost={mycosts:.2f}, Latency={longest_path} ---")
 
-    return {
-        "cost": mycosts,
-        "transmission_latency": longest_path,
-        "processing_latency": processing_latency,
-        "computing_time": end_time - start_time,
-        "status": "success"
-    }
+        return {
+            "cost": mycosts,
+            "transmission_latency": longest_path,
+            "processing_latency": processing_latency,
+            "computing_time": end_time - start_time,
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(
+            msg=e,
+            exc_info=True,
+        )
 
 
 def calculate_prepp_from_cloud(context, reused_buffer_section):
@@ -212,118 +223,146 @@ def calculate_prepp_from_cloud(context, reused_buffer_section):
     Returns:
         Dictionary containing PrePP results with cost, latency, and status
     """
-    print("--- Running Solely PrePP from Cloud Scenario ---")
 
-    # Build buffer content using list for efficient concatenation
-    buffer_lines = [reused_buffer_section]
+    try:
+        print("--- Running Solely PrePP from Cloud Scenario ---")
 
-    # Add queries section
-    buffer_lines.append("queries")
-    for query in context.query_workload:
-        buffer_lines.append(str(query))
-    buffer_lines.append("")  # Empty line after queries
-
-    # Add muse graph section
-    buffer_lines.append("muse graph")
-    for query in context.query_workload:
-        primitive_events = context.h_primitive_events[str(query)]
-
-        # Build primitive events list with proper formatting
-        list_str = "; ".join(str(event) for event in primitive_events)
-
-        # Build the SELECT line (all queries placed on cloud node 0)
-        selection_rate = context.h_projrates[query][0]
-        line = f"SELECT {str(query)} FROM {list_str} ON {{0}} WITH selectionRate= {selection_rate}"
-        buffer_lines.append(line)
-
-    # Create buffer with proper initialization
-    buffer = io.StringIO()
-    buffer.write("\n".join(buffer_lines))
-    buffer.seek(0)  # CRITICAL: Reset to start for reading
-
-    # Determine if running in deterministic mode
-    is_deterministic = context.config.mode.value == "deterministic"
-
-    # Run PrePP for cloud-only placement
-    prepp_results = generate_prePP(
-        input_buffer=buffer,
-        method="ppmuse",
-        algorithm="e",
-        samples=1,
-        top_k=0,
-        runs=1,
-        plan_print=True,
-        allPairs=context.allPairs,
-        is_deterministic=is_deterministic
-    )
-
-    if prepp_results is None or len(prepp_results) < 7:
-        return {"cost": 0, "transmission_latency": 0, "processing_latency": 0,
-                "computing_time": 0, "status": "failed"}
-
-    # Extract results (prepp_results format: [cost, time, latency, ratio, push_costs, central_latency, steps])
-    exact_cost = prepp_results[0]
-    computing_time = prepp_results[1]
-    max_latency_tuple = prepp_results[2]
-    acquisition_steps = prepp_results[6]  # Dictionary: {query_str: AcquisitionSet}
-
-    # Extract transmission latency
-    if isinstance(max_latency_tuple, tuple):
-        transmission_latency = max_latency_tuple[1]  # Latency value from tuple
-    else:
-        transmission_latency = max_latency_tuple
-
-    # Calculate processing latency using acquisition steps
-    # For each query: output_rate * (sum_of_acquisition_response_costs / sum_of_primitive_input_rates)
-    processing_latency = 0.0
-    max_latency = 0.0
-    for query in context.query_workload:
-        query_str = str(query)
-
-        # Get the acquisition set for this query
-        if query_str not in acquisition_steps:
-            continue
-
-        acquisition_set = acquisition_steps[query_str]
-
-        # Handle error case where acquisition_set is a dict with "error" key
-        if isinstance(acquisition_set, dict) and "error" in acquisition_set:
-            continue
-
-        # Sum the pull response costs from all acquisition steps
-        sum_of_acquisition_step_response_cost = sum(
-            step.pull_response.cost for step in acquisition_set.steps
+        # Convert reused_buffer_section to ensure no numpy types in output
+        # The reused section may contain numpy type representations like 'np.int64(113)'
+        # which cannot be parsed by prepp.py. Replace them with plain numbers.
+        import re
+        # Match patterns like 'np.int64(123)' or 'np.float64(1.5)' and extract just the number
+        reused_buffer_section = re.sub(
+            r'np\.\w+\(([^)]+)\)',
+            r'\1',
+            reused_buffer_section
         )
 
-        transmission_latency = sum(
-            step.total_latency for step in acquisition_set.steps
+        # Build buffer content using list for efficient concatenation
+        buffer_lines = [reused_buffer_section]
+
+        # Add queries section
+        buffer_lines.append("queries")
+        for query in context.query_workload:
+            buffer_lines.append(str(query))
+        buffer_lines.append("")  # Empty line after queries
+
+        # Add muse graph section
+        buffer_lines.append("muse graph")
+        for query in context.processing_order:
+            if query not in context.query_workload:
+                continue
+            primitive_events = context.h_primitive_events[str(query)]
+
+
+            # Build primitive events list with proper formatting
+            list_str = "; ".join(str(event) for event in primitive_events)
+
+            # Build the SELECT line (all queries placed on cloud node 0)
+            qkey = str(query)
+            selection_rate = context.h_projrates.get(qkey, (0.001, 0.001))[0]
+
+            # Convert selection_rate to Python float to avoid numpy type in output
+            selection_rate = float(selection_rate)
+
+            line = f"SELECT {qkey} FROM {list_str} ON {{0}} WITH selectionRate= {selection_rate}"
+            buffer_lines.append(line)
+
+        # Create buffer with proper initialization
+        buffer = io.StringIO()
+        buffer.write("\n".join(buffer_lines))
+        buffer.seek(0)  # CRITICAL: Reset to start for reading
+
+        # Determine if running in deterministic mode
+        is_deterministic = context.config.mode.value == "deterministic"
+
+        # Run PrePP for cloud-only placement
+        prepp_results = generate_prePP(
+            input_buffer=buffer,
+            method="ppmuse",
+            algorithm="e",
+            samples=1,
+            top_k=0,
+            runs=1,
+            plan_print=True,
+            allPairs=context.allPairs,
+            is_deterministic=is_deterministic
         )
 
-        max_latency = max(max_latency, transmission_latency)
+        if prepp_results is None or len(prepp_results) < 7:
+            return {"cost": 0, "transmission_latency": 0, "processing_latency": 0,
+                    "computing_time": 0, "status": "failed"}
 
-        # Get the sum of primitive input rates for this query
-        sum_input_rates_per_query = context.sum_of_input_rates_per_query.get(query, 1.0)
+        # Extract results (prepp_results format: [cost, time, latency, ratio, push_costs, central_latency, steps])
+        exact_cost = prepp_results[0]
+        computing_time = prepp_results[1]
+        max_latency_tuple = prepp_results[2]
+        acquisition_steps = prepp_results[6]  # Dictionary: {query_str: AcquisitionSet}
 
-        # Calculate the input ratio
-        if sum_input_rates_per_query > 0:
-            input_ratio = sum_of_acquisition_step_response_cost / sum_input_rates_per_query
+        # Extract transmission latency
+        if isinstance(max_latency_tuple, tuple):
+            transmission_latency = max_latency_tuple[1]  # Latency value from tuple
         else:
-            input_ratio = 0.0
+            transmission_latency = max_latency_tuple
 
-        # Get the output rate for this query
-        output_rate = context.h_projrates[query][1]
+        # Calculate processing latency using acquisition steps
+        # For each query: output_rate * (sum_of_acquisition_response_costs / sum_of_primitive_input_rates)
+        processing_latency = 0.0
+        max_latency = 0.0
+        for query in context.query_workload:
+            query_str = str(query)
 
-        # Calculate processing latency contribution for this query
-        query_processing_latency = output_rate * input_ratio
-        processing_latency += query_processing_latency
+            # Get the acquisition set for this query
+            if query_str not in acquisition_steps:
+                continue
 
-    return {
-        "cost": exact_cost,
-        "transmission_latency": max_latency,
-        "processing_latency": processing_latency,
-        "computing_time": computing_time,
-        "status": "success"
-    }
+            acquisition_set = acquisition_steps[query_str]
+
+            # Handle error case where acquisition_set is a dict with "error" key
+            if isinstance(acquisition_set, dict) and "error" in acquisition_set:
+                continue
+
+            # Sum the pull response costs from all acquisition steps
+            sum_of_acquisition_step_response_cost = sum(
+                step.pull_response.cost for step in acquisition_set.steps
+            )
+
+            transmission_latency = sum(
+                step.total_latency for step in acquisition_set.steps
+            )
+
+            max_latency = max(max_latency, transmission_latency)
+
+            # Get the sum of primitive input rates for this query
+            sum_input_rates_per_query = context.sum_of_input_rates_per_query.get(query, 1.0)
+
+            # Calculate the input ratio
+            if sum_input_rates_per_query > 0:
+                input_ratio = sum_of_acquisition_step_response_cost / sum_input_rates_per_query
+            else:
+                input_ratio = 0.0
+
+            # Get the output rate for this query
+            qkey = str(query)
+            output_rate = context.h_projrates.get(qkey, (0.0, 0.0))[1]
+
+            # Calculate processing latency contribution for this query
+            query_processing_latency = output_rate * input_ratio
+            processing_latency += query_processing_latency
+
+        return {
+            "cost": exact_cost,
+            "transmission_latency": max_latency,
+            "processing_latency": processing_latency,
+            "computing_time": computing_time,
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(
+            msg=e,
+            exc_info=True,
+        )
+
 
 
 def update_results_for_topology(context, ines_results, inev_results):
@@ -355,72 +394,77 @@ def update_results_for_topology(context, ines_results, inev_results):
             "status": "success"
         }
     """
-    CLOUD_NODE_ID = 0
+    try:
+        CLOUD_NODE_ID = 0
 
-    query_workload = context.query_workload
-    ines_eval_plan = context.eval_plan[0].projections
+        query_workload = context.query_workload
+        ines_eval_plan = context.eval_plan[0].projections
 
-    # Extract INES data
-    ines_total_costs = ines_results[0]
-    ines_calculation_time = ines_results[1]
-    ines_max_latency_tuple = ines_results[2]
+        # Extract INES data
+        ines_total_costs = ines_results[0]
+        ines_calculation_time = ines_results[1]
+        ines_max_latency_tuple = ines_results[2]
 
-    # Calculate INES latencies (returns tuple of transmission and processing latencies)
-    ines_transmission_latency, ines_processing_latency = calculate_ines_max_latency(context, ines_results)
+        # Calculate INES latencies (returns tuple of transmission and processing latencies)
+        ines_transmission_latency, ines_processing_latency = calculate_ines_max_latency(context, ines_results)
 
-    # Extract INEv data
-    inev_total_costs = inev_results['cost']
-    inev_calculation_time = inev_results['computing_time']
-    inev_transmission_latency = inev_results['transmission_latency']
-    inev_processing_latency = inev_results['processing_latency']
+        # Extract INEv data
+        inev_total_costs = inev_results['cost']
+        inev_calculation_time = inev_results['computing_time']
+        inev_transmission_latency = inev_results['transmission_latency']
+        inev_processing_latency = inev_results['processing_latency']
 
-    # Calculate additional costs for sending query results to cloud
-    # This is the same for both INES and INEv since they use the same placement
-    additional_costs = 0
+        # Calculate additional costs for sending query results to cloud
+        # This is the same for both INES and INEv since they use the same placement
+        additional_costs = 0
 
-    for projection in ines_eval_plan:
-        projection_name = projection.name.name
-        if projection_name in query_workload:
-            placement_nodes = projection.name.sinks
-            for placed_node in placement_nodes:
-                hops_from_node_to_cloud = context.allPairs[placed_node][CLOUD_NODE_ID]
-                query_output_rate = context.h_projrates.get(projection_name, (1.0, 1.0))[1]
-                additional_costs += hops_from_node_to_cloud * query_output_rate
+        for projection in ines_eval_plan:
+            projection_name = projection.name.name
+            if projection_name in query_workload:
+                placement_nodes = projection.name.sinks
+                for placed_node in placement_nodes:
+                    hops_from_node_to_cloud = context.allPairs[placed_node][CLOUD_NODE_ID]
+                    query_output_rate = context.h_projrates.get(projection_name, (1.0, 1.0))[1]
+                    additional_costs += hops_from_node_to_cloud * query_output_rate
 
-    # Update costs for both strategies
-    ines_total_costs += additional_costs
-    inev_total_costs += additional_costs
+        # Update costs for both strategies
+        ines_total_costs += additional_costs
+        inev_total_costs += additional_costs
 
-    # Calculate additional latency for sending to cloud
-    # Find the maximum latency contribution from any placement to cloud
-    additional_latency = 0
-    if isinstance(ines_max_latency_tuple, tuple):
-        node_with_max_latency = ines_max_latency_tuple[0]
-        additional_latency = context.allPairs[node_with_max_latency][CLOUD_NODE_ID]
+        # Calculate additional latency for sending to cloud
+        # Find the maximum latency contribution from any placement to cloud
+        additional_latency = 0
+        if isinstance(ines_max_latency_tuple, tuple):
+            node_with_max_latency = ines_max_latency_tuple[0]
+            additional_latency = context.allPairs[node_with_max_latency][CLOUD_NODE_ID]
 
-    # Update transmission latency for both strategies (add cloud transmission)
-    ines_transmission_latency += additional_latency
-    inev_transmission_latency += additional_latency
+        # Update transmission latency for both strategies (add cloud transmission)
+        ines_transmission_latency += additional_latency
+        inev_transmission_latency += additional_latency
 
-    # Create return dictionaries
-    ines_dict = {
-        "cost": ines_total_costs,
-        "transmission_latency": ines_transmission_latency,
-        "processing_latency": ines_processing_latency,
-        "computing_time": ines_calculation_time,
-        "status": "success"
-    }
+        # Create return dictionaries
+        ines_dict = {
+            "cost": ines_total_costs,
+            "transmission_latency": ines_transmission_latency,
+            "processing_latency": ines_processing_latency,
+            "computing_time": ines_calculation_time,
+            "status": "success"
+        }
 
-    inev_dict = {
-        "cost": inev_total_costs,
-        "transmission_latency": inev_transmission_latency,
-        "processing_latency": inev_processing_latency,
-        "computing_time": inev_calculation_time,
-        "status": "success"
-    }
+        inev_dict = {
+            "cost": inev_total_costs,
+            "transmission_latency": inev_transmission_latency,
+            "processing_latency": inev_processing_latency,
+            "computing_time": inev_calculation_time,
+            "status": "success"
+        }
 
-    return ines_dict, inev_dict
-
+        return ines_dict, inev_dict
+    except Exception as e:
+        logger.error(
+            msg=e,
+            exc_info=True
+        )
 
 # ==================== HARDCODED TOPOLOGY/WORKLOAD FUNCTIONS ====================
 
@@ -819,7 +863,8 @@ def calculate_global_eventrates(context):
         if len(node.eventrates) > 0:
             # Take every eventrate from the node
             global_event_rates = np.add(global_event_rates, node.eventrates)
-    result = list(global_event_rates)
+    # Convert numpy types to Python native types to avoid 'np.int64(...)' in strings
+    result = [int(x) if isinstance(x, (np.integer, np.int64, np.int32)) else float(x) for x in global_event_rates]
     return result
 
 
@@ -911,144 +956,153 @@ class Simulation:
             config: SimulationConfig object containing all simulation parameters
         """
         print("--- Initializing Simulation Environment ---")
+        try:
+            # ------ SETUP -------#
 
-        # ------ SETUP -------#
+            # Store configuration and extract parameters
+            self.config = config
+            self.nwSize = config.network_size
+            self.node_event_ratio = config.node_event_ratio
+            self.number_eventtypes = config.num_event_types
+            self.eventskew = config.event_skew
+            self.max_parents = config.max_parents
+            self.query_size = config.query_size
+            self.query_length = config.query_length
+            self.latency_threshold = config.latency_threshold
 
-        # Store configuration and extract parameters
-        self.config = config
-        self.nwSize = config.network_size
-        self.node_event_ratio = config.node_event_ratio
-        self.number_eventtypes = config.num_event_types
-        self.eventskew = config.event_skew
-        self.max_parents = config.max_parents
-        self.query_size = config.query_size
-        self.query_length = config.query_length
-        self.latency_threshold = config.latency_threshold
+            # Initialize result schema for experiments
+            self.schema = [
+                "ID",
+                "TransmissionRatio",
+                "Transmission",
+                "INEvTransmission",
+                "FilterUsed",
+                "Nodes",
+                "EventSkew",
+                "EventNodeRatio",
+                "WorkloadSize",
+                "NumberProjections",
+                "MinimalSelectivity",
+                "MedianSelectivity",
+                "CombigenComputationTime",
+                "Efficiency",
+                "PlacementComputationTime",
+                "centralHopLatency",
+                "Depth",
+                "CentralTransmission",
+                "LowerBound",
+                "EventTypes",
+                "MaximumParents",
+                "exact_costs",
+                "PushPullTime",
+                "MaxPushPullLatency",
+                "endTransmissionRatio",
+            ]
 
-        # Initialize result schema for experiments
-        self.schema = [
-            "ID",
-            "TransmissionRatio",
-            "Transmission",
-            "INEvTransmission",
-            "FilterUsed",
-            "Nodes",
-            "EventSkew",
-            "EventNodeRatio",
-            "WorkloadSize",
-            "NumberProjections",
-            "MinimalSelectivity",
-            "MedianSelectivity",
-            "CombigenComputationTime",
-            "Efficiency",
-            "PlacementComputationTime",
-            "centralHopLatency",
-            "Depth",
-            "CentralTransmission",
-            "LowerBound",
-            "EventTypes",
-            "MaximumParents",
-            "exact_costs",
-            "PushPullTime",
-            "MaxPushPullLatency",
-            "endTransmissionRatio",
-        ]
+            # Initialize core simulation parameters
+            from projections import generate_all_projections
 
-        # Initialize core simulation parameters
-        from projections import generate_all_projections
+            eventrates_per_source = generate_eventrates(
+                config.event_skew, config.num_event_types
+            )
+            self.eventrates = eventrates_per_source
+            self.networkParams = [
+                self.eventskew,
+                self.number_eventtypes,
+                self.node_event_ratio,
+                self.nwSize,
+                min(self.eventrates) / max(self.eventrates),
+            ]
 
-        eventrates_per_source = generate_eventrates(
-            config.event_skew, config.num_event_types
-        )
-        self.eventrates = eventrates_per_source
-        self.networkParams = [
-            self.eventskew,
-            self.number_eventtypes,
-            self.node_event_ratio,
-            self.nwSize,
-            min(self.eventrates) / max(self.eventrates),
-        ]
+            # Generate primitive events - use hardcoded values for consistent selectivity calculations
+            if config.is_selectivities_fixed():
+                self.primitiveEvents = generate_hardcoded_primitive_events()
+            else:
+                self.primitiveEvents = eventrates_per_source
 
-        # Generate primitive events - use hardcoded values for consistent selectivity calculations
-        if config.is_selectivities_fixed():
-            self.primitiveEvents = generate_hardcoded_primitive_events()
-        else:
-            self.primitiveEvents = eventrates_per_source
+            # Initialize simulation components based on configuration mode
+            self._initialize_network_topology()
 
-        # Initialize simulation components based on configuration mode
-        self._initialize_network_topology()
-        self._initialize_network_graph()
-        self._initialize_query_workload()
-        self._initialize_selectivities()
+            # Convert all node eventrates to Python native types to prevent numpy type strings
+            self._convert_node_eventrates_to_python()
 
-        self.graph_density = calculate_graph_density(self.graph)
+            self._initialize_network_graph()
+            self._initialize_query_workload()
+            self._initialize_selectivities()
 
-        global_event_rates = calculate_global_eventrates(self)
-        self.primitiveEvents = global_event_rates
-        self.eventrates = global_event_rates
+            self.graph_density = calculate_graph_density(self.graph)
 
-        # Generate configuration and single selectivities for detailed analysis
-        self.config_single = generate_config_buffer(
-            self.network, self.query_workload, self.selectivities
-        )
-        deterministic_flag = self.config.is_selectivities_fixed()
+            global_event_rates = calculate_global_eventrates(self)
+            self.primitiveEvents = global_event_rates
+            self.eventrates = global_event_rates
 
-        """
-        Finn Glück 31.08.2025:
-        When using multiple runs the legacy system produces an error since some selectivities are not initialized properly.
-        This is a quick fix to ensure that all selectivities are initialized properly.
-        """
-        # Get all events
-        all_events_array_string = list(string.ascii_uppercase[: config.num_event_types])
+            # Generate configuration and single selectivities for detailed analysis
+            self.config_single = generate_config_buffer(
+                self.network, self.query_workload, self.selectivities
+            )
+            deterministic_flag = self.config.is_selectivities_fixed()
 
-        self.single_selectivity = initializeSingleSelectivity(
-            CURRENT_SECTION=self.CURRENT_SECTION,
-            config_single=self.config_single,
-            workload=self.query_workload,
-            is_deterministic=deterministic_flag,
-            all_events_array_string=all_events_array_string,
-        )
+            """
+            Finn Glück 31.08.2025:
+            When using multiple runs the legacy system produces an error since some selectivities are not initialized properly.
+            This is a quick fix to ensure that all selectivities are initialized properly.
+            """
+            # Get all events
+            all_events_array_string = list(string.ascii_uppercase[: config.num_event_types])
 
-        # Initialize remaining simulation components (legacy processing pipeline)
-        (
-            self.h_network_data,
-            self.h_rates_data,
-            self.h_primEvents,
-            self.h_instances,
-            self.h_nodes,
-        ) = initialize_globals(self.network)
-        self.h_eventNodes, self.h_IndexEventNodes = initEventNodes(
-            self.h_nodes, self.h_network_data
-        )
-        (
-            self.h_projlist,
-            self.h_projrates,
-            self.h_projsPerQuery,
-            self.h_sharedProjectionsDict,
-            self.h_sharedProjectionsList,
-        ) = generate_all_projections(self)
-        self.h_projFilterDict = populate_projFilterDict(self)
-        self.h_projFilterDict = removeFilters(self)
-        (
-            self.h_mycombi,
-            self.h_combiDict,
-            self.h_criticalMSTypes_criticalMSProjs,
-            self.h_combiExperimentData,
-            self.h_primitive_events,
-        ) = generate_combigen(self)
-        self.h_criticalMSTypes, self.h_criticalMSProjs = (
-            self.h_criticalMSTypes_criticalMSProjs
-        )
+            self.single_selectivity = initializeSingleSelectivity(
+                CURRENT_SECTION=self.CURRENT_SECTION,
+                config_single=self.config_single,
+                workload=self.query_workload,
+                is_deterministic=deterministic_flag,
+                all_events_array_string=all_events_array_string,
+            )
 
-        # Create optimized rate lookup structure for fast dependency rate calculations
-        self.h_local_rate_lookup = self._create_optimized_rate_lookup()
+            # Initialize remaining simulation components (legacy processing pipeline)
+            (
+                self.h_network_data,
+                self.h_rates_data,
+                self.h_primEvents,
+                self.h_instances,
+                self.h_nodes,
+            ) = initialize_globals(self.network)
+            self.h_eventNodes, self.h_IndexEventNodes = initEventNodes(
+                self.h_nodes, self.h_network_data
+            )
+            (
+                self.h_projlist,
+                self.h_projrates,
+                self.h_projsPerQuery,
+                self.h_sharedProjectionsDict,
+                self.h_sharedProjectionsList,
+            ) = generate_all_projections(self)
+            self.h_projFilterDict = populate_projFilterDict(self)
+            self.h_projFilterDict = removeFilters(self)
+            (
+                self.h_mycombi,
+                self.h_combiDict,
+                self.h_criticalMSTypes_criticalMSProjs,
+                self.h_combiExperimentData,
+                self.h_primitive_events,
+            ) = generate_combigen(self)
+            self.h_criticalMSTypes, self.h_criticalMSProjs = (
+                self.h_criticalMSTypes_criticalMSProjs
+            )
 
-        # Calculate sum of primitive input rates per query for processing latency calculations
-        self.sum_of_input_rates_per_query = (
-            self._calculate_sum_of_primitive_input_rates_per_query()
-        )
+            # Create optimized rate lookup structure for fast dependency rate calculations
+            self.h_local_rate_lookup = self._create_optimized_rate_lookup()
 
-        print("--- SETUP COMPLETE ---")
+            # Calculate sum of primitive input rates per query for processing latency calculations
+            self.sum_of_input_rates_per_query = (
+                self._calculate_sum_of_primitive_input_rates_per_query()
+            )
+
+            print("--- SETUP COMPLETE ---")
+        except Exception as e:
+            logger.error(
+                msg=e,
+                exc_info=True,
+            )
 
     def run(self):
         """
@@ -1063,61 +1117,208 @@ class Simulation:
         6. Write Results
         """
         # ----- ALL PUSH CALCULATION -----#
-        print("--- Running All Push Computation ---")
-        self.all_push_results = compute_all_push(self)
-        print("--- ALL PUSH COMPUTATION COMPLETE ---")
+        try:
+            print("--- Running All Push Computation ---")
+            self.all_push_results = compute_all_push(self)
+            print("--- ALL PUSH COMPUTATION COMPLETE ---")
 
-        # ----- INEV COMPUTATION -----#
-        print("--- Running INEv Computation ---")
-        (self.eval_plan, self.central_eval_plan, self.experiment_result,
-         self.results, self.inev_results) = calculate_operatorPlacement(self, "test", 0)
-        print("--- INEV COMPUTATION COMPLETE ---")
+            # ----- INEV COMPUTATION -----#
+            print("--- Running INEv Computation ---")
+            (self.eval_plan, self.central_eval_plan, self.experiment_result,
+             self.results, self.inev_results) = calculate_operatorPlacement(self, "test", 0)
+            print("--- INEV COMPUTATION COMPLETE ---")
 
-        # ----- INES COMPUTATION (using INEv results) -----#
-        print("--- Running INES Computation ---")
-        plan, reused_section = generate_eval_plan(
-            self.network, self.selectivities, self.eval_plan,
-            self.central_eval_plan, self.query_workload
-        )
-        deterministic_flag = self.config.is_selectivities_fixed()
-        ines_results = generate_prePP(
-            plan, "ppmuse", "e", 1, 0, 1, True, self.allPairs, deterministic_flag
-        )
+            # ----- INES COMPUTATION (using INEv results) -----#
+            print("--- Running INES Computation ---")
+            plan, reused_section = generate_eval_plan(
+                self.network, self.selectivities, self.eval_plan,
+                self.central_eval_plan, self.query_workload
+            )
+            deterministic_flag = self.config.is_selectivities_fixed()
+            ines_results = generate_prePP(
+                plan, "ppmuse", "e", 1, 0, 1, True, self.allPairs, deterministic_flag
+            )
 
-        # Update both INES and INEv results with topology adjustments
-        ines_dict, inev_dict = update_results_for_topology(self, ines_results, self.inev_results)
-        self.ines_results = ines_dict
-        self.inev_results = inev_dict
+            # Update both INES and INEv results with topology adjustments
+            ines_dict, inev_dict = update_results_for_topology(self, ines_results, self.inev_results)
+            self.ines_results = ines_dict
+            self.inev_results = inev_dict
 
-        print("--- INES COMPUTATION COMPLETE ---")
+            print("--- INES COMPUTATION COMPLETE ---")
 
-        # ----- SOLELY PREPP COMPUTATION (from cloud) -----#
-        print("--- Running PrePP from Cloud Computation ---")
-        self.prepp_from_cloud_result = calculate_prepp_from_cloud(self, reused_section)
-        print("--- PREPP FROM CLOUD COMPUTATION COMPLETE ---")
+            # ----- SOLELY PREPP COMPUTATION (from cloud) -----#
+            print("--- Running PrePP from Cloud Computation ---")
+            self.prepp_from_cloud_result = calculate_prepp_from_cloud(self, reused_section)
+            print("--- PREPP FROM CLOUD COMPUTATION COMPLETE ---")
 
-        # ----- KRAKEN COMPUTATION -----#
-        print("--- Running Kraken Computation ---")
-        from src.kraken2_0.run import run_kraken_solver
+            # ----- KRAKEN COMPUTATION -----#
+            print("--- Running Kraken Computation ---")
+            from src.kraken2_0.run import run_kraken_solver
 
-        self.kraken_results = run_kraken_solver(
-            ines_context=self,
-            strategies_to_run=["greedy"],
-            enable_detailed_logging=False,
-        )
-        print("--- KRAKEN COMPUTATION COMPLETE ---")
+            self.kraken_results = run_kraken_solver(
+                ines_context=self,
+                strategies_to_run=["greedy"],
+                enable_detailed_logging=False,
+            )
+            print("--- KRAKEN COMPUTATION COMPLETE ---")
 
-        # ----- WRITE RESULTS -----#
-        self._write_results()
-        print("--- All computations complete and results saved. ---")
+            # ----- WRITE RESULTS -----#
+            self._write_results()
+            print("--- All computations complete and results saved. ---")
+        except Exception as e:
+            logger.error(
+                msg=e,
+                exc_info=True,
+            )
 
     def _write_results(self):
-        """Placeholder for the logic to write all collected results to a file."""
-        print("--- Writing results to file (Placeholder) ---")
-        # In the future, this method will collect data from all `self.*_results`
-        # attributes and write them to the final output file.
-        pass
+        """Write all strategy results to a unified parquet file."""
+        import pandas as pd
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+        from pathlib import Path
 
+        try:
+            print("--- Writing unified results to parquet ---")
+
+            # Prepare results data
+            results_data = []
+
+            # 1. All Push Results
+            if self.all_push_results:
+                results_data.append({
+                    "strategy_name": "all_push",
+                    "cost": self.all_push_results.get("cost", 0.0),
+                    "transmission_latency": self.all_push_results.get("transmission_latency", 0.0),
+                    "processing_latency": self.all_push_results.get("processing_latency", 0.0),
+                    "computing_time": self.all_push_results.get("computing_time", 0.0),
+                    "status": self.all_push_results.get("status", "unknown"),
+                    # Extended metrics (None for non-Kraken strategies)
+                    "workload_cost": None,
+                    "num_placements": None,
+                    "placements_at_cloud": None,
+                    "average_cost_per_placement": None,
+                })
+
+            # 2. INEv Results
+            if self.inev_results:
+                results_data.append({
+                    "strategy_name": "inev",
+                    "cost": self.inev_results.get("cost", 0.0),
+                    "transmission_latency": self.inev_results.get("transmission_latency", 0.0),
+                    "processing_latency": self.inev_results.get("processing_latency", 0.0),
+                    "computing_time": self.inev_results.get("computing_time", 0.0),
+                    "status": self.inev_results.get("status", "unknown"),
+                    "workload_cost": None,
+                    "num_placements": None,
+                    "placements_at_cloud": None,
+                    "average_cost_per_placement": None,
+                })
+
+            # 3. INES Results
+            if self.ines_results:
+                results_data.append({
+                    "strategy_name": "ines",
+                    "cost": self.ines_results.get("cost", 0.0),
+                    "transmission_latency": self.ines_results.get("transmission_latency", 0.0),
+                    "processing_latency": self.ines_results.get("processing_latency", 0.0),
+                    "computing_time": self.ines_results.get("computing_time", 0.0),
+                    "status": self.ines_results.get("status", "unknown"),
+                    "workload_cost": None,
+                    "num_placements": None,
+                    "placements_at_cloud": None,
+                    "average_cost_per_placement": None,
+                })
+
+            # 4. PrePP from Cloud Results
+            if self.prepp_from_cloud_result:
+                results_data.append({
+                    "strategy_name": "prepp_from_cloud",
+                    "cost": self.prepp_from_cloud_result.get("cost", 0.0),
+                    "transmission_latency": self.prepp_from_cloud_result.get("transmission_latency", 0.0),
+                    "processing_latency": self.prepp_from_cloud_result.get("processing_latency", 0.0),
+                    "computing_time": self.prepp_from_cloud_result.get("computing_time", 0.0),
+                    "status": self.prepp_from_cloud_result.get("status", "unknown"),
+                    "workload_cost": None,
+                    "num_placements": None,
+                    "placements_at_cloud": None,
+                    "average_cost_per_placement": None,
+                })
+
+            # 5. Kraken Results (with extended metrics)
+            if self.kraken_results and "strategies" in self.kraken_results:
+                for strategy_name, strategy_result in self.kraken_results["strategies"].items():
+                    if strategy_result["status"] == "success":
+                        metrics = strategy_result["metrics"]
+                        results_data.append({
+                            "strategy_name": f"kraken_{strategy_name}",
+                            "cost": metrics.get("total_cost", 0.0),
+                            "transmission_latency": metrics.get("max_latency", 0.0),
+                            "processing_latency": metrics.get("cumulative_processing_latency", 0.0),
+                            "computing_time": strategy_result.get("execution_time_seconds", 0.0),
+                            "status": "success",
+                            # Extended Kraken metrics
+                            "workload_cost": metrics.get("workload_cost", None),
+                            "num_placements": metrics.get("num_placements", None),
+                            "placements_at_cloud": metrics.get("placements_at_cloud", None),
+                            "average_cost_per_placement": metrics.get("average_cost_per_placement", None),
+                        })
+                    else:
+                        # Failed Kraken strategy
+                        results_data.append({
+                            "strategy_name": f"kraken_{strategy_name}",
+                            "cost": None,
+                            "transmission_latency": None,
+                            "processing_latency": None,
+                            "computing_time": strategy_result.get("execution_time_seconds", 0.0),
+                            "status": "failed",
+                            "workload_cost": None,
+                            "num_placements": None,
+                            "placements_at_cloud": None,
+                            "average_cost_per_placement": None,
+                        })
+
+            # Check if we have any results to write
+            if not results_data:
+                print("--- No results to write ---")
+                return
+
+            # Create DataFrame
+            df = pd.DataFrame(results_data)
+
+            # Define column order
+            columns = [
+                "strategy_name",
+                "status",
+                "cost",
+                "transmission_latency",
+                "processing_latency",
+                "computing_time",
+                "workload_cost",
+                "num_placements",
+                "placements_at_cloud",
+                "average_cost_per_placement",
+            ]
+            df = df[columns]
+
+            # Convert to PyArrow table
+            table = pa.Table.from_pandas(df, preserve_index=False)
+
+            # Write to parquet using the same directory structure as Kraken
+            output_dir = Path("kraken2_0/result/unified_results.parquet")
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            # Write to dataset (enables append operations)
+            pq.write_to_dataset(table, root_path=str(output_dir))
+
+            print(f"--- Results written to {output_dir} ---")
+            print(f"--- Total strategies recorded: {len(results_data)} ---")
+
+        except Exception as e:
+            logger.error(
+                msg=e,
+                exc_info=e
+            )
     # ==================== HELPER METHODS ====================
 
     def _calculate_sum_of_primitive_input_rates_per_query(self) -> Dict:
@@ -1197,6 +1398,21 @@ class Simulation:
             self.root, self.network, self.eList = create_random_tree(
                 self.nwSize, self.eventrates, self.node_event_ratio, self.max_parents
             )
+
+    def _convert_node_eventrates_to_python(self):
+        """Convert all node eventrates from numpy types to Python native types.
+
+        This prevents 'np.int64(...)' representations from appearing in stringified buffers.
+        """
+        for node in self.network:
+            if hasattr(node, 'eventrates') and node.eventrates:
+                # Convert each element to Python native type
+                node.eventrates = [
+                    int(x) if isinstance(x, (np.integer, np.int64, np.int32, np.int16, np.int8))
+                    else float(x) if isinstance(x, (np.floating, np.float64, np.float32))
+                    else x
+                    for x in node.eventrates
+                ]
 
     def _initialize_network_graph(self):
         """Initialize network graph and distance calculations."""

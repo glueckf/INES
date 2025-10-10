@@ -5,8 +5,12 @@ import copy
 import helper.push_pull_plan_generator as push_pull_plan_generator
 import time
 from itertools import chain, combinations
+import logging
 
 from src.kraken2_0.acquisition_step import AcquisitionStep, AcquisitionSet, PullRequest, PullResponse
+
+# Set up module logger
+logger = logging.getLogger(__name__)
 
 NETWORK = "network"
 QUERIES = "queries"
@@ -1289,7 +1293,19 @@ def generate_prePP(
                         CLOUD_EVALUATION_NODE,
                     )
                 except Exception as e:
-                    print(e)
+                    logger.error(
+                        f"PrePP generation failed: {str(e)}",
+                        exc_info=True,
+                        extra={
+                            "method": method,
+                            "algorithm": algorithm,
+                            "is_deterministic": is_deterministic,
+                            "samples": samples,
+                            "top_k": top_k,
+                            "runs": runs,
+                        }
+                    )
+                    return None
 
 
                 (
@@ -1359,7 +1375,16 @@ def generate_prePP(
             aquisition_steps,
         ]
     except Exception as e:
-        # Minimal error logging
-        print(e)
-        pass
+        logger.error(
+            f"PrePP generation failed: {str(e)}",
+            exc_info=True,
+            extra={
+                "method": method,
+                "algorithm": algorithm,
+                "is_deterministic": is_deterministic,
+                "samples": samples,
+                "top_k": top_k,
+                "runs": runs,
+            }
+        )
         return None
