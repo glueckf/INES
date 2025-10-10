@@ -2,6 +2,7 @@
 
 import io
 import hashlib
+import logging
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -533,7 +534,13 @@ class CostCalculator:
 
         # Calculate the processing latency
         # The ratio is: (sum of pull response costs) / (sum of all primitive input rates for query)
-        sum_of_input_rates_for_strategy = sum(step.pull_response.cost for step in acquisition_set.steps)
+        # We divide by the latency to convert cost back to rate since the cost here is in terms of hops * rate
+        # And latency = hops
+
+        try:
+            sum_of_input_rates_for_strategy = sum((step.pull_response.cost/step.pull_response.latency) for step in acquisition_set.steps)
+        except ZeroDivisionError:
+            sum_of_input_rates_for_strategy = 0.0
 
         sum_of_input_rates_for_primitive_strategy = self.params["sum_of_input_rates_per_query"][p]
 

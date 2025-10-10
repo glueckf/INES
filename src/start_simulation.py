@@ -439,9 +439,9 @@ def run_parameter_study(
     parent_factors: List[float] = [1.8],
     query_lengths: List[int] = [5],
     runs_per_combination: int = 5,
-    node_event_ratio: float = 0.5,
-    num_event_types: int = 6,
-    event_skew: float = 2.0,
+    node_event_ratios: List[float] = [0.5],
+    num_event_types: List[int] = [6],
+    event_skews: List[float] = [2.0],
     xi: float = 0,
     latency_threshold: float = None,
     mode: SimulationMode = SimulationMode.FULLY_DETERMINISTIC,
@@ -460,9 +460,9 @@ def run_parameter_study(
         parent_factors: List of parent factors to test
         query_lengths: List of query lengths to test
         runs_per_combination: Number of runs per parameter combination
-        node_event_ratio: Fixed node event ratio
+        node_event_ratios: Fixed node event ratio
         num_event_types: Fixed number of event types
-        event_skew: Fixed event skew parameter
+        event_skews: Fixed event skew parameter
         xi: Xi value for processing latency weight (default 0.0)
         latency_threshold: Optional latency threshold to make kraken latency aware
         mode: Simulation mode
@@ -484,38 +484,41 @@ def run_parameter_study(
         for workload_size in workload_sizes:
             for network_size in network_sizes:
                 for query_length in query_lengths:
-                    # Calculate max_parents using same formula as original
-                    max_parents = int(
-                        parent_factor * math.ceil(math.log2(network_size))
-                    )
+                    for node_event_ratio in node_event_ratios:
+                        for num_event_type in num_event_types:
+                            for event_skew in event_skews:
+                                # Calculate max_parents using same formula as original
+                                max_parents = int(
+                                    parent_factor * math.ceil(math.log2(network_size))
+                                )
 
-                    # Create parameter set identifier
-                    parameter_set_id = f"n{network_size}_w{workload_size}_q{query_length}_pf{parent_factor}_p{max_parents}"
+                                # Create parameter set identifier
+                                parameter_set_id = f"n{network_size}_w{workload_size}_q{query_length}_pf{parent_factor}_p{max_parents}"
 
-                    # Create configuration for this parameter combination
-                    config = SimulationConfig(
-                        network_size=network_size,
-                        node_event_ratio=node_event_ratio,
-                        num_event_types=num_event_types,
-                        event_skew=event_skew,
-                        max_parents=max_parents,
-                        parent_factor=parent_factor,
-                        query_size=workload_size,
-                        query_length=query_length,
-                        xi=xi,
-                        mode=mode,
-                        latency_threshold=latency_threshold,
-                    )
+                                # Create configuration for this parameter combination
+                                config = SimulationConfig(
+                                    network_size=network_size,
+                                    node_event_ratio=node_event_ratio,
+                                    num_event_types=num_event_type,
+                                    event_skew=event_skew,
+                                    max_parents=max_parents,
+                                    parent_factor=parent_factor,
+                                    query_size=workload_size,
+                                    query_length=query_length,
+                                    xi=xi,
+                                    mode=mode,
+                                    latency_threshold=latency_threshold,
+                                )
 
-                    # Generate multiple runs for this combination
-                    for run_num in range(runs_per_combination):
-                        job = SimulationJob(
-                            job_id=job_id,
-                            config=config,
-                            parameter_set_id=f"{parameter_set_id}_run{run_num + 1}",
-                        )
-                        jobs.append(job)
-                        job_id += 1
+                                # Generate multiple runs for this combination
+                                for run_num in range(runs_per_combination):
+                                    job = SimulationJob(
+                                        job_id=job_id,
+                                        config=config,
+                                        parameter_set_id=f"{parameter_set_id}_run{run_num + 1}",
+                                    )
+                                    jobs.append(job)
+                                    job_id += 1
 
     total_jobs = len(jobs)
     expected_jobs = (
@@ -523,6 +526,9 @@ def run_parameter_study(
         * len(workload_sizes)
         * len(parent_factors)
         * len(query_lengths)
+        * len(node_event_ratios)
+        * len(num_event_types)
+        * len(event_skews)
         * runs_per_combination
     )
 
@@ -563,16 +569,16 @@ def main() -> None:
 
     # Option 2: Full parameter study (active by default)
     run_parameter_study(
-        network_sizes=[10, 30, 50, 100, 200, 500, 1000,],
-        workload_sizes=[3, 5, 8],
-        parent_factors=[1.8],
+        network_sizes=[10, 30, 50, 100, 200],
+        workload_sizes=[3, 5, 8, 10],
+        parent_factors=[1.8, 1.2, 2.2],
         query_lengths=[3, 5, 8],
         runs_per_combination=50,
-        node_event_ratio=0.5,
-        num_event_types=6,
-        event_skew=2.0,
+        node_event_ratios=[0.3, 0.5, 0.7],
+        num_event_types=[4, 6, 8, 10],
+        event_skews=[1.0, 2.0, 3.0],
         mode=SimulationMode.RANDOM,
-        enable_parallel=False,
+        enable_parallel=True,
         max_workers=14,
         xi=0,
     )

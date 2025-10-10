@@ -490,6 +490,7 @@ def determine_randomized_distribution_push_pull_costs(
         for current_node in query.node_placement:
             already_received_eventtypes[current_node] = []
     max_latency = (None, 0)  # (node, latency)
+    received_eventtypes = []  # Initialize to handle empty queries case
     # print(f"[DEBUG] Processing {len(queries)} queries")
     # sort queries by size:
     try:

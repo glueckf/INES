@@ -12,7 +12,7 @@ import math
 import time
 from enum import Enum
 from dataclasses import dataclass
-from typing import Dict
+from typing import Any, Dict, Optional
 
 import networkx as nx
 import numpy as np
@@ -227,6 +227,8 @@ def calculate_prepp_from_cloud(context, reused_buffer_section):
     try:
         print("--- Running Solely PrePP from Cloud Scenario ---")
 
+        prepp_start_time = time.time()
+
         # Convert reused_buffer_section to ensure no numpy types in output
         # The reused section may contain numpy type representations like 'np.int64(113)'
         # which cannot be parsed by prepp.py. Replace them with plain numbers.
@@ -350,11 +352,13 @@ def calculate_prepp_from_cloud(context, reused_buffer_section):
             query_processing_latency = output_rate * input_ratio
             processing_latency += query_processing_latency
 
+        prepp_end_time = time.time()
+
         return {
             "cost": exact_cost,
             "transmission_latency": max_latency,
             "processing_latency": processing_latency,
-            "computing_time": computing_time,
+            "computing_time": prepp_end_time - prepp_start_time,
             "status": "success"
         }
     except Exception as e:
@@ -406,7 +410,7 @@ def update_results_for_topology(context, ines_results, inev_results):
         ines_max_latency_tuple = ines_results[2]
 
         # Calculate INES latencies (returns tuple of transmission and processing latencies)
-        ines_transmission_latency, ines_processing_latency = calculate_ines_max_latency(context, ines_results)
+        ines_transmission_latency_per_query, ines_processing_latency = calculate_ines_max_latency(context, ines_results)
 
         # Extract INEv data
         inev_total_costs = inev_results['cost']
@@ -439,8 +443,22 @@ def update_results_for_topology(context, ines_results, inev_results):
             additional_latency = context.allPairs[node_with_max_latency][CLOUD_NODE_ID]
 
         # Update transmission latency for both strategies (add cloud transmission)
-        ines_transmission_latency += additional_latency
         inev_transmission_latency += additional_latency
+
+        ines_transmission_latency = 0.0
+        for query in query_workload:
+            transmission_latency = ines_transmission_latency_per_query.get(query, 0.0)
+            projections = context.eval_plan[0].projections
+            for proj in projections:
+                query_name = proj.name.name
+                if query_name == query:
+                    sinks = proj.name.sinks
+                    max_distance = 0
+                    for sink in sinks:
+                        max_distance = max(max_distance, context.allPairs[sink][CLOUD_NODE_ID])
+                    transmission_latency += max_distance
+            ines_transmission_latency = max(ines_transmission_latency, transmission_latency)
+            print("pass")
 
         # Create return dictionaries
         ines_dict = {
@@ -703,146 +721,127 @@ def generate_hardcoded_selectivities():
 
 def calculate_ines_max_latency(context, ines_results):
     """
-    Calculate the maximum latency for INES strategy considering both transmission
-    and processing latencies across the query dependency tree.
+    Reconstruct critical-path latency for INES using Kraken's latency model.
 
-    Args:
-        context: Simulation context with workload and projection data
-        ines_results: INES results containing acquisition steps
-
-    Returns:
-        Tuple of (max_transmission_latency, max_processing_latency) across all queries
+    Returns
+        Tuple:
+            dict(query -> critical path latency without cloud hop)
+            float total processing latency across queries (for reporting)
     """
     acquisition_steps = ines_results[6]
+    config = getattr(context, "config", None)
+    xi = getattr(config, "xi", 1.0)
+    if xi is None:
+        xi = 1.0
 
-    # Extract transmission latency and input costs per projection
-    transmission_and_processing_latency_per_projection = {}
-    for projection in context.processing_order:
-        proj_str = str(projection)
+    processing_order_objects = list(getattr(context, "processing_order", []))
+    processing_order = [str(proj) for proj in processing_order_objects]
+    key_to_projection = {str(proj): proj for proj in processing_order_objects}
 
-        # Check if acquisition steps exist for this projection
-        if proj_str not in acquisition_steps:
+    # Build per-projection latency metrics from acquisition steps
+    per_projection_metrics = {}
+    for proj_key in processing_order:
+        steps = acquisition_steps.get(proj_key)
+        if not steps or (isinstance(steps, dict) and "error" in steps):
             continue
 
-        steps = acquisition_steps[proj_str]
-
-        # Handle error case where steps is a dict with "error" key
-        if isinstance(steps, dict) and "error" in steps:
-            continue
-
-        total_transmission_latency = 0.0
-        inputs_cost = 0.0
-
-        # Access the AcquisitionSet.steps attribute
         try:
+            total_transmission_latency = 0.0
+            inputs_cost = 0.0
             for step in steps.steps:
                 total_transmission_latency += step.total_latency
-                # Sum up pull response costs to get total inputs
                 inputs_cost += step.pull_response.cost
-        except (AttributeError, TypeError) as e:
-            # If steps doesn't have .steps attribute or iteration fails, skip
+        except (AttributeError, TypeError):
             continue
 
-        transmission_and_processing_latency_per_projection[projection] = (
-            total_transmission_latency,
-            inputs_cost
-        )
+        projection_obj = key_to_projection.get(proj_key, proj_key)
 
-    # Recursive function to calculate cumulative latencies for a projection
-    def calculate_cumulative_latency(projection, memo=None):
-        """
-        Recursively calculate transmission and processing latency for a projection.
+        sum_of_inputs = context.sum_of_input_rates_per_query.get(projection_obj)
+        if sum_of_inputs is None:
+            sum_of_inputs = context.sum_of_input_rates_per_query.get(proj_key)
+        if sum_of_inputs is None:
+            sum_of_inputs = 0.0
 
-        Returns:
-            Tuple of (transmission_latency, processing_latency)
-        """
-        if memo is None:
-            memo = {}
+        output_rate_tuple = context.h_projrates.get(projection_obj)
+        if output_rate_tuple is None:
+            output_rate_tuple = context.h_projrates.get(proj_key)
 
-        if projection in memo:
-            return memo[projection]
-
-        # Get transmission latency and inputs for this projection
-        transmission_latency, inputs_cost = transmission_and_processing_latency_per_projection.get(
-            projection, (0.0, 0.0)
-        )
-
-        # Get dependencies for this projection
-        dependencies = context.h_combiDict.get(projection, [])
-
-        # Convert list dependencies to strings for hashable keys
-        normalized_dependencies = []
-        for dep in dependencies:
-            if isinstance(dep, list):
-                # Convert list to string representation
-                normalized_dependencies.append(str(dep))
-            else:
-                normalized_dependencies.append(dep)
-
-        # Check if this projection has only primitive events (leaf node)
-        has_only_primitives = all(
-            isinstance(dep, str) and len(dep) == 1  # Primitive events are single chars
-            for dep in normalized_dependencies
-        )
-
-        if has_only_primitives or not normalized_dependencies:
-            # Leaf node: calculate processing latency
-            sum_of_inputs = context.sum_of_input_rates_per_query.get(projection, 1.0)
-            output_rate = context.h_projrates.get(projection, (1.0, 1.0))[1]
-
-            # Processing latency = output_rate * (inputs / sum_of_inputs)
-            if sum_of_inputs > 0:
-                processing_latency = output_rate * (inputs_cost / sum_of_inputs)
-            else:
-                processing_latency = 0.0
-
-            result = (transmission_latency, processing_latency)
-        else:
-            # Intermediate node: aggregate from children
-            child_transmission_latencies = []
-            child_processing_latencies = []
-
-            for dependency in normalized_dependencies:
-                if dependency in transmission_and_processing_latency_per_projection:
-                    child_trans, child_proc = calculate_cumulative_latency(dependency, memo)
-                    child_transmission_latencies.append(child_trans)
-                    child_processing_latencies.append(child_proc)
-
-            # Transmission latency = max of all child transmission latencies
-            max_child_transmission = max(child_transmission_latencies) if child_transmission_latencies else 0.0
-
-            # Processing latency = sum of all child processing latencies + own processing
-            sum_child_processing = sum(child_processing_latencies) if child_processing_latencies else 0.0
-
-            # Calculate own processing latency
-            sum_of_inputs = context.sum_of_input_rates_per_query.get(projection, 1.0)
-            output_rate = context.h_projrates.get(projection, (1.0, 1.0))[1]
-
-            if sum_of_inputs > 0:
-                own_processing_latency = output_rate * (inputs_cost / sum_of_inputs)
-            else:
-                own_processing_latency = 0.0
-
-            result = (
-                max(transmission_latency, max_child_transmission),
-                sum_child_processing + own_processing_latency
+        output_rate = 0.0
+        if output_rate_tuple:
+            output_rate = (
+                output_rate_tuple[1]
+                if isinstance(output_rate_tuple, (list, tuple)) and len(output_rate_tuple) > 1
+                else output_rate_tuple[0]
+                if isinstance(output_rate_tuple, (list, tuple)) and output_rate_tuple
+                else float(output_rate_tuple)
             )
 
-        memo[projection] = result
-        return result
+        if sum_of_inputs > 0:
+            processing_latency = output_rate * (inputs_cost / sum_of_inputs)
+        else:
+            processing_latency = 0.0
 
-    # Calculate latencies for each query in workload (keep them separate)
-    max_transmission_latency = 0.0
-    max_processing_latency = 0.0
+        per_projection_metrics[proj_key] = {
+            "transmission": total_transmission_latency,
+            "processing": processing_latency,
+        }
 
+    # Prepare dependency lookup using string keys for consistency
+    dependency_map = {}
+    for projection in getattr(context, "processing_order", []):
+        proj_key = str(projection)
+        deps = context.h_combiDict.get(projection, [])
+        dependency_map[proj_key] = [
+            str(dep) if not isinstance(dep, str) else dep for dep in deps
+        ]
+
+    processing_latency_cache = {}
+    critical_latency_cache = {}
+
+    def calculate_processing_latency(proj_key):
+        if proj_key in processing_latency_cache:
+            return processing_latency_cache[proj_key]
+
+        own_processing = per_projection_metrics.get(proj_key, {}).get("processing", 0.0)
+        total = own_processing
+        for predecessor in dependency_map.get(proj_key, []):
+            total += calculate_processing_latency(predecessor)
+        processing_latency_cache[proj_key] = total
+        return total
+
+    def calculate_critical_latency(proj_key):
+        if proj_key in critical_latency_cache:
+            return critical_latency_cache[proj_key]
+
+        metrics = per_projection_metrics.get(proj_key, {"transmission": 0.0, "processing": 0.0})
+        transmission_latency = metrics["transmission"]
+        processing_latency = metrics["processing"]
+
+        latest_predecessor_latency = 0.0
+        for predecessor in dependency_map.get(proj_key, []):
+            latest_predecessor_latency = max(
+                latest_predecessor_latency,
+                calculate_critical_latency(predecessor),
+            )
+
+        critical_latency = (processing_latency * xi) + transmission_latency + latest_predecessor_latency
+        critical_latency_cache[proj_key] = critical_latency
+        return critical_latency
+
+    # Extract per-query critical latencies
+    critical_latency_per_query = {}
+    total_processing_latency = 0.0
     for query in context.query_workload:
-        if query in transmission_and_processing_latency_per_projection:
-            transmission_latency, processing_latency = calculate_cumulative_latency(query)
-            max_transmission_latency = max(max_transmission_latency, transmission_latency)
-            max_processing_latency = max(max_processing_latency, processing_latency)
+        query_key = str(query)
+        latency_value = calculate_critical_latency(query_key)
+        critical_latency_per_query[query_key] = latency_value
+        try:
+            critical_latency_per_query[query] = latency_value
+        except TypeError:
+            pass
+        total_processing_latency += calculate_processing_latency(query_key)
 
-    # Return as tuple: (transmission_latency, processing_latency) - DO NOT ADD THEM
-    return (max_transmission_latency, max_processing_latency)
+    return critical_latency_per_query, total_processing_latency
 
 def generate_hardcoded_primitive_events():
     """
@@ -1124,8 +1123,11 @@ class Simulation:
 
             # ----- INEV COMPUTATION -----#
             print("--- Running INEv Computation ---")
+            inev_start_time = time.time()
+            ines_start_time = inev_start_time  # For consistency in logging
             (self.eval_plan, self.central_eval_plan, self.experiment_result,
              self.results, self.inev_results) = calculate_operatorPlacement(self, "test", 0)
+            inev_end_time = time.time()
             print("--- INEV COMPUTATION COMPLETE ---")
 
             # ----- INES COMPUTATION (using INEv results) -----#
@@ -1141,6 +1143,9 @@ class Simulation:
 
             # Update both INES and INEv results with topology adjustments
             ines_dict, inev_dict = update_results_for_topology(self, ines_results, self.inev_results)
+            ines_end_time = time.time()
+            inev_dict["computing_time"] = inev_end_time - inev_start_time
+            ines_dict["computing_time"] = ines_end_time - ines_start_time
             self.ines_results = ines_dict
             self.inev_results = inev_dict
 
@@ -1181,144 +1186,53 @@ class Simulation:
         try:
             print("--- Writing unified results to parquet ---")
 
-            # Prepare results data
-            results_data = []
+            row: Dict[str, Any] = {}
 
-            # 1. All Push Results
-            if self.all_push_results:
-                results_data.append({
-                    "strategy_name": "all_push",
-                    "cost": self.all_push_results.get("cost", 0.0),
-                    "transmission_latency": self.all_push_results.get("transmission_latency", 0.0),
-                    "processing_latency": self.all_push_results.get("processing_latency", 0.0),
-                    "computing_time": self.all_push_results.get("computing_time", 0.0),
-                    "status": self.all_push_results.get("status", "unknown"),
-                    # Extended metrics (None for non-Kraken strategies)
-                    "workload_cost": None,
-                    "num_placements": None,
-                    "placements_at_cloud": None,
-                    "average_cost_per_placement": None,
-                })
+            def populate_basic(prefix: str, result: Optional[Dict[str, Any]]):
+                if not result:
+                    return
+                row[f"{prefix}_status"] = result.get("status", "unknown")
+                row[f"{prefix}_cost"] = result.get("cost")
+                row[f"{prefix}_transmission_latency"] = result.get("transmission_latency")
+                row[f"{prefix}_processing_latency"] = result.get("processing_latency")
+                row[f"{prefix}_computing_time"] = result.get("computing_time")
 
-            # 2. INEv Results
-            if self.inev_results:
-                results_data.append({
-                    "strategy_name": "inev",
-                    "cost": self.inev_results.get("cost", 0.0),
-                    "transmission_latency": self.inev_results.get("transmission_latency", 0.0),
-                    "processing_latency": self.inev_results.get("processing_latency", 0.0),
-                    "computing_time": self.inev_results.get("computing_time", 0.0),
-                    "status": self.inev_results.get("status", "unknown"),
-                    "workload_cost": None,
-                    "num_placements": None,
-                    "placements_at_cloud": None,
-                    "average_cost_per_placement": None,
-                })
+            populate_basic("all_push", self.all_push_results)
+            populate_basic("inev", self.inev_results)
+            populate_basic("ines", self.ines_results)
+            populate_basic("prepp", self.prepp_from_cloud_result)
 
-            # 3. INES Results
-            if self.ines_results:
-                results_data.append({
-                    "strategy_name": "ines",
-                    "cost": self.ines_results.get("cost", 0.0),
-                    "transmission_latency": self.ines_results.get("transmission_latency", 0.0),
-                    "processing_latency": self.ines_results.get("processing_latency", 0.0),
-                    "computing_time": self.ines_results.get("computing_time", 0.0),
-                    "status": self.ines_results.get("status", "unknown"),
-                    "workload_cost": None,
-                    "num_placements": None,
-                    "placements_at_cloud": None,
-                    "average_cost_per_placement": None,
-                })
-
-            # 4. PrePP from Cloud Results
-            if self.prepp_from_cloud_result:
-                results_data.append({
-                    "strategy_name": "prepp_from_cloud",
-                    "cost": self.prepp_from_cloud_result.get("cost", 0.0),
-                    "transmission_latency": self.prepp_from_cloud_result.get("transmission_latency", 0.0),
-                    "processing_latency": self.prepp_from_cloud_result.get("processing_latency", 0.0),
-                    "computing_time": self.prepp_from_cloud_result.get("computing_time", 0.0),
-                    "status": self.prepp_from_cloud_result.get("status", "unknown"),
-                    "workload_cost": None,
-                    "num_placements": None,
-                    "placements_at_cloud": None,
-                    "average_cost_per_placement": None,
-                })
-
-            # 5. Kraken Results (with extended metrics)
             if self.kraken_results and "strategies" in self.kraken_results:
                 for strategy_name, strategy_result in self.kraken_results["strategies"].items():
-                    if strategy_result["status"] == "success":
-                        metrics = strategy_result["metrics"]
-                        results_data.append({
-                            "strategy_name": f"kraken_{strategy_name}",
-                            "cost": metrics.get("total_cost", 0.0),
-                            "transmission_latency": metrics.get("max_latency", 0.0),
-                            "processing_latency": metrics.get("cumulative_processing_latency", 0.0),
-                            "computing_time": strategy_result.get("execution_time_seconds", 0.0),
-                            "status": "success",
-                            # Extended Kraken metrics
-                            "workload_cost": metrics.get("workload_cost", None),
-                            "num_placements": metrics.get("num_placements", None),
-                            "placements_at_cloud": metrics.get("placements_at_cloud", None),
-                            "average_cost_per_placement": metrics.get("average_cost_per_placement", None),
-                        })
-                    else:
-                        # Failed Kraken strategy
-                        results_data.append({
-                            "strategy_name": f"kraken_{strategy_name}",
-                            "cost": None,
-                            "transmission_latency": None,
-                            "processing_latency": None,
-                            "computing_time": strategy_result.get("execution_time_seconds", 0.0),
-                            "status": "failed",
-                            "workload_cost": None,
-                            "num_placements": None,
-                            "placements_at_cloud": None,
-                            "average_cost_per_placement": None,
-                        })
+                    prefix = f"kraken_{strategy_name}"
+                    status = strategy_result.get("status", "unknown")
+                    metrics = strategy_result.get("metrics", {}) if status == "success" else {}
 
-            # Check if we have any results to write
-            if not results_data:
+                    row[f"{prefix}_status"] = status
+                    row[f"{prefix}_cost"] = metrics.get("total_cost")
+                    row[f"{prefix}_transmission_latency"] = metrics.get("max_latency")
+                    row[f"{prefix}_processing_latency"] = metrics.get("cumulative_processing_latency")
+                    row[f"{prefix}_computing_time"] = strategy_result.get("execution_time_seconds")
+                    row[f"{prefix}_workload_cost"] = metrics.get("workload_cost")
+                    row[f"{prefix}_num_placements"] = metrics.get("num_placements")
+                    row[f"{prefix}_placements_at_cloud"] = metrics.get("placements_at_cloud")
+                    row[f"{prefix}_average_cost_per_placement"] = metrics.get("average_cost_per_placement")
+
+            if not row:
                 print("--- No results to write ---")
                 return
 
-            # Create DataFrame
-            df = pd.DataFrame(results_data)
-
-            # Define column order
-            columns = [
-                "strategy_name",
-                "status",
-                "cost",
-                "transmission_latency",
-                "processing_latency",
-                "computing_time",
-                "workload_cost",
-                "num_placements",
-                "placements_at_cloud",
-                "average_cost_per_placement",
-            ]
-            df = df[columns]
-
-            # Convert to PyArrow table
+            df = pd.DataFrame([row])
             table = pa.Table.from_pandas(df, preserve_index=False)
 
-            # Write to parquet using the same directory structure as Kraken
             output_dir = Path("kraken2_0/result/unified_results.parquet")
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Write to dataset (enables append operations)
             pq.write_to_dataset(table, root_path=str(output_dir))
 
             print(f"--- Results written to {output_dir} ---")
-            print(f"--- Total strategies recorded: {len(results_data)} ---")
-
         except Exception as e:
-            logger.error(
-                msg=e,
-                exc_info=e
-            )
+            logger.error(msg=e, exc_info=e)
     # ==================== HELPER METHODS ====================
 
     def _calculate_sum_of_primitive_input_rates_per_query(self) -> Dict:
