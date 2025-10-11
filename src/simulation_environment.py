@@ -32,10 +32,10 @@ from operatorplacement import calculate_operatorPlacement
 from prepp import generate_prePP
 from generateEvalPlan import generate_eval_plan
 
-
 # ==================== SIMULATION CONFIGURATION ====================
 
 logger = logging.getLogger(__name__)
+
 
 class SimulationMode(Enum):
     """Defines different simulation configuration modes for reproducible experiments."""
@@ -144,14 +144,9 @@ def compute_all_push(context):
 
         destination = 0  # Cloud node
 
-        # Pre-compute: Get all event types and processing latency in one pass
+        # Pre-compute: Get all event types
         eventtypes = set()
-        processing_latency = 0
         for query in context.query_workload:
-            qkey = str(query)
-            # Use .get() with default to handle missing queries
-            query_rates = context.h_projrates.get(qkey, (0.0, 0.0))
-            processing_latency += query_rates[1]
             eventtypes.update(query.leafs())
 
         eventtypes = list(eventtypes)  # Convert back to list if needed
@@ -162,10 +157,12 @@ def compute_all_push(context):
         # Calculate costs for central placement at cloud (node 0)
         mycosts = 0
         routing_dict = {}
+        event_costs = {}  # Track costs per event type for processing latency calculation
 
         for eventtype in eventtypes:
             event_rate = context.h_rates_data[eventtype]
             routing_dict[eventtype] = {}
+            event_type_cost = 0
 
             for etb in context.h_IndexEventNodes[eventtype]:
                 # Get event node indices directly
@@ -184,13 +181,35 @@ def compute_all_push(context):
                             best_source = node_id
 
                 # Add transmission cost: rate × distance
-                mycosts += event_rate * min_distance
+                cost = event_rate * min_distance
+                mycosts += cost
+                event_type_cost += cost
 
                 # Compute shortest path only once per event instance
                 shortest_path = nx.shortest_path(
                     context.graph, best_source, destination, method="dijkstra"
                 )
                 routing_dict[eventtype][etb] = shortest_path
+
+            event_costs[eventtype] = event_type_cost
+
+        # Calculate processing latency using the correct formula
+        processing_latency = 0
+        for query in context.query_workload:
+            qkey = str(query)
+            query_output_rate = context.h_projrates.get(qkey, (0.0, 0.0))[1]
+
+            # Sum costs for events used by this query
+            query_event_cost = sum(
+                event_costs.get(event, 0.0) for event in query.leafs()
+            )
+
+            # Get sum of primitive input rates for this query
+            sum_input_rates = context.sum_of_input_rates_per_query.get(query, 1.0)
+
+            # Calculate processing latency: output_rate × (costs / sum_input_rates)
+            if sum_input_rates > 0:
+                processing_latency += query_output_rate * (query_event_cost / sum_input_rates)
 
         # Longest path is simply the maximum distance from destination
         longest_path = max(dest_distances)
@@ -255,7 +274,6 @@ def calculate_prepp_from_cloud(context, reused_buffer_section):
             if query not in context.query_workload:
                 continue
             primitive_events = context.h_primitive_events[str(query)]
-
 
             # Build primitive events list with proper formatting
             list_str = "; ".join(str(event) for event in primitive_events)
@@ -366,7 +384,6 @@ def calculate_prepp_from_cloud(context, reused_buffer_section):
             msg=e,
             exc_info=True,
         )
-
 
 
 def update_results_for_topology(context, ines_results, inev_results):
@@ -483,6 +500,7 @@ def update_results_for_topology(context, ines_results, inev_results):
             msg=e,
             exc_info=True
         )
+
 
 # ==================== HARDCODED TOPOLOGY/WORKLOAD FUNCTIONS ====================
 
@@ -719,6 +737,7 @@ def generate_hardcoded_selectivities():
 
     return selectivities, selectivitiesExperimentData
 
+
 def calculate_ines_max_latency(context, ines_results):
     """
     Reconstruct critical-path latency for INES using Kraken's latency model.
@@ -831,6 +850,15 @@ def calculate_ines_max_latency(context, ines_results):
     # Extract per-query critical latencies
     critical_latency_per_query = {}
     total_processing_latency = 0.0
+
+    # Calculate total processing latency for ALL projections (not just final queries)
+    # This matches Kraken's logic of summing individual processing latencies for all placements
+    for proj_key in processing_order:
+        # Get the individual processing latency for this projection
+        individual_processing = per_projection_metrics.get(proj_key, {}).get("processing", 0.0)
+        total_processing_latency += individual_processing
+
+    # Still calculate critical latency per query for transmission latency reporting
     for query in context.query_workload:
         query_key = str(query)
         latency_value = calculate_critical_latency(query_key)
@@ -839,9 +867,9 @@ def calculate_ines_max_latency(context, ines_results):
             critical_latency_per_query[query] = latency_value
         except TypeError:
             pass
-        total_processing_latency += calculate_processing_latency(query_key)
 
     return critical_latency_per_query, total_processing_latency
+
 
 def generate_hardcoded_primitive_events():
     """
@@ -1233,6 +1261,7 @@ class Simulation:
             print(f"--- Results written to {output_dir} ---")
         except Exception as e:
             logger.error(msg=e, exc_info=e)
+
     # ==================== HELPER METHODS ====================
 
     def _calculate_sum_of_primitive_input_rates_per_query(self) -> Dict:

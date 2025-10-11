@@ -659,7 +659,7 @@ def ComputeSingleSinkPlacement(
     # Calculate the processing latency
     output_rate = projrates[projection][1]
     baseline_input_events = self.sum_of_input_rates_per_query[projection]
-    actual_input_rates = 0
+    actual_input_costs = 0
 
     # add filters of projections to eventtpes in combi, if filters added, use costs of filter -> compute costs for single etbs of projrates
     intercombi = []
@@ -762,16 +762,16 @@ def ComputeSingleSinkPlacement(
 
                 elif eventtype in rates.keys():  # case primitive event
                     rate = rates[eventtype]
-                    actual_input_rates += rate
                     distance = allPairs[destination][mySource]
                     etb_cost = rate * distance
+                    actual_input_costs += etb_cost
 
                 else:  # case projection
                     num = NumETBsByKey(etb, eventtype, IndexEventNodes)
                     proj_rate = projrates[eventtype][1]
-                    actual_input_rates += num * proj_rate
                     distance = allPairs[destination][mySource]
                     etb_cost = proj_rate * distance * num
+                    actual_input_costs += etb_cost
 
                 eventtype_cost += etb_cost
 
@@ -830,7 +830,7 @@ def ComputeSingleSinkPlacement(
     myProjection.addSpawned([IndexEventNodes[projection][0]])  #!
 
     # Calculate the processing latency
-    processing_latency = output_rate * (actual_input_rates / baseline_input_events)
+    processing_latency = output_rate * (actual_input_costs / baseline_input_events)
 
     return costs, node, longestPath, myProjection, newInstances, Filters, processing_latency
 

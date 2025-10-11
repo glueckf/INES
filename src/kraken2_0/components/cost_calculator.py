@@ -534,19 +534,14 @@ class CostCalculator:
 
         # Calculate the processing latency
         # The ratio is: (sum of pull response costs) / (sum of all primitive input rates for query)
-        # We divide by the latency to convert cost back to rate since the cost here is in terms of hops * rate
-        # And latency = hops
+        # where costs = rate × distance, creating a weighted average by transmission distance
 
-        try:
-            sum_of_input_rates_for_strategy = sum((step.pull_response.cost/step.pull_response.latency) for step in acquisition_set.steps)
-        except ZeroDivisionError:
-            sum_of_input_rates_for_strategy = 0.0
-
+        sum_of_input_costs_for_strategy = sum(step.pull_response.cost for step in acquisition_set.steps)
         sum_of_input_rates_for_primitive_strategy = self.params["sum_of_input_rates_per_query"][p]
 
-        # Calculate the input ratio based on actual primitive event rates
+        # Calculate the input ratio based on transmission costs
         input_ratio = (
-            sum_of_input_rates_for_strategy / sum_of_input_rates_for_primitive_strategy
+            sum_of_input_costs_for_strategy / sum_of_input_rates_for_primitive_strategy
             if sum_of_input_rates_for_primitive_strategy > 0
             else 0.0
         )
