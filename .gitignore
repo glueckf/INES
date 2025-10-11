@@ -6,3 +6,5 @@ CLAUDE.md
 
 *.parquet
 *.csv
+ruff.xml
+copilot.*
