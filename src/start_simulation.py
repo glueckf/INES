@@ -567,37 +567,37 @@ def main() -> None:
     #     num_runs=1
     # )
 
-    # # Option 2: Full parameter study (active by default)
-    # run_parameter_study(
-    #     network_sizes=[10, 30, 50, 100, 200],
-    #     workload_sizes=[3, 5, 8, 10],
-    #     parent_factors=[1.8, 1.2, 2.2],
-    #     query_lengths=[3, 5, 8],
-    #     runs_per_combination=50,
-    #     node_event_ratios=[0.3, 0.5, 0.7],
-    #     num_event_types=[4, 6, 8, 10],
-    #     event_skews=[1.0, 2.0, 3.0],
-    #     mode=SimulationMode.RANDOM,
-    #     enable_parallel=True,
-    #     max_workers=14,
-    #     xi=0,
-    # )
-
+    # Option 2: Full parameter study (active by default)
     run_parameter_study(
-        network_sizes=[30],
-        workload_sizes=[5],
-        parent_factors=[1.8],
-        query_lengths=[5],
-        runs_per_combination=1,
-        node_event_ratios=[0.5],
-        num_event_types=[6],
-        event_skews=[2.0],
-        latency_threshold=None,
-        mode=SimulationMode.FULLY_DETERMINISTIC,
-        enable_parallel=False,
+        network_sizes=[10, 30, 50, 100, 200],
+        workload_sizes=[3, 5, 8, 10],
+        parent_factors=[1.8, 1.2, 2.2],
+        query_lengths=[3, 5, 8],
+        runs_per_combination=50,
+        node_event_ratios=[0.3, 0.5, 0.7],
+        num_event_types=[4, 6, 8, 10],
+        event_skews=[1.0, 2.0, 3.0],
+        mode=SimulationMode.RANDOM,
+        enable_parallel=True,
         max_workers=14,
         xi=0,
     )
+
+    # run_parameter_study(
+    #     network_sizes=[30],
+    #     workload_sizes=[5],
+    #     parent_factors=[1.8],
+    #     query_lengths=[5],
+    #     runs_per_combination=1,
+    #     node_event_ratios=[0.5],
+    #     num_event_types=[6],
+    #     event_skews=[2.0],
+    #     latency_threshold=None,
+    #     mode=SimulationMode.FULLY_DETERMINISTIC,
+    #     enable_parallel=False,
+    #     max_workers=14,
+    #     xi=0,
+    # )
 
 
 if __name__ == "__main__":
