@@ -1244,13 +1244,6 @@ class Simulation:
             populate_basic("ines", self.ines_results)
             populate_basic("prepp", self.prepp_from_cloud_result)
 
-            def add_timing_metrics(name: str, value: Optional[float]) -> None:
-                """Record timing metrics with both 'good' and 'usefull' labels."""
-                if value is None:
-                    return
-                row[f"good_{name}"] = value
-                row[f"usefull_{name}"] = value
-
             if self.kraken_results and "strategies" in self.kraken_results:
                 for strategy_name, strategy_result in self.kraken_results["strategies"].items():
                     prefix = f"kraken_{strategy_name}"
@@ -1282,9 +1275,12 @@ class Simulation:
             row["algorithm"] = self.config.algorithm.value if hasattr(self.config.algorithm, 'value') else str(self.config.algorithm)
             row["graph_density"] = getattr(self, 'graph_density', None)
 
-            add_timing_metrics("entire_simulation_time", getattr(self, "entire_simulation_time", None))
-            add_timing_metrics("setup_time", getattr(self, "setup_time", None))
-            add_timing_metrics("combigen_computation_time", getattr(self, "combigen_computation_time", None))
+            if getattr(self, "entire_simulation_time", None) is not None:
+                row["good_entire_simulation_time"] = self.entire_simulation_time
+            if getattr(self, "setup_time", None) is not None:
+                row["good_setup_time"] = self.setup_time
+            if getattr(self, "combigen_computation_time", None) is not None:
+                row["usefull_combigen_computation_time"] = self.combigen_computation_time
 
             if not row:
                 print("--- No results to write ---")
