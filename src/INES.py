@@ -57,6 +57,7 @@ class SimulationConfig:
     # Latency Awareness
     xi: float = 0.0
     latency_threshold: float = None  # If None, latency is not considered
+    cost_weight: float = 0.5
 
     # Simulation mode
     mode: SimulationMode = SimulationMode.RANDOM

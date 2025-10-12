@@ -584,15 +584,16 @@ def main() -> None:
     # )
 
     run_parameter_study(
-        network_sizes=[10],
-        workload_sizes=[3],
+        network_sizes=[30],
+        workload_sizes=[5],
         parent_factors=[1.8],
-        query_lengths=[3],
+        query_lengths=[5],
         runs_per_combination=1,
-        node_event_ratios=[0.3],
-        num_event_types=[4],
-        event_skews=[1.0],
-        mode=SimulationMode.RANDOM,
+        node_event_ratios=[0.5],
+        num_event_types=[6],
+        event_skews=[2.0],
+        latency_threshold=None,
+        mode=SimulationMode.FULLY_DETERMINISTIC,
         enable_parallel=False,
         max_workers=14,
         xi=0,

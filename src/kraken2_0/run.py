@@ -187,8 +187,10 @@ def _gather_problem_parameters(ines_context: Any) -> Dict[str, Any]:
         # Simulation mode
         "simulation_mode": ines_context.config.mode,
         # Latency
-        "latency_threshold": ines_context.config.latency_threshold,
+        "latency_threshold": ines_context.latency_threshold,
         "latency_weighting_factor": ines_context.config.xi,
+        "cost_weight": getattr(ines_context.config, "cost_weight", 0.5),
+        "latency_weight": 1 - getattr(ines_context.config, "cost_weight", 0.5)
     }
 
     return context
@@ -403,6 +405,10 @@ def _prepare_run_results_summary(
 
     # Extract config information once for all results
     config = ines_context.config
+    cost_weight = getattr(config, "cost_weight", 0.5)
+    cost_weight = max(0.0, min(cost_weight, 1.0))
+    latency_weight = 1.0 - cost_weight
+
     config_data = {
         "network_size": config.network_size,
         "event_skew": config.event_skew,
@@ -414,6 +420,8 @@ def _prepare_run_results_summary(
         "query_length": config.query_length,
         "xi": config.xi,
         "latency_threshold": config.latency_threshold,
+        "cost_weight": cost_weight,
+        "latency_weight": latency_weight,
         "mode": config.mode.value if hasattr(config.mode, 'value') else str(config.mode),
         "algorithm": config.algorithm.value if hasattr(config.algorithm, 'value') else str(config.algorithm),
         "graph_density": getattr(ines_context, 'graph_density', None),

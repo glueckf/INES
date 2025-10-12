@@ -12,7 +12,7 @@ import math
 import time
 from enum import Enum
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import networkx as nx
 import numpy as np
@@ -73,6 +73,7 @@ class SimulationConfig:
     # Latency Awareness
     xi: float = 0.0
     latency_threshold: float = None  # If None, latency is not considered
+    cost_weight: float = 0.5
 
     # Simulation mode
     mode: SimulationMode = SimulationMode.RANDOM
@@ -459,23 +460,40 @@ def update_results_for_topology(context, ines_results, inev_results):
             node_with_max_latency = ines_max_latency_tuple[0]
             additional_latency = context.allPairs[node_with_max_latency][CLOUD_NODE_ID]
 
+        projections = context.eval_plan[0].projections
+
+        def _lookup_base_latency(query_obj: Any) -> float:
+            """Fetch the pre-cloud critical latency for a query using multiple key styles."""
+            query_key = str(query_obj)
+            if query_key in ines_transmission_latency_per_query:
+                return float(ines_transmission_latency_per_query[query_key])
+            if query_obj in ines_transmission_latency_per_query:
+                return float(ines_transmission_latency_per_query[query_obj])
+            return 0.0
+
+        def _cloud_hop_latency(query_name: Any) -> float:
+            """Compute the max distance from placements to the cloud for a given query."""
+            max_distance = 0.0
+            for proj in projections:
+                current_name = proj.name.name
+                if current_name == query_name:
+                    sinks = getattr(proj.name, "sinks", []) or []
+                    for sink in sinks:
+                        max_distance = max(
+                            max_distance,
+                            float(context.allPairs[sink][CLOUD_NODE_ID]),
+                        )
+            return max_distance
+
         # Update transmission latency for both strategies (add cloud transmission)
         inev_transmission_latency += additional_latency
 
         ines_transmission_latency = 0.0
         for query in query_workload:
-            transmission_latency = ines_transmission_latency_per_query.get(query, 0.0)
-            projections = context.eval_plan[0].projections
-            for proj in projections:
-                query_name = proj.name.name
-                if query_name == query:
-                    sinks = proj.name.sinks
-                    max_distance = 0
-                    for sink in sinks:
-                        max_distance = max(max_distance, context.allPairs[sink][CLOUD_NODE_ID])
-                    transmission_latency += max_distance
-            ines_transmission_latency = max(ines_transmission_latency, transmission_latency)
-            print("pass")
+            base_latency = _lookup_base_latency(query)
+            cloud_latency = _cloud_hop_latency(query)
+            candidate_latency = base_latency + cloud_latency
+            ines_transmission_latency = max(ines_transmission_latency, candidate_latency)
 
         # Create return dictionaries
         ines_dict = {
@@ -641,41 +659,41 @@ def generate_hardcoded_workload():
 
     queries = []
 
-    # Query 1: Simple SEQ - SEQ(A, B, C)
-    q1 = SEQ(PrimEvent("A"), PrimEvent("B"), PrimEvent("C"))
-    q1 = number_children(q1)
-    queries.append(q1)
-
-    # Query 2:
-    q2 = AND(PrimEvent("A"), PrimEvent("B"))
-    q2 = number_children(q2)
-    queries.append(q2)
-
-    # Query 3: Simple AND with shared elements - AND(A, B, D)
-    q3 = AND(PrimEvent("A"), PrimEvent("B"), PrimEvent("D"))
-    q3 = number_children(q3)
-    queries.append(q3)
+    # # Query 1: Simple SEQ - SEQ(A, B, C)
+    # q1 = SEQ(PrimEvent("A"), PrimEvent("B"), PrimEvent("C"))
+    # q1 = number_children(q1)
+    # queries.append(q1)
     #
-    # Query 4: Medium complexity - SEQ(A, B, AND(E, F))
-    # Shares A, B with queries 1 and 2
-    q4 = SEQ(PrimEvent("A"), PrimEvent("B"), AND(PrimEvent("E"), PrimEvent("F")))
-    q4 = number_children(q4)
-    queries.append(q4)
+    # # Query 2:
+    # q2 = AND(PrimEvent("A"), PrimEvent("B"))
+    # q2 = number_children(q2)
+    # queries.append(q2)
     #
-    # Query 4: Complex nested - AND(SEQ(A, B, C), D, SEQ(E, F))
-    # Shares SEQ(A, B, C) with query 1, and has synergy with query 3
-    q5 = AND(
-        SEQ(PrimEvent("A"), PrimEvent("B"), PrimEvent("C")),
-        PrimEvent("D"),
-        SEQ(PrimEvent("E"), PrimEvent("F")),
-    )
-    q5 = number_children(q5)
-    queries.append(q5)
-
-    # Query 6: AND(A, B, C)
-    q6 = AND(PrimEvent("A"), PrimEvent("B"), PrimEvent("C"))
-    q6 = number_children(q6)
-    queries.append(q6)
+    # # Query 3: Simple AND with shared elements - AND(A, B, D)
+    # q3 = AND(PrimEvent("A"), PrimEvent("B"), PrimEvent("D"))
+    # q3 = number_children(q3)
+    # queries.append(q3)
+    # #
+    # # Query 4: Medium complexity - SEQ(A, B, AND(E, F))
+    # # Shares A, B with queries 1 and 2
+    # q4 = SEQ(PrimEvent("A"), PrimEvent("B"), AND(PrimEvent("E"), PrimEvent("F")))
+    # q4 = number_children(q4)
+    # queries.append(q4)
+    # #
+    # # Query 4: Complex nested - AND(SEQ(A, B, C), D, SEQ(E, F))
+    # # Shares SEQ(A, B, C) with query 1, and has synergy with query 3
+    # q5 = AND(
+    #     SEQ(PrimEvent("A"), PrimEvent("B"), PrimEvent("C")),
+    #     PrimEvent("D"),
+    #     SEQ(PrimEvent("E"), PrimEvent("F")),
+    # )
+    # q5 = number_children(q5)
+    # queries.append(q5)
+    #
+    # # Query 6: AND(A, B, C)
+    # q6 = AND(PrimEvent("A"), PrimEvent("B"), PrimEvent("C"))
+    # q6 = number_children(q6)
+    # queries.append(q6)
 
     return queries
 
@@ -764,14 +782,16 @@ def calculate_ines_max_latency(context, ines_results):
         if not steps or (isinstance(steps, dict) and "error" in steps):
             continue
 
-        try:
-            total_transmission_latency = 0.0
-            inputs_cost = 0.0
-            for step in steps.steps:
-                total_transmission_latency += step.total_latency
-                inputs_cost += step.pull_response.cost
-        except (AttributeError, TypeError):
-            continue
+        total_transmission_latency = 0.0
+        inputs_cost = 0.0
+        step_sequence = getattr(steps, "steps", []) or []
+        for step in step_sequence:
+            if step is None:
+                continue
+            total_transmission_latency += getattr(step, "total_latency", 0.0) or 0.0
+            pull_response = getattr(step, "pull_response", None)
+            if pull_response is not None:
+                inputs_cost += getattr(pull_response, "cost", 0.0) or 0.0
 
         projection_obj = key_to_projection.get(proj_key, proj_key)
 
@@ -806,13 +826,21 @@ def calculate_ines_max_latency(context, ines_results):
         }
 
     # Prepare dependency lookup using string keys for consistency
-    dependency_map = {}
+    dependency_map: Dict[str, List[str]] = {}
+    raw_dependencies = getattr(context, "h_mycombi", {})
     for projection in getattr(context, "processing_order", []):
         proj_key = str(projection)
-        deps = context.h_combiDict.get(projection, [])
-        dependency_map[proj_key] = [
-            str(dep) if not isinstance(dep, str) else dep for dep in deps
-        ]
+        deps = raw_dependencies.get(projection)
+        if deps is None and proj_key in raw_dependencies:
+            deps = raw_dependencies[proj_key]
+        normalized_deps: List[str] = []
+        if deps:
+            for dep in deps:
+                if isinstance(dep, str):
+                    normalized_deps.append(dep)
+                else:
+                    normalized_deps.append(str(dep))
+        dependency_map[proj_key] = normalized_deps
 
     processing_latency_cache = {}
     critical_latency_cache = {}
@@ -1159,6 +1187,9 @@ class Simulation:
         try:
             print("--- Running All Push Computation ---")
             self.all_push_results = compute_all_push(self)
+            all_push_latency = self.all_push_results.get("transmission_latency", 0.0)
+            if self.latency_threshold is not None:
+                self.latency_threshold *= all_push_latency
             print("--- ALL PUSH COMPUTATION COMPLETE ---")
 
             # ----- INEV COMPUTATION -----#
@@ -1182,6 +1213,7 @@ class Simulation:
             )
 
             # Update both INES and INEv results with topology adjustments
+            self.raw_ines_prepp_result = ines_results
             ines_dict, inev_dict = update_results_for_topology(self, ines_results, self.inev_results)
             ines_end_time = time.time()
             inev_dict["computing_time"] = inev_end_time - inev_start_time
@@ -1230,14 +1262,24 @@ class Simulation:
 
             row: Dict[str, Any] = {}
 
+            def safe_float(value: Any) -> Optional[float]:
+                """Safely convert any numeric value to float, handling None."""
+                if value is None:
+                    return None
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    return None
+
             def populate_basic(prefix: str, result: Optional[Dict[str, Any]]):
+                """Populate row with basic metrics, ensuring all numeric values are floats."""
                 if not result:
                     return
                 row[f"{prefix}_status"] = result.get("status", "unknown")
-                row[f"{prefix}_cost"] = result.get("cost")
-                row[f"{prefix}_transmission_latency"] = result.get("transmission_latency")
-                row[f"{prefix}_processing_latency"] = result.get("processing_latency")
-                row[f"{prefix}_computing_time"] = result.get("computing_time")
+                row[f"{prefix}_cost"] = safe_float(result.get("cost"))
+                row[f"{prefix}_transmission_latency"] = safe_float(result.get("transmission_latency"))
+                row[f"{prefix}_processing_latency"] = safe_float(result.get("processing_latency"))
+                row[f"{prefix}_computing_time"] = safe_float(result.get("computing_time"))
 
             populate_basic("all_push", self.all_push_results)
             populate_basic("inev", self.inev_results)
@@ -1251,43 +1293,104 @@ class Simulation:
                     metrics = strategy_result.get("metrics", {}) if status == "success" else {}
 
                     row[f"{prefix}_status"] = status
-                    row[f"{prefix}_cost"] = metrics.get("total_cost")
-                    row[f"{prefix}_transmission_latency"] = metrics.get("max_latency")
-                    row[f"{prefix}_processing_latency"] = metrics.get("cumulative_processing_latency")
-                    row[f"{prefix}_computing_time"] = strategy_result.get("execution_time_seconds")
-                    row[f"{prefix}_workload_cost"] = metrics.get("workload_cost")
-                    row[f"{prefix}_num_placements"] = metrics.get("num_placements")
-                    row[f"{prefix}_placements_at_cloud"] = metrics.get("placements_at_cloud")
-                    row[f"{prefix}_average_cost_per_placement"] = metrics.get("average_cost_per_placement")
+                    row[f"{prefix}_cost"] = safe_float(metrics.get("total_cost"))
+                    row[f"{prefix}_transmission_latency"] = safe_float(metrics.get("max_latency"))
+                    row[f"{prefix}_processing_latency"] = safe_float(metrics.get("cumulative_processing_latency"))
+                    row[f"{prefix}_computing_time"] = safe_float(strategy_result.get("execution_time_seconds"))
+                    row[f"{prefix}_workload_cost"] = safe_float(metrics.get("workload_cost"))
+                    row[f"{prefix}_num_placements"] = safe_float(metrics.get("num_placements"))
+                    row[f"{prefix}_placements_at_cloud"] = safe_float(metrics.get("placements_at_cloud"))
+                    row[f"{prefix}_average_cost_per_placement"] = safe_float(metrics.get("average_cost_per_placement"))
 
-            # Add configuration information to results
-            row["network_size"] = self.config.network_size
-            row["event_skew"] = self.config.event_skew
-            row["node_event_ratio"] = self.config.node_event_ratio
-            row["max_parents"] = self.config.max_parents
-            row["parent_factor"] = self.config.parent_factor
-            row["num_event_types"] = self.config.num_event_types
-            row["query_size"] = self.config.query_size
-            row["query_length"] = self.config.query_length
-            row["xi"] = self.config.xi
-            row["latency_threshold"] = self.config.latency_threshold
+            # Add configuration information to results (cast all to float for consistency)
+            row["network_size"] = safe_float(self.config.network_size)
+            row["event_skew"] = safe_float(self.config.event_skew)
+            row["node_event_ratio"] = safe_float(self.config.node_event_ratio)
+            row["max_parents"] = safe_float(self.config.max_parents)
+            row["parent_factor"] = safe_float(self.config.parent_factor)
+            row["num_event_types"] = safe_float(self.config.num_event_types)
+            row["query_size"] = safe_float(self.config.query_size)
+            row["query_length"] = safe_float(self.config.query_length)
+            row["xi"] = safe_float(self.config.xi)
+            row["latency_threshold"] = safe_float(self.config.latency_threshold)
             row["mode"] = self.config.mode.value if hasattr(self.config.mode, 'value') else str(self.config.mode)
             row["algorithm"] = self.config.algorithm.value if hasattr(self.config.algorithm, 'value') else str(self.config.algorithm)
-            row["graph_density"] = getattr(self, 'graph_density', None)
+            row["graph_density"] = safe_float(getattr(self, 'graph_density', None))
 
-            if getattr(self, "entire_simulation_time", None) is not None:
-                row["good_entire_simulation_time"] = self.entire_simulation_time
-            if getattr(self, "setup_time", None) is not None:
-                row["good_setup_time"] = self.setup_time
-            if getattr(self, "combigen_computation_time", None) is not None:
-                row["usefull_combigen_computation_time"] = self.combigen_computation_time
+            row["good_entire_simulation_time"] = safe_float(getattr(self, "entire_simulation_time", None))
+            row["good_setup_time"] = safe_float(getattr(self, "setup_time", None))
+            row["usefull_combigen_computation_time"] = safe_float(getattr(self, "combigen_computation_time", None))
 
             if not row:
                 print("--- No results to write ---")
                 return
 
+            # Create DataFrame from row
             df = pd.DataFrame([row])
-            table = pa.Table.from_pandas(df, preserve_index=False)
+
+            # Define explicit PyArrow schema to prevent type inference issues
+            # All numeric columns are explicitly set to float64 (double in PyArrow)
+            schema_fields = [
+                # All Push metrics
+                pa.field("all_push_status", pa.string()),
+                pa.field("all_push_cost", pa.float64()),
+                pa.field("all_push_transmission_latency", pa.float64()),
+                pa.field("all_push_processing_latency", pa.float64()),
+                pa.field("all_push_computing_time", pa.float64()),
+                # INEv metrics
+                pa.field("inev_status", pa.string()),
+                pa.field("inev_cost", pa.float64()),
+                pa.field("inev_transmission_latency", pa.float64()),
+                pa.field("inev_processing_latency", pa.float64()),
+                pa.field("inev_computing_time", pa.float64()),
+                # INES metrics
+                pa.field("ines_status", pa.string()),
+                pa.field("ines_cost", pa.float64()),
+                pa.field("ines_transmission_latency", pa.float64()),
+                pa.field("ines_processing_latency", pa.float64()),
+                pa.field("ines_computing_time", pa.float64()),
+                # PrePP metrics
+                pa.field("prepp_status", pa.string()),
+                pa.field("prepp_cost", pa.float64()),
+                pa.field("prepp_transmission_latency", pa.float64()),
+                pa.field("prepp_processing_latency", pa.float64()),
+                pa.field("prepp_computing_time", pa.float64()),
+                # Kraken metrics (dynamic strategy names handled below)
+                pa.field("kraken_greedy_status", pa.string()),
+                pa.field("kraken_greedy_cost", pa.float64()),
+                pa.field("kraken_greedy_transmission_latency", pa.float64()),
+                pa.field("kraken_greedy_processing_latency", pa.float64()),
+                pa.field("kraken_greedy_computing_time", pa.float64()),
+                pa.field("kraken_greedy_workload_cost", pa.float64()),
+                pa.field("kraken_greedy_num_placements", pa.float64()),
+                pa.field("kraken_greedy_placements_at_cloud", pa.float64()),
+                pa.field("kraken_greedy_average_cost_per_placement", pa.float64()),
+                # Configuration parameters
+                pa.field("network_size", pa.float64()),
+                pa.field("event_skew", pa.float64()),
+                pa.field("node_event_ratio", pa.float64()),
+                pa.field("max_parents", pa.float64()),
+                pa.field("parent_factor", pa.float64()),
+                pa.field("num_event_types", pa.float64()),
+                pa.field("query_size", pa.float64()),
+                pa.field("query_length", pa.float64()),
+                pa.field("xi", pa.float64()),
+                pa.field("latency_threshold", pa.float64()),
+                pa.field("mode", pa.string()),
+                pa.field("algorithm", pa.string()),
+                pa.field("graph_density", pa.float64()),
+                # Timing metrics
+                pa.field("good_entire_simulation_time", pa.float64()),
+                pa.field("good_setup_time", pa.float64()),
+                pa.field("usefull_combigen_computation_time", pa.float64()),
+            ]
+
+            # Only include fields that exist in the DataFrame
+            schema_fields = [field for field in schema_fields if field.name in df.columns]
+            explicit_schema = pa.schema(schema_fields)
+
+            # Convert DataFrame to PyArrow table with explicit schema
+            table = pa.Table.from_pandas(df, schema=explicit_schema, preserve_index=False)
 
             output_dir = Path("result/unified_results.parquet")
             output_dir.mkdir(parents=True, exist_ok=True)

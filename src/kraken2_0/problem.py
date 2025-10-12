@@ -1,3 +1,4 @@
+import math
 from typing import List, Any, Dict
 
 from kraken2_0.components.event_stack_manager import update_event_stack
@@ -14,7 +15,7 @@ class PlacementProblem:
         context: Dict[str, Any],
         enable_detailed_logging: bool = False,
     ):
-        latency_threshold = context["latency_threshold"]
+        latency_threshold = context.get("latency_threshold", None)
         """Initializes the entire problem context"""
 
         # Logging configuration
@@ -32,6 +33,27 @@ class PlacementProblem:
         self.latency_weighting_factor = context.get(
             "latency_weighting_factor", 1.0
         )  # The 'xi' factor
+        raw_cost_weight = context.get("cost_weight", 0.5)
+        cost_weight = raw_cost_weight if math.isfinite(raw_cost_weight) else 0.5
+        cost_weight = min(max(cost_weight, 0.0), 1.0)
+
+        latency_weight = context.get("latency_weight")
+        if latency_weight is None:
+            latency_weight = 1.0 - cost_weight
+        elif not math.isfinite(latency_weight):
+            latency_weight = 1.0 - cost_weight
+
+        if latency_weight < 0.0:
+            latency_weight = 0.0
+
+        weight_sum = cost_weight + latency_weight
+        if weight_sum == 0:
+            cost_weight = 0.5
+            latency_weight = 0.5
+            weight_sum = 1.0
+
+        self.cost_weight = cost_weight / weight_sum
+        self.latency_weight = latency_weight / weight_sum
 
         # --- Instantiate Helper Component ---
         self.optimizer = PlacementOptimizer(
@@ -170,8 +192,36 @@ class PlacementProblem:
             if pruning:
                 break
 
-        s_next_options.sort(key=lambda s: s.cumulative_cost)
-        return s_next_options
+        if not s_next_options:
+            return s_next_options
+
+        costs = [candidate.cumulative_cost for candidate in s_next_options]
+        min_cost = min(costs)
+        max_cost = max(costs)
+        cost_range = max_cost - min_cost
+
+        scored_options = []
+        latency_threshold = self.latency_threshold
+
+        for candidate in s_next_options:
+            candidate_latency = candidate.get_critical_path_latency(self)
+            if math.isfinite(latency_threshold) and latency_threshold > 0:
+                latency_norm = candidate_latency / latency_threshold
+            else:
+                latency_norm = 0.0
+
+            if cost_range > 0:
+                cost_norm = (candidate.cumulative_cost - min_cost) / cost_range
+            else:
+                cost_norm = 0.0
+
+            score = (self.cost_weight * cost_norm) + (
+                self.latency_weight * latency_norm
+            )
+            scored_options.append((score, candidate))
+
+        scored_options.sort(key=lambda item: item[0])
+        return [candidate for _, candidate in scored_options]
 
     def _create_next_candidate(
         self, s_current: SolutionCandidate, p: Any, n: int, strategy_result: dict

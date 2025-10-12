@@ -146,6 +146,30 @@ def write_run_results(results_data: List[Dict[str, Any]]) -> None:
     df = pd.DataFrame(results_data)
     df = df[RUN_RESULTS_HEADER]
 
+    numeric_columns = [
+        "total_cost",
+        "workload_cost",
+        "average_cost_per_placement",
+        "max_latency",
+        "cumulative_processing_latency",
+        "num_placements",
+        "placements_at_cloud",
+        "network_size",
+        "event_skew",
+        "node_event_ratio",
+        "max_parents",
+        "parent_factor",
+        "num_event_types",
+        "query_size",
+        "query_length",
+        "xi",
+        "latency_threshold",
+        "graph_density",
+    ]
+    for column in numeric_columns:
+        if column in df.columns:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
+
     table = pa.Table.from_pandas(df, preserve_index=False)
 
     output_dir = Path(OUTPUT_DIRECTORY) / RUN_RESULTS_DIR
