@@ -481,8 +481,8 @@ def run_parameter_study(
     job_id = 0
 
     for parent_factor in parent_factors:
-        for workload_size in workload_sizes:
-            for network_size in network_sizes:
+        for network_size in network_sizes:
+            for workload_size in workload_sizes:
                 for query_length in query_lengths:
                     for node_event_ratio in node_event_ratios:
                         for num_event_type in num_event_types:

@@ -7,7 +7,7 @@ import time
 from itertools import chain, combinations
 import logging
 
-from src.kraken2_0.acquisition_step import AcquisitionStep, AcquisitionSet, PullRequest, PullResponse
+from kraken2_0.data.acquisition_step import AcquisitionStep, AcquisitionSet, PullRequest, PullResponse
 
 # Set up module logger
 logger = logging.getLogger(__name__)

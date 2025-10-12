@@ -1,6 +1,6 @@
 import re
 from typing import Any, Set
-from src.kraken2_0.state import PlacementInfo
+from kraken2_0.data.state import PlacementInfo
 
 
 def update_event_stack(

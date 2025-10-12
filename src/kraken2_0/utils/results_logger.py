@@ -58,9 +58,23 @@ RUN_RESULTS_HEADER = [
     # Placement metrics
     "num_placements",
     "placements_at_cloud",
+    # Configuration parameters
+    "network_size",
+    "event_skew",
+    "node_event_ratio",
+    "max_parents",
+    "parent_factor",
+    "num_event_types",
+    "query_size",
+    "query_length",
+    "xi",
+    "latency_threshold",
+    "mode",
+    "algorithm",
+    "graph_density",
 ]
 
-OUTPUT_DIRECTORY = "kraken2_0/result"
+OUTPUT_DIRECTORY = "result"
 RUN_RESULTS_DIR = "run_results.parquet"
 DETAILED_LOG_DIR = "detailed_run_log.parquet"
 

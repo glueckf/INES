@@ -6,13 +6,12 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.kraken2_0.acquisition_step import (
+from kraken2_0.data.acquisition_step import (
     AcquisitionSet,
     AcquisitionStep,
     PullResponse,
 )
-from src.kraken2_0.state import SolutionCandidate
-from src.prepp import generate_prePP
+from kraken2_0.data.state import SolutionCandidate
 
 
 class CostCalculator:
@@ -96,6 +95,7 @@ class CostCalculator:
             return [all_push_result]
 
         # Run PrePP for push-pull optimization
+        from prepp import generate_prePP
         prepp_output = generate_prePP(
             input_buffer=input_buffer,
             method=METHOD,

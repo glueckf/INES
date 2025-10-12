@@ -985,7 +985,10 @@ class Simulation:
         print("--- Initializing Simulation Environment ---")
         try:
             # ------ SETUP -------#
-
+            start_time_setup = time.time()
+            self.start_time_setup = start_time_setup
+            # Initialize for future reference
+            self.entire_simulation_time = 0
             # Store configuration and extract parameters
             self.config = config
             self.nwSize = config.network_size
@@ -1105,6 +1108,8 @@ class Simulation:
             ) = generate_all_projections(self)
             self.h_projFilterDict = populate_projFilterDict(self)
             self.h_projFilterDict = removeFilters(self)
+
+            start_time_generate_combigen = time.time()
             (
                 self.h_mycombi,
                 self.h_combiDict,
@@ -1112,6 +1117,10 @@ class Simulation:
                 self.h_combiExperimentData,
                 self.h_primitive_events,
             ) = generate_combigen(self)
+
+            end_time_generate_combigen = time.time()
+            self.combigen_computation_time = end_time_generate_combigen - start_time_generate_combigen
+
             self.h_criticalMSTypes, self.h_criticalMSProjs = (
                 self.h_criticalMSTypes_criticalMSProjs
             )
@@ -1123,6 +1132,9 @@ class Simulation:
             self.sum_of_input_rates_per_query = (
                 self._calculate_sum_of_primitive_input_rates_per_query()
             )
+
+            end_time_setup = time.time()
+            self.setup_time = end_time_setup - start_time_setup
 
             print("--- SETUP COMPLETE ---")
         except Exception as e:
@@ -1195,6 +1207,8 @@ class Simulation:
             )
             print("--- KRAKEN COMPUTATION COMPLETE ---")
 
+            self.entire_simulation_time = self.start_time_setup - time.time()
+
             # ----- WRITE RESULTS -----#
             self._write_results()
             print("--- All computations complete and results saved. ---")
@@ -1230,6 +1244,13 @@ class Simulation:
             populate_basic("ines", self.ines_results)
             populate_basic("prepp", self.prepp_from_cloud_result)
 
+            def add_timing_metrics(name: str, value: Optional[float]) -> None:
+                """Record timing metrics with both 'good' and 'usefull' labels."""
+                if value is None:
+                    return
+                row[f"good_{name}"] = value
+                row[f"usefull_{name}"] = value
+
             if self.kraken_results and "strategies" in self.kraken_results:
                 for strategy_name, strategy_result in self.kraken_results["strategies"].items():
                     prefix = f"kraken_{strategy_name}"
@@ -1246,6 +1267,25 @@ class Simulation:
                     row[f"{prefix}_placements_at_cloud"] = metrics.get("placements_at_cloud")
                     row[f"{prefix}_average_cost_per_placement"] = metrics.get("average_cost_per_placement")
 
+            # Add configuration information to results
+            row["network_size"] = self.config.network_size
+            row["event_skew"] = self.config.event_skew
+            row["node_event_ratio"] = self.config.node_event_ratio
+            row["max_parents"] = self.config.max_parents
+            row["parent_factor"] = self.config.parent_factor
+            row["num_event_types"] = self.config.num_event_types
+            row["query_size"] = self.config.query_size
+            row["query_length"] = self.config.query_length
+            row["xi"] = self.config.xi
+            row["latency_threshold"] = self.config.latency_threshold
+            row["mode"] = self.config.mode.value if hasattr(self.config.mode, 'value') else str(self.config.mode)
+            row["algorithm"] = self.config.algorithm.value if hasattr(self.config.algorithm, 'value') else str(self.config.algorithm)
+            row["graph_density"] = getattr(self, 'graph_density', None)
+
+            add_timing_metrics("entire_simulation_time", getattr(self, "entire_simulation_time", None))
+            add_timing_metrics("setup_time", getattr(self, "setup_time", None))
+            add_timing_metrics("combigen_computation_time", getattr(self, "combigen_computation_time", None))
+
             if not row:
                 print("--- No results to write ---")
                 return
@@ -1253,7 +1293,7 @@ class Simulation:
             df = pd.DataFrame([row])
             table = pa.Table.from_pandas(df, preserve_index=False)
 
-            output_dir = Path("kraken2_0/result/unified_results.parquet")
+            output_dir = Path("result/unified_results.parquet")
             output_dir.mkdir(parents=True, exist_ok=True)
 
             pq.write_to_dataset(table, root_path=str(output_dir))

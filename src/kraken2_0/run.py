@@ -13,9 +13,9 @@ import uuid
 from helper.processCombination_aug import compute_dependencies
 from allPairs import create_routing_dict
 
-from src.kraken2_0.problem import PlacementProblem
-from src.kraken2_0.state import SolutionCandidate
-from src.kraken2_0.results_logger import (
+from kraken2_0.problem import PlacementProblem
+from kraken2_0.data.state import SolutionCandidate
+from kraken2_0.utils.results_logger import (
     initialize_logging,
     write_detailed_log,
     write_run_results,
@@ -121,7 +121,7 @@ def run_kraken_solver(
 
     # Prepare and write run results summary
     run_results_data = _prepare_run_results_summary(
-        str(run_id), strategy_results, problem
+        str(run_id), strategy_results, problem, ines_context
     )
     if run_results_data:
         write_run_results(run_results_data)
@@ -208,7 +208,7 @@ def _select_strategy(algorithm_enum: Any):
         NotImplementedError: If the strategy is not yet implemented.
         ValueError: If the algorithm enum is not recognized.
     """
-    from src.kraken2_0.search import GreedySearch
+    from kraken2_0.search import GreedySearch
 
     # Get the algorithm name
     algorithm_name = (
@@ -381,7 +381,7 @@ def _enrich_log_with_solution(
 
 
 def _prepare_run_results_summary(
-    run_id: str, strategy_results: Dict[str, Any], problem: PlacementProblem
+    run_id: str, strategy_results: Dict[str, Any], problem: PlacementProblem, ines_context: Any
 ) -> List[Dict[str, Any]]:
     """
     Prepare summary data for run results from strategy executions.
@@ -393,12 +393,31 @@ def _prepare_run_results_summary(
         run_id: Unique identifier for this run.
         strategy_results: Dictionary of results from each strategy execution.
         problem: PlacementProblem instance for workload information.
+        ines_context: INES context for configuration information.
 
     Returns:
         List of dictionaries containing run result summaries.
     """
     workload_str = ";".join(str(q) for q in problem.query_workload)
     results_data = []
+
+    # Extract config information once for all results
+    config = ines_context.config
+    config_data = {
+        "network_size": config.network_size,
+        "event_skew": config.event_skew,
+        "node_event_ratio": config.node_event_ratio,
+        "max_parents": config.max_parents,
+        "parent_factor": config.parent_factor,
+        "num_event_types": config.num_event_types,
+        "query_size": config.query_size,
+        "query_length": config.query_length,
+        "xi": config.xi,
+        "latency_threshold": config.latency_threshold,
+        "mode": config.mode.value if hasattr(config.mode, 'value') else str(config.mode),
+        "algorithm": config.algorithm.value if hasattr(config.algorithm, 'value') else str(config.algorithm),
+        "graph_density": getattr(ines_context, 'graph_density', None),
+    }
 
     for strategy_name, result in strategy_results.items():
         result_entry = {
@@ -437,6 +456,9 @@ def _prepare_run_results_summary(
                     "placements_at_cloud": None,
                 }
             )
+
+        # Add config data to each result entry
+        result_entry.update(config_data)
 
         results_data.append(result_entry)
 

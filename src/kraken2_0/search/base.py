@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.kraken2_0.problem import PlacementProblem
-    from src.kraken2_0.state import SolutionCandidate
+    from kraken2_0.problem import PlacementProblem
+    from kraken2_0.data.state import SolutionCandidate
 
 
 class SearchStrategy(ABC):
