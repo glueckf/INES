@@ -6,11 +6,13 @@ and run results. It provides high-performance, scalable storage for algorithm
 analysis and debugging using the Apache Parquet columnar format.
 """
 
+import logging
+from pathlib import Path
+from typing import Any, Dict, List
+
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-from pathlib import Path
-from typing import Any, Dict, List
 
 # Header Definitions (maintain exact column names for compatibility)
 DETAILED_LOG_HEADER = [
@@ -78,6 +80,8 @@ OUTPUT_DIRECTORY = "result"
 RUN_RESULTS_DIR = "run_results.parquet"
 DETAILED_LOG_DIR = "detailed_run_log.parquet"
 
+logger = logging.getLogger(__name__)
+
 
 def initialize_logging() -> None:
     """
@@ -110,6 +114,7 @@ def write_detailed_log(run_id: str, detailed_log_data: List[Dict[str, Any]]) -> 
     Raises:
         OSError: If file writing fails.
         ValueError: If log entries are missing required fields.
+        RuntimeError: If the written Parquet file fails validation.
     """
     if not detailed_log_data:
         return
@@ -123,6 +128,7 @@ def write_detailed_log(run_id: str, detailed_log_data: List[Dict[str, Any]]) -> 
     file_path = Path(OUTPUT_DIRECTORY) / DETAILED_LOG_DIR / f"{run_id}.parquet"
 
     df.to_parquet(file_path, engine="pyarrow", compression="snappy", index=False)
+    _validate_written_files([file_path])
 
 
 def write_run_results(results_data: List[Dict[str, Any]]) -> None:
@@ -139,6 +145,7 @@ def write_run_results(results_data: List[Dict[str, Any]]) -> None:
     Raises:
         OSError: If file writing fails.
         ValueError: If result entries are missing required fields.
+        RuntimeError: If a written dataset fragment fails validation.
     """
     if not results_data:
         return
@@ -174,4 +181,39 @@ def write_run_results(results_data: List[Dict[str, Any]]) -> None:
 
     output_dir = Path(OUTPUT_DIRECTORY) / RUN_RESULTS_DIR
 
+    _write_dataset_with_validation(table, output_dir)
+
+
+def _write_dataset_with_validation(table: pa.Table, output_dir: Path) -> None:
+    """
+    Write a pyarrow table to a Parquet dataset and validate the new fragments.
+
+    Validation ensures freshly written files can be read back immediately, catching
+    partial writes or corruption while the producing process is still running.
+
+    Raises:
+        RuntimeError: If validation of the written fragments fails.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    existing_files = {file.name for file in output_dir.glob("*.parquet")}
+
     pq.write_to_dataset(table, root_path=str(output_dir))
+
+    new_files = [file for file in output_dir.glob("*.parquet") if file.name not in existing_files]
+
+    # Fallback: if the dataset writer reused an existing filename, validate the most recent file
+    if not new_files and existing_files:
+        candidates = sorted(output_dir.glob("*.parquet"), key=lambda f: f.stat().st_mtime, reverse=True)
+        new_files = candidates[:1]
+
+    _validate_written_files(new_files)
+
+
+def _validate_written_files(files: List[Path]) -> None:
+    """Attempt to read back written parquet files to detect corruption early."""
+    for file_path in files:
+        try:
+            pq.read_table(file_path)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Parquet validation failed for %s", file_path, exc_info=exc)
+            raise RuntimeError(f"Parquet validation failed for {file_path}") from exc

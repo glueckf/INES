@@ -231,6 +231,7 @@ def compute_all_push(context):
             msg=e,
             exc_info=True,
         )
+        raise
 
 
 def calculate_prepp_from_cloud(context, reused_buffer_section):
@@ -385,6 +386,7 @@ def calculate_prepp_from_cloud(context, reused_buffer_section):
             msg=e,
             exc_info=True,
         )
+        raise
 
 
 def update_results_for_topology(context, ines_results, inev_results):
@@ -518,6 +520,7 @@ def update_results_for_topology(context, ines_results, inev_results):
             msg=e,
             exc_info=True
         )
+        raise
 
 
 # ==================== HARDCODED TOPOLOGY/WORKLOAD FUNCTIONS ====================
@@ -1166,10 +1169,8 @@ class Simulation:
 
             print("--- SETUP COMPLETE ---")
         except Exception as e:
-            logger.error(
-                msg=e,
-                exc_info=True,
-            )
+            logger.error(msg=e, exc_info=True)
+            raise
 
     def run(self):
         """
@@ -1245,10 +1246,8 @@ class Simulation:
             self._write_results()
             print("--- All computations complete and results saved. ---")
         except Exception as e:
-            logger.error(
-                msg=e,
-                exc_info=True,
-            )
+            logger.error(msg=e, exc_info=True)
+            raise
 
     def _write_results(self):
         """Write all strategy results to a unified parquet file."""
@@ -1395,11 +1394,33 @@ class Simulation:
             output_dir = Path("result/unified_results.parquet")
             output_dir.mkdir(parents=True, exist_ok=True)
 
+            existing_files = {file.name for file in output_dir.glob("*.parquet")}
+
             pq.write_to_dataset(table, root_path=str(output_dir))
+
+            new_files = [file for file in output_dir.glob("*.parquet") if file.name not in existing_files]
+            if not new_files and existing_files:
+                new_files = sorted(
+                    output_dir.glob("*.parquet"),
+                    key=lambda f: f.stat().st_mtime,
+                    reverse=True,
+                )[:1]
+
+            for file_path in new_files:
+                try:
+                    pq.read_table(file_path)
+                except Exception as validation_error:  # noqa: BLE001
+                    logger.error(
+                        "Parquet validation failed for %s", file_path, exc_info=validation_error
+                    )
+                    raise RuntimeError(
+                        f"Parquet validation failed for {file_path}"
+                    ) from validation_error
 
             print(f"--- Results written to {output_dir} ---")
         except Exception as e:
-            logger.error(msg=e, exc_info=e)
+            logger.error("Failed to write unified results", exc_info=e)
+            raise
 
     # ==================== HELPER METHODS ====================
 
