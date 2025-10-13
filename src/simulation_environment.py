@@ -1316,9 +1316,9 @@ class Simulation:
             row["algorithm"] = self.config.algorithm.value if hasattr(self.config.algorithm, 'value') else str(self.config.algorithm)
             row["graph_density"] = safe_float(getattr(self, 'graph_density', None))
 
-            row["good_entire_simulation_time"] = safe_float(getattr(self, "entire_simulation_time", None))
-            row["good_setup_time"] = safe_float(getattr(self, "setup_time", None))
-            row["usefull_combigen_computation_time"] = safe_float(getattr(self, "combigen_computation_time", None))
+            row["entire_simulation_time"] = safe_float(getattr(self, "entire_simulation_time", None))
+            row["setup_time"] = safe_float(getattr(self, "setup_time", None))
+            row["combigen_computation_time"] = safe_float(getattr(self, "combigen_computation_time", None))
 
             if not row:
                 print("--- No results to write ---")
@@ -1379,9 +1379,9 @@ class Simulation:
                 pa.field("algorithm", pa.string()),
                 pa.field("graph_density", pa.float64()),
                 # Timing metrics
-                pa.field("good_entire_simulation_time", pa.float64()),
-                pa.field("good_setup_time", pa.float64()),
-                pa.field("usefull_combigen_computation_time", pa.float64()),
+                pa.field("entire_simulation_time", pa.float64()),
+                pa.field("setup_time", pa.float64()),
+                pa.field("combigen_computation_time", pa.float64()),
             ]
 
             # Only include fields that exist in the DataFrame
