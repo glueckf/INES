@@ -6,7 +6,7 @@ numpy~=2.3.3
 packaging==24.1
 pandas==2.2.3
 pip-chill==1.0.3
-pyarrow==19.0.0
+pyarrow==19.0.1
 platformdirs==4.2.2
 tomli==2.0.1
 
