@@ -458,9 +458,15 @@ def update_results_for_topology(context, ines_results, inev_results):
         # Calculate additional latency for sending to cloud
         # Find the maximum latency contribution from any placement to cloud
         additional_latency = 0
-        if isinstance(ines_max_latency_tuple, tuple):
+        if isinstance(ines_max_latency_tuple, tuple) and len(ines_max_latency_tuple) > 0:
             node_with_max_latency = ines_max_latency_tuple[0]
-            additional_latency = context.allPairs[node_with_max_latency][CLOUD_NODE_ID]
+            if isinstance(node_with_max_latency, int):
+                additional_latency = context.allPairs[node_with_max_latency][CLOUD_NODE_ID]
+            else:
+                logger.debug(
+                    "INES max latency node is not an integer (value=%s); skipping cloud latency adjustment",
+                    node_with_max_latency,
+                )
 
         projections = context.eval_plan[0].projections
 

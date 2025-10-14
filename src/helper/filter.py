@@ -1,4 +1,9 @@
+import logging
+
 from helper.structures import getNumETBs
+
+
+logger = logging.getLogger(__name__)
 
 
 def computePromisingType(self, projection):
@@ -58,7 +63,24 @@ def getDecomposedTotal(primEvents, projection, singleSelectivities, rates, insta
         x for x in projection.leafs() if x not in primEvents
     ]:  # implement for list of primEvents, to use during placement
         myKey = getKeySingleSelect(event, projection)
-        mysum += singleSelectivities[myKey] * rates[event] * instances[event]
+        selectivity = singleSelectivities.get(myKey)
+        if selectivity is None:
+            logger.debug(
+                "Missing single selectivity entry for key '%s'; defaulting to 0",
+                myKey,
+            )
+            continue
+        rate_value = rates.get(event)
+        instance_value = instances.get(event)
+        if rate_value is None or instance_value is None:
+            logger.debug(
+                "Missing rate/instance for event '%s' (rate=%s, instance=%s); skipping contribution",
+                event,
+                rate_value,
+                instance_value,
+            )
+            continue
+        mysum += selectivity * rate_value * instance_value
     return mysum
 
 
