@@ -585,7 +585,7 @@ def main() -> None:
         workload_sizes=[3, 5, 8],
         parent_factors=[1.8, 1.2, 2.2],
         query_lengths=[3, 5, 8],
-        runs_per_combination=50,
+        runs_per_combination=25,
         node_event_ratios=[0.3, 0.5, 0.7],
         num_event_types=[4, 6, 8],
         event_skews=[1.0, 2.0],
