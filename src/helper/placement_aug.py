@@ -658,8 +658,15 @@ def ComputeSingleSinkPlacement(
 
     # Calculate the processing latency
     output_rate = projrates[projection][1]
-    baseline_input_events = self.sum_of_input_rates_per_query[projection]
-    actual_input_costs = 0
+    baseline_input_events = self.sum_of_input_rates_per_query.get(projection)
+    if baseline_input_events is None:
+        baseline_input_events = self.sum_of_input_rates_per_query.get(str(projection), 0.0)
+    best_actual_input_costs = 0.0
+
+    original_input_objects = set(combination)
+    original_input_keys = {str(item) for item in combination}
+    filter_input_objects = set()
+    filter_input_keys = set()
 
     # add filters of projections to eventtpes in combi, if filters added, use costs of filter -> compute costs for single etbs of projrates
     intercombi = []
@@ -674,8 +681,22 @@ def ComputeSingleSinkPlacement(
             maximal_filter_len = len(maximal_filter)
             if proj_len > 1 and maximal_filter_len > 0:
                 Filters.append((proj, maximal_filter))
-                for etype in maximal_filter:
+                if isinstance(maximal_filter, (list, tuple, set)):
+                    iterable_filter = list(maximal_filter)
+                elif maximal_filter:
+                    iterable_filter = [maximal_filter]
+                else:
+                    iterable_filter = []
+
+                for etype in iterable_filter:
                     intercombi.append(etype)
+                    etype_str = str(etype)
+                    if (
+                        etype not in original_input_objects
+                        and etype_str not in original_input_keys
+                    ):
+                        filter_input_objects.add(etype)
+                        filter_input_keys.add(etype_str)
     intercombi_set = set(intercombi)
     combination = list(intercombi_set)
 
@@ -710,11 +731,12 @@ def ComputeSingleSinkPlacement(
 
         mycosts = 0
         eventtype_costs = {}
+        actual_input_costs_candidate = 0.0
 
         """
         Problem: Placement does not consider the ouput rate of the projection that is placed
         Only Calculates the costs of sending the inputs to the possible placement node 
-        
+
         The solution would be: 
         input_costs = mycosts 
         output_costs = query_output_rate * hops_to_cloud
@@ -722,6 +744,15 @@ def ComputeSingleSinkPlacement(
         """
         for eventtype in combination:
             eventtype_cost = 0
+            eventtype_str = str(eventtype)
+            is_original_input = (
+                eventtype in original_input_objects
+                or eventtype_str in original_input_keys
+            )
+            is_filter_input = (
+                eventtype in filter_input_objects
+                or eventtype_str in filter_input_keys
+            )
             for etb_idx, etb in enumerate(IndexEventNodes[eventtype]):
                 possibleSources = getNodes(etb, EventNodes, IndexEventNodes)
                 mySource = possibleSources[0]
@@ -764,23 +795,24 @@ def ComputeSingleSinkPlacement(
                     rate = rates[eventtype]
                     distance = allPairs[destination][mySource]
                     etb_cost = rate * distance
-                    actual_input_costs += etb_cost
 
                 else:  # case projection
                     num = NumETBsByKey(etb, eventtype, IndexEventNodes)
                     proj_rate = projrates[eventtype][1]
                     distance = allPairs[destination][mySource]
                     etb_cost = proj_rate * distance * num
-                    actual_input_costs += etb_cost
 
                 eventtype_cost += etb_cost
 
             eventtype_costs[eventtype] = eventtype_cost
             mycosts += eventtype_cost
+            if is_original_input and not is_filter_input:
+                actual_input_costs_candidate += eventtype_cost
 
         if mycosts < costs:
             costs = mycosts
             node = destination
+            best_actual_input_costs = actual_input_costs_candidate
 
     myProjection.addSinks(node)  #!
 
@@ -830,7 +862,10 @@ def ComputeSingleSinkPlacement(
     myProjection.addSpawned([IndexEventNodes[projection][0]])  #!
 
     # Calculate the processing latency
-    processing_latency = output_rate * (actual_input_costs / baseline_input_events)
+    if baseline_input_events > 0:
+        processing_latency = output_rate * (best_actual_input_costs / baseline_input_events)
+    else:
+        processing_latency = 0.0
 
     return costs, node, longestPath, myProjection, newInstances, Filters, processing_latency
 

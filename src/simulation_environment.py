@@ -12,6 +12,7 @@ import math
 import time
 from enum import Enum
 from dataclasses import dataclass
+from itertools import permutations
 from typing import Any, Dict, List, Optional
 
 import networkx as nx
@@ -52,6 +53,160 @@ class PlacementAlgorithm(Enum):
     GREEDY = "greedy"  # Greedy algorithm (default, fast)
     BACKTRACKING = "backtracking"  # Backtracking with latency constraints
     BRANCH_AND_CUT = "branch_and_cut"  # Branch and cut (not yet implemented)
+
+
+class ProjectionRateLookupError(KeyError):
+    """Raised when projection rates cannot be resolved for a query."""
+
+
+_NOT_FOUND = object()
+
+
+def _safe_to_str(obj: Any) -> Optional[str]:
+    """Safely convert an object to string; return None if conversion fails."""
+    try:
+        return str(obj)
+    except Exception:
+        return None
+
+
+def _attempt_projection_rate_lookup(projrates: Dict[Any, Any], candidate: Any) -> Any:
+    """Attempt to resolve a projection rate entry using multiple key styles."""
+    try:
+        return projrates[candidate]
+    except Exception:
+        pass
+
+    candidate_str = _safe_to_str(candidate)
+
+    for key, value in projrates.items():
+        if key is candidate:
+            return value
+        try:
+            if key == candidate:
+                return value
+        except Exception:
+            pass
+        if candidate_str is not None:
+            key_str = _safe_to_str(key)
+            if key_str == candidate_str:
+                return value
+
+    return _NOT_FOUND
+
+
+def _is_and_structure(candidate: Any) -> bool:
+    """Determine whether a candidate represents an AND operator."""
+    if hasattr(candidate, "mytype"):
+        try:
+            return str(getattr(candidate, "mytype", "")).upper() == "AND"
+        except Exception:
+            return False
+    return False
+
+
+def _generate_and_permutation_strings(candidate: Any):
+    """Yield all unique string permutations for AND query children."""
+    children = getattr(candidate, "children", None)
+    if not children or len(children) < 2:
+        return
+
+    child_strings = [_safe_to_str(child) for child in children]
+    if any(child_str is None for child_str in child_strings):
+        return
+
+    original = tuple(child_strings)
+    seen = set()
+
+    for perm in permutations(child_strings):
+        if perm == original:
+            continue
+        candidate_str = f"AND({', '.join(perm)})"
+        if candidate_str in seen:
+            continue
+        seen.add(candidate_str)
+        yield candidate_str
+
+
+def resolve_projection_rate_tuple(context: Any, query: Any) -> Any:
+    """Resolve the projection rate tuple for a query, trying AND permutations if needed."""
+    projrates = getattr(context, "h_projrates", None)
+    if not projrates:
+        query_repr = _safe_to_str(query) or repr(query)
+        raise ProjectionRateLookupError(f"Projection rates are not initialized; failed for query '{query_repr}'.")
+
+    candidates: List[Any] = []
+    candidates.append(query)
+
+    if hasattr(query, "stripKL_simple"):
+        try:
+            stripped = query.stripKL_simple()
+            candidates.append(stripped)
+        except Exception:
+            pass
+
+    query_str = _safe_to_str(query)
+    if query_str is not None:
+        candidates.append(query_str)
+
+    checked_strings = set()
+
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        result = _attempt_projection_rate_lookup(projrates, candidate)
+        if result is not _NOT_FOUND:
+            return result
+        candidate_str = _safe_to_str(candidate)
+        if candidate_str:
+            checked_strings.add(candidate_str)
+
+    for candidate in candidates:
+        if candidate is None or isinstance(candidate, str):
+            continue
+        if not _is_and_structure(candidate):
+            continue
+        for permutation_str in _generate_and_permutation_strings(candidate):
+            if permutation_str in checked_strings:
+                continue
+            checked_strings.add(permutation_str)
+            result = _attempt_projection_rate_lookup(projrates, permutation_str)
+            if result is not _NOT_FOUND:
+                return result
+
+    query_repr = query_str or repr(query)
+    raise ProjectionRateLookupError(
+        f"Unable to resolve projection rates for query '{query_repr}' even after AND permutations."
+    )
+
+
+def get_projection_rate_value(context: Any, query: Any, index: int) -> float:
+    """Fetch a specific projection rate (selection/output) as float."""
+    rate_info = resolve_projection_rate_tuple(context, query)
+
+    if isinstance(rate_info, (list, tuple)):
+        try:
+            selected_value = rate_info[index]
+        except (IndexError, TypeError):
+            query_repr = _safe_to_str(query) or repr(query)
+            raise ProjectionRateLookupError(
+                f"Projection rate tuple for query '{query_repr}' does not contain index {index}."
+            ) from None
+    else:
+        if index != 0:
+            query_repr = _safe_to_str(query) or repr(query)
+            raise ProjectionRateLookupError(
+                f"Projection rate for query '{query_repr}' is scalar; index {index} is invalid."
+            )
+        selected_value = rate_info
+
+    try:
+        return float(selected_value)
+    except (TypeError, ValueError):
+        query_repr = _safe_to_str(query) or repr(query)
+        raise ProjectionRateLookupError(
+            f"Projection rate value for query '{query_repr}' at index {index} is not numeric."
+        ) from None
 
 
 @dataclass
@@ -197,8 +352,7 @@ def compute_all_push(context):
         # Calculate processing latency using the correct formula
         processing_latency = 0
         for query in context.query_workload:
-            qkey = str(query)
-            query_output_rate = context.h_projrates.get(qkey, (0.0, 0.0))[1]
+            query_output_rate = get_projection_rate_value(context, query, index=1)
 
             # Sum costs for events used by this query
             query_event_cost = sum(
@@ -275,17 +429,14 @@ def calculate_prepp_from_cloud(context, reused_buffer_section):
         for query in context.processing_order:
             if query not in context.query_workload:
                 continue
-            primitive_events = context.h_primitive_events[str(query)]
+            qkey = str(query)
+            primitive_events = context.h_primitive_events[qkey]
 
             # Build primitive events list with proper formatting
             list_str = "; ".join(str(event) for event in primitive_events)
 
             # Build the SELECT line (all queries placed on cloud node 0)
-            qkey = str(query)
-            selection_rate = context.h_projrates.get(qkey, (0.001, 0.001))[0]
-
-            # Convert selection_rate to Python float to avoid numpy type in output
-            selection_rate = float(selection_rate)
+            selection_rate = get_projection_rate_value(context, query, index=0)
 
             line = f"SELECT {qkey} FROM {list_str} ON {{0}} WITH selectionRate= {selection_rate}"
             buffer_lines.append(line)
@@ -365,8 +516,7 @@ def calculate_prepp_from_cloud(context, reused_buffer_section):
                 input_ratio = 0.0
 
             # Get the output rate for this query
-            qkey = str(query)
-            output_rate = context.h_projrates.get(qkey, (0.0, 0.0))[1]
+            output_rate = get_projection_rate_value(context, query, index=1)
 
             # Calculate processing latency contribution for this query
             query_processing_latency = output_rate * input_ratio
@@ -1132,6 +1282,7 @@ class Simulation:
                 self.h_primEvents,
                 self.h_instances,
                 self.h_nodes,
+                self.h_etb_rates
             ) = initialize_globals(self.network)
             self.h_eventNodes, self.h_IndexEventNodes = initEventNodes(
                 self.h_nodes, self.h_network_data

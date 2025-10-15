@@ -15,6 +15,7 @@ def initialize_globals(network_data):
     primEvents = []
     instances = {}
     nodes = {}
+    etb_rates = {}
 
     ind = 0
     for node in network_data:
@@ -28,6 +29,7 @@ def initialize_globals(network_data):
                 if event not in rates.keys():
                     rates[event] = 0
                 rates[event] += float(node.eventrates[eventtype])
+                etb_rates[f"{event}{ind}"] = float(node.eventrates[eventtype])
         ind += 1
 
     # Populate nodes dictionary
@@ -42,7 +44,7 @@ def initialize_globals(network_data):
     for i in primEvents:
         instances[i] = len(nodes[i])
 
-    return network, rates, primEvents, instances, nodes
+    return network, rates, primEvents, instances, nodes, etb_rates
 
 
 # Getter functions with lazy initialization
