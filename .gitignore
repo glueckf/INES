@@ -7,3 +7,4 @@ CLAUDE.md
 *.parquet
 *.csv
 .idea/
+requirements.txt
