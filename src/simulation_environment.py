@@ -1392,7 +1392,7 @@ class Simulation:
 
             self.kraken_results = run_kraken_solver(
                 ines_context=self,
-                strategies_to_run=["greedy"],
+                strategies_to_run=["k_beam"],
                 enable_detailed_logging=False,
             )
             print(f"--- KRAKEN COMPUTATION COMPLETE ---")
