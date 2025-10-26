@@ -1395,7 +1395,12 @@ class Simulation:
                 strategies_to_run=["greedy"],
                 enable_detailed_logging=False,
             )
-            print("--- KRAKEN COMPUTATION COMPLETE ---")
+            print(f"--- KRAKEN COMPUTATION COMPLETE ---")
+            print(f"DEBUG: Kraken results keys: {self.kraken_results.keys() if self.kraken_results else 'None'}")
+            if self.kraken_results and "strategies" in self.kraken_results:
+                print(f"DEBUG: Strategies run: {list(self.kraken_results['strategies'].keys())}")
+                for strat_name, strat_result in self.kraken_results['strategies'].items():
+                    print(f"DEBUG: Strategy '{strat_name}' - Status: {strat_result.get('status', 'unknown')}")
 
             self.entire_simulation_time = self.start_time_setup - time.time()
 
@@ -1448,6 +1453,8 @@ class Simulation:
                     status = strategy_result.get("status", "unknown")
                     metrics = strategy_result.get("metrics", {}) if status == "success" else {}
 
+                    print(f"DEBUG _write_results: Adding columns for strategy '{strategy_name}' with prefix '{prefix}'")
+
                     row[f"{prefix}_status"] = status
                     row[f"{prefix}_cost"] = safe_float(metrics.get("total_cost"))
                     row[f"{prefix}_transmission_latency"] = safe_float(metrics.get("max_latency"))
@@ -1457,6 +1464,8 @@ class Simulation:
                     row[f"{prefix}_num_placements"] = safe_float(metrics.get("num_placements"))
                     row[f"{prefix}_placements_at_cloud"] = safe_float(metrics.get("placements_at_cloud"))
                     row[f"{prefix}_average_cost_per_placement"] = safe_float(metrics.get("average_cost_per_placement"))
+
+            print(f"DEBUG _write_results: Row contains these kraken columns: {[k for k in row.keys() if 'kraken' in k]}")
 
             # Add configuration information to results (cast all to float for consistency)
             row["network_size"] = safe_float(self.config.network_size)
@@ -1483,6 +1492,7 @@ class Simulation:
 
             # Create DataFrame from row
             df = pd.DataFrame([row])
+            print(f"DEBUG: DataFrame columns (total {len(df.columns)}): {[c for c in df.columns if 'kraken' in c]}")
 
             # Define explicit PyArrow schema to prevent type inference issues
             # All numeric columns are explicitly set to float64 (double in PyArrow)
@@ -1512,6 +1522,7 @@ class Simulation:
                 pa.field("prepp_processing_latency", pa.float64()),
                 pa.field("prepp_computing_time", pa.float64()),
                 # Kraken metrics (dynamic strategy names handled below)
+                # Greedy strategy
                 pa.field("kraken_greedy_status", pa.string()),
                 pa.field("kraken_greedy_cost", pa.float64()),
                 pa.field("kraken_greedy_transmission_latency", pa.float64()),
@@ -1521,6 +1532,16 @@ class Simulation:
                 pa.field("kraken_greedy_num_placements", pa.float64()),
                 pa.field("kraken_greedy_placements_at_cloud", pa.float64()),
                 pa.field("kraken_greedy_average_cost_per_placement", pa.float64()),
+                # K-Beam strategy
+                pa.field("kraken_k_beam_status", pa.string()),
+                pa.field("kraken_k_beam_cost", pa.float64()),
+                pa.field("kraken_k_beam_transmission_latency", pa.float64()),
+                pa.field("kraken_k_beam_processing_latency", pa.float64()),
+                pa.field("kraken_k_beam_computing_time", pa.float64()),
+                pa.field("kraken_k_beam_workload_cost", pa.float64()),
+                pa.field("kraken_k_beam_num_placements", pa.float64()),
+                pa.field("kraken_k_beam_placements_at_cloud", pa.float64()),
+                pa.field("kraken_k_beam_average_cost_per_placement", pa.float64()),
                 # Configuration parameters
                 pa.field("network_size", pa.float64()),
                 pa.field("event_skew", pa.float64()),
@@ -1542,7 +1563,11 @@ class Simulation:
             ]
 
             # Only include fields that exist in the DataFrame
+            original_field_count = len(schema_fields)
             schema_fields = [field for field in schema_fields if field.name in df.columns]
+            print(f"DEBUG: Schema filtering: {original_field_count} -> {len(schema_fields)} fields")
+            kraken_schema_fields = [f.name for f in schema_fields if 'kraken' in f.name]
+            print(f"DEBUG: Kraken columns in final schema: {kraken_schema_fields}")
             explicit_schema = pa.schema(schema_fields)
 
             # Convert DataFrame to PyArrow table with explicit schema

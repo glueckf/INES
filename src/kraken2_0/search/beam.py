@@ -20,7 +20,7 @@ class BeamSearch(SearchStrategy):
         k: The beam width (number of best candidates to keep at each step).
     """
 
-    def __init__(self, k: int = 3):
+    def __init__(self, k: int = 1):
         """
         Initialize the beam search strategy.
 
