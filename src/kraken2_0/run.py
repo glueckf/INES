@@ -190,7 +190,7 @@ def _gather_problem_parameters(ines_context: Any) -> Dict[str, Any]:
         "latency_threshold": ines_context.latency_threshold,
         "latency_weighting_factor": ines_context.config.xi,
         "cost_weight": getattr(ines_context.config, "cost_weight", 0.5),
-        "latency_weight": 1 - getattr(ines_context.config, "cost_weight", 0.5)
+        "latency_weight": 1 - getattr(ines_context.config, "cost_weight", 0.5),
     }
 
     return context
@@ -201,7 +201,7 @@ def _select_strategy(algorithm_enum: Any):
     Factory function to instantiate the appropriate search strategy.
 
     Args:
-        algorithm_enum: PlacementAlgorithm enum value.
+        algorithm_enum: PlacementAlgorithm enum value or string.
 
     Returns:
         Instance of the corresponding SearchStrategy implementation.
@@ -210,7 +210,7 @@ def _select_strategy(algorithm_enum: Any):
         NotImplementedError: If the strategy is not yet implemented.
         ValueError: If the algorithm enum is not recognized.
     """
-    from kraken2_0.search import GreedySearch
+    from kraken2_0.search import GreedySearch, BeamSearch
 
     # Get the algorithm name
     algorithm_name = (
@@ -221,6 +221,9 @@ def _select_strategy(algorithm_enum: Any):
 
     if algorithm_name == "greedy":
         return GreedySearch()
+    elif algorithm_name == "k_beam":
+        # Use default k=3 (hardcoded in BeamSearch class)
+        return BeamSearch()
     elif algorithm_name == "backtracking":
         raise NotImplementedError("Backtracking search not yet implemented")
     elif algorithm_name == "branch_and_cut":
@@ -228,7 +231,7 @@ def _select_strategy(algorithm_enum: Any):
     else:
         raise ValueError(
             f"Unknown placement algorithm: {algorithm_enum}. "
-            f"Valid options: GREEDY, BACKTRACKING, BRANCH_AND_CUT"
+            f"Valid options: GREEDY, K_BEAM, BACKTRACKING, BRANCH_AND_CUT"
         )
 
 
@@ -383,7 +386,10 @@ def _enrich_log_with_solution(
 
 
 def _prepare_run_results_summary(
-    run_id: str, strategy_results: Dict[str, Any], problem: PlacementProblem, ines_context: Any
+    run_id: str,
+    strategy_results: Dict[str, Any],
+    problem: PlacementProblem,
+    ines_context: Any,
 ) -> List[Dict[str, Any]]:
     """
     Prepare summary data for run results from strategy executions.
@@ -422,9 +428,13 @@ def _prepare_run_results_summary(
         "latency_threshold": config.latency_threshold,
         "cost_weight": cost_weight,
         "latency_weight": latency_weight,
-        "mode": config.mode.value if hasattr(config.mode, 'value') else str(config.mode),
-        "algorithm": config.algorithm.value if hasattr(config.algorithm, 'value') else str(config.algorithm),
-        "graph_density": getattr(ines_context, 'graph_density', None),
+        "mode": config.mode.value
+        if hasattr(config.mode, "value")
+        else str(config.mode),
+        "algorithm": config.algorithm.value
+        if hasattr(config.algorithm, "value")
+        else str(config.algorithm),
+        "graph_density": getattr(ines_context, "graph_density", None),
     }
 
     for strategy_name, result in strategy_results.items():

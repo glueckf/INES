@@ -36,6 +36,7 @@ class PlacementAlgorithm(Enum):
     GREEDY = "greedy"  # Greedy algorithm (default, fast)
     BACKTRACKING = "backtracking"  # Backtracking with latency constraints
     BRANCH_AND_CUT = "branch_and_cut"  # Branch and cut (not yet implemented)
+    K_BEAM = "k_beam"  # K-Beam search with configurable beam width
 
 
 @dataclass
@@ -734,7 +735,6 @@ class INES:
         # Only take the first 4 results to match the schema
         self.results += prepp_results[0:4]
 
-
     def _calculate_sum_of_primitive_input_rates_per_query(self) -> Dict:
         """
         Calculate the sum of all primitive input rates for each query.
@@ -749,7 +749,6 @@ class INES:
             Example: {query1: 1845.0, query2: 1002.0, ...}
         """
         from helper.projString import filter_numbers
-
 
         sum_of_input_rates = {}
 

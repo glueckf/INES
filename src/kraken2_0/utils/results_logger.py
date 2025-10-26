@@ -199,11 +199,15 @@ def _write_dataset_with_validation(table: pa.Table, output_dir: Path) -> None:
 
     pq.write_to_dataset(table, root_path=str(output_dir))
 
-    new_files = [file for file in output_dir.glob("*.parquet") if file.name not in existing_files]
+    new_files = [
+        file for file in output_dir.glob("*.parquet") if file.name not in existing_files
+    ]
 
     # Fallback: if the dataset writer reused an existing filename, validate the most recent file
     if not new_files and existing_files:
-        candidates = sorted(output_dir.glob("*.parquet"), key=lambda f: f.stat().st_mtime, reverse=True)
+        candidates = sorted(
+            output_dir.glob("*.parquet"), key=lambda f: f.stat().st_mtime, reverse=True
+        )
         new_files = candidates[:1]
 
     _validate_written_files(new_files)

@@ -2,7 +2,6 @@
 
 import io
 import hashlib
-import logging
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -96,6 +95,7 @@ class CostCalculator:
 
         # Run PrePP for push-pull optimization
         from prepp import generate_prePP
+
         prepp_output = generate_prePP(
             input_buffer=input_buffer,
             method=METHOD,
@@ -536,8 +536,12 @@ class CostCalculator:
         # The ratio is: (sum of pull response costs) / (sum of all primitive input rates for query)
         # where costs = rate × distance, creating a weighted average by transmission distance
 
-        sum_of_input_costs_for_strategy = sum(step.pull_response.cost for step in acquisition_set.steps)
-        sum_of_input_rates_for_primitive_strategy = self.params["sum_of_input_rates_per_query"][p]
+        sum_of_input_costs_for_strategy = sum(
+            step.pull_response.cost for step in acquisition_set.steps
+        )
+        sum_of_input_rates_for_primitive_strategy = self.params[
+            "sum_of_input_rates_per_query"
+        ][p]
 
         # Calculate the input ratio based on transmission costs
         input_ratio = (
