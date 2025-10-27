@@ -1390,9 +1390,12 @@ class Simulation:
             print("--- Running Kraken Computation ---")
             from src.kraken2_0.run import run_kraken_solver
 
+            # TODO: Note that we currently have `strategies_to_run` but only one strategy can run at a time
+            #  In the future, we should be able to run multiple strategies in one go and get their results together
+            #  or each result separately
             self.kraken_results = run_kraken_solver(
                 ines_context=self,
-                strategies_to_run=["k_beam"],
+                strategies_to_run=["greedy"],
                 enable_detailed_logging=False,
             )
             print(f"--- KRAKEN COMPUTATION COMPLETE ---")

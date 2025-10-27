@@ -581,13 +581,13 @@ def main() -> None:
 
     # Option 2: Full parameter study (active by default)
     run_parameter_study(
-        network_sizes=[10, 30, 50, 100, 200],
-        workload_sizes=[3, 5, 8],
+        network_sizes=[100, 200, 500, 1000],
+        workload_sizes=[5],
         parent_factors=[1.8],
-        query_lengths=[3, 5, 8],
+        query_lengths=[5],
         runs_per_combination=50,
-        node_event_ratios=[0.5, 0.7],
-        num_event_types=[4, 6, 8],
+        node_event_ratios=[0.7],
+        num_event_types=[6],
         event_skews=[2.0],
         mode=SimulationMode.RANDOM,
         enable_parallel=True,
