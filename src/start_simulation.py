@@ -579,20 +579,118 @@ def main() -> None:
     #     num_runs=1
     # )
 
-    # Option 2: Full parameter study (active by default)
+    # Default configuration: Full parameter study
+    # network_sizes = 100
+    # workload_sizes = 5
+    # parent_factors = 1.8
+    # query_lengths = 5
+    # runs_per_combination = 50
+    # node_event_ratios = 0.7
+    # num_event_types = 6
+    # event_skews = 2.0
     run_parameter_study(
-        network_sizes=[100, 200, 500, 1000],
-        workload_sizes=[5],
+        network_sizes=[100],
+        workload_sizes=[3, 5, 7, 10, 20, 40],
         parent_factors=[1.8],
         query_lengths=[5],
         runs_per_combination=50,
         node_event_ratios=[0.7],
         num_event_types=[6],
         event_skews=[2.0],
+        latency_threshold=None,
         mode=SimulationMode.RANDOM,
         enable_parallel=True,
         max_workers=14,
-        xi=0,
+    )
+
+    run_parameter_study(
+        network_sizes=[100],
+        workload_sizes=[5],
+        parent_factors=[1, 1.2, 1.4, 1.8, 2.0],
+        query_lengths=[5],
+        runs_per_combination=50,
+        node_event_ratios=[0.7],
+        num_event_types=[6],
+        event_skews=[2.0],
+        latency_threshold=None,
+        mode=SimulationMode.RANDOM,
+        enable_parallel=True,
+        max_workers=14,
+    )
+
+    run_parameter_study(
+        network_sizes=[100],
+        workload_sizes=[5],
+        parent_factors=[1.8],
+        query_lengths=[3, 5, 8, 10],
+        runs_per_combination=50,
+        node_event_ratios=[0.7],
+        num_event_types=[6],
+        event_skews=[2.0],
+        latency_threshold=None,
+        mode=SimulationMode.RANDOM,
+        enable_parallel=True,
+        max_workers=14,
+    )
+
+    run_parameter_study(
+        network_sizes=[50],
+        workload_sizes=[5],
+        parent_factors=[1.8],
+        query_lengths=[5],
+        runs_per_combination=50,
+        node_event_ratios=[0.1, 0.3, 0.5, 0.7, 0.9],
+        num_event_types=[6],
+        event_skews=[2.0],
+        latency_threshold=None,
+        mode=SimulationMode.RANDOM,
+        enable_parallel=True,
+        max_workers=14,
+    )
+
+    run_parameter_study(
+        network_sizes=[50],
+        workload_sizes=[5],
+        parent_factors=[1.8],
+        query_lengths=[5],
+        runs_per_combination=50,
+        node_event_ratios=[0.1, 0.3, 0.5, 0.7, 0.9],
+        num_event_types=[6],
+        event_skews=[2.0],
+        latency_threshold=None,
+        mode=SimulationMode.RANDOM,
+        enable_parallel=True,
+        max_workers=14,
+    )
+
+    run_parameter_study(
+        network_sizes=[50],
+        workload_sizes=[5],
+        parent_factors=[1.8],
+        query_lengths=[5],
+        runs_per_combination=50,
+        node_event_ratios=[0.7],
+        num_event_types=[4, 6, 8, 10, 20],
+        event_skews=[2.0],
+        latency_threshold=None,
+        mode=SimulationMode.RANDOM,
+        enable_parallel=True,
+        max_workers=14,
+    )
+
+    run_parameter_study(
+        network_sizes=[50],
+        workload_sizes=[5],
+        parent_factors=[1.8],
+        query_lengths=[5],
+        runs_per_combination=50,
+        node_event_ratios=[0.7],
+        num_event_types=[6],
+        event_skews=[1.0, 1.2, 1.4, 1.8, 1.6, 2.0],
+        latency_threshold=None,
+        mode=SimulationMode.RANDOM,
+        enable_parallel=True,
+        max_workers=14,
     )
 
     # run_parameter_study(
