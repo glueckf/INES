@@ -1324,6 +1324,9 @@ class Simulation:
             end_time_setup = time.time()
             self.setup_time = end_time_setup - start_time_setup
 
+            # calculate the average selectivity
+            self.average_selectivity = sum(self.selectivities.values())/len(self.selectivities)
+
             print("--- SETUP COMPLETE ---")
         except Exception as e:
             logger.error(msg=e, exc_info=True)
@@ -1488,6 +1491,7 @@ class Simulation:
             row["entire_simulation_time"] = safe_float(getattr(self, "entire_simulation_time", None))
             row["setup_time"] = safe_float(getattr(self, "setup_time", None))
             row["combigen_computation_time"] = safe_float(getattr(self, "combigen_computation_time", None))
+            row["average_selectivity"] = safe_float(getattr(self, "average_selectivity", None))
 
             if not row:
                 print("--- No results to write ---")
@@ -1563,6 +1567,7 @@ class Simulation:
                 pa.field("entire_simulation_time", pa.float64()),
                 pa.field("setup_time", pa.float64()),
                 pa.field("combigen_computation_time", pa.float64()),
+                pa.field("average_selectivity", pa.float64()),
             ]
 
             # Only include fields that exist in the DataFrame
