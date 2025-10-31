@@ -7,3 +7,7 @@ CLAUDE.md
 *.parquet
 *.csv
 .idea/
+
+src/kraken2_0/analysis
+
+sync_remote_results.sh
