@@ -8,6 +8,7 @@ CLAUDE.md
 *.csv
 .idea/
 
-src/kraken2_0/analysis
+analysis
 
 sync_remote_results.sh
+__pycache__/
