@@ -261,7 +261,7 @@ def computeMSplacementCosts(
 def NEWcomputeMSplacementCosts(
     self, projection, sourcetypes, destinationtypes, noFilter, G
 ):
-    from allPairs import create_routing_dict
+    from src.allPairs import create_routing_dict
 
     routingDict = create_routing_dict(G)
     routingAlgo = dict(nx.all_pairs_shortest_path(G))
