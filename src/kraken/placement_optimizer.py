@@ -93,6 +93,8 @@ class PlacementOptimizer:
         subquery_nodes = list(placed_subqueries.values())
         common_reachable = self._get_common_reachable_nodes(subquery_nodes)
 
+        # TODO: Filter for ressource constraints.
+
         # Filter nodes based on reachability
         valid_nodes = [node for node in possible_nodes if node in common_reachable]
 
