@@ -70,28 +70,29 @@ def optimisticTotalRate_single(self, projection):  # USE FILTERED RATE FOR ESTIM
         return rates[projection.leafs()[0]] * len(nodes[projection.leafs()[0]])
 
 
-def returnPartitioning(self, proj, combi, projrates: dict, *args):
+def returnPartitioning(self, proj, combi, projrates: dict, *criticalMSTypes):
     """returns list containing partitioning input type of proj generated with combi, args contains critical eventtypes, if potential eventtype in critical events, return False"""
-
+    # TODO What is def of a critical event type?"""
     DistMatrices = None
     MSTrees = None
     rates = self.h_rates_data
+    """ myevents is a list of primitive events, sorted by their base rates (descending)"""
     myevents = [x for x in combi if len(x) == 1]
     myevents = sorted(myevents, key=lambda x: rates[x], reverse=True)
-    if args:
-        args = args[0]
+    if criticalMSTypes:
+        criticalMSTypes = criticalMSTypes[0]
         if myevents:
-            if myevents[0] in args:
+            if myevents[0] in criticalMSTypes:
+                """iff highest-rate primitive being critical this blocks partitioning"""
                 res, DistMatrices, MSTrees = NEW_isPartitioning(
                     self, myevents[0], combi, proj, projrates
                 )
-                return [], DistMatrices, MSTrees  # ,DistMatrices,MSTrees
+                return [], DistMatrices, MSTrees
 
     if myevents:
         res, DistMatrices, MSTrees = NEW_isPartitioning(
             self, myevents[0], combi, proj, projrates
         )
-        # res = NEW_isPartitioning_alt(myevents[0], combi, proj, myprojFilterDict)
         if res:
             return [myevents[0], res[0]], DistMatrices, MSTrees
     return [], DistMatrices, MSTrees
@@ -252,12 +253,8 @@ def minimum_subgraph(G, nodes_list):
     return subgraph
 
 
-def NEW_isPartitioning(self, element, combi, proj, projrates: dict):
-    """returns true if element partitioning input of proj generated with combi"""
-    MSTrees = {}
-    DistMatrices = {}
-
-    # Debug fix, because for fixed workload, an error occurs.
+def NEW_isPartitioning(self, eventType, combi, proj, projrates: dict):
+    """returns true if eventType partitioning input of proj generated with combi"""
     # Check if MSTrees and DistMatrices are initialized
     if not hasattr(self, "MSTrees"):
         self.MSTrees = {}
@@ -277,13 +274,15 @@ def NEW_isPartitioning(self, element, combi, proj, projrates: dict):
 
     longestPath = getLongest(self.allPairs)
 
-    etbs = IndexEventNodes[element]
+    """ returns the sources of the event type """
+    etbs = IndexEventNodes[eventType]
     myNodes = [getNodes(x, EventNodes, IndexEventNodes)[0] for x in etbs]
-    if element not in MSTrees.keys():
+
+    if eventType not in MSTrees.keys():
         myTree = minimum_subgraph(G, myNodes)
-        MSTrees[element] = myTree
+        MSTrees[eventType] = myTree
     else:
-        myTree = MSTrees[element]
+        myTree = MSTrees[eventType]
 
     if myTree not in DistMatrices.keys():
         myAllPairs = fillMyDistMatrice(myTree)
@@ -295,7 +294,7 @@ def NEW_isPartitioning(self, element, combi, proj, projrates: dict):
     costs = len(myTree.edges())
 
     mysum = 0
-    for i in [x for x in combi if not x == element]:
+    for i in [x for x in combi if not x == eventType]:
         if i in rates.keys():
             additional = rates[i] * len(nodes[i])
             mysum += additional
@@ -310,7 +309,7 @@ def NEW_isPartitioning(self, element, combi, proj, projrates: dict):
         )  # additional constraint about ratio of partitioning event type and outputrate of projection
 
     if (
-        totalRate(self, element, projrates) * longestPath
+        totalRate(self, eventType, projrates) * longestPath
         > (mysum * costs) + myproj * longestPath
     ):
         return [costs], MSTrees, DistMatrices

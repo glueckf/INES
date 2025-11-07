@@ -191,11 +191,10 @@ def calculate_operatorPlacement(self, file_path: str, max_parents: int):
                 [hopLatency[x] for x in unfolded[projection] if x in hopLatency.keys()]
             )
 
-        # partType = returnPartitioning(self,projection, unfolded[projection], self.h_projrates,criticalMSTypes)
-
         # ComputeMSPlacement
-        # TODO: Currntly leave out MS placement for integrated approach, as it is not yet implemented
-        # partType,_,_ = returnPartitioning(self, projection, unfolded[projection], projrates ,criticalMSTypes)
+        # TODO: Currently leave out MS placement for integrated approach, as it is not yet implemented
+        #partType = returnPartitioning(self, projection, unfolded[projection], self.h_projrates,criticalMSTypes)
+        #returns true of routing all other tuples to high-rate event is benefical, else false
         partType = False
         if partType:
             MSPlacements[projection] = partType

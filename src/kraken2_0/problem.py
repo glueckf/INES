@@ -101,17 +101,28 @@ class PlacementProblem:
         p = self.processing_order[projection_index]
 
         # Get and sort candidate physical nodes
+        # TODO placed_subqueries ... maybe naming is a bit confusing? Is it list of nodes or are operatros placed already?
         placed_subqueries = s_current.get_placed_subqueries(p, self)
 
         # (Pass necessary context to the optimizer)
         # This returns all the physical nodes n from the network T, that are capable of hosting this query simply based
-        # on the question if all inputs are able to arrive there.
+        # on the question if all inputs (or the required subset for MNP) are able to arrive there.
         possible_nodes = self.optimizer.get_possible_placement_nodes_optimized(
             p, placed_subqueries, self.cost_calculator.params
         )
 
-        if not possible_nodes:
+        if not possible_nodes[0]:
             return []
+
+        # knowing p(rojection) and possible_nodes
+        if possible_nodes[1]: # check if possible nodes contain an MNP placement
+            # now we have to figure out if this beneficial for us that should only be a problem if fan-out
+            # if fan out : partType = False (or SNP for p)
+            # else: partType: True
+            partType: True #(MNP for p)
+        else:
+            partType = False # meaning SNP
+    # TODO how to proceed, if MNP that means p is place multiple times at multiple node, i.e, that only nodes in missings_by_node + SNP
 
         # This sorts the nodes in an optimized manner to allow for pruning.
         # The goal is to: Check nodes that have all the inputs available first

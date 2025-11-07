@@ -12,3 +12,5 @@ analysis
 
 sync_remote_results.sh
 __pycache__/
+
+requirements.txt
