@@ -60,6 +60,8 @@ RUN_RESULTS_HEADER = [
     # Placement metrics
     "num_placements",
     "placements_at_cloud",
+    # Strategy parameters
+    "beam_width_k",
     # Configuration parameters
     "network_size",
     "event_skew",
@@ -79,6 +81,7 @@ RUN_RESULTS_HEADER = [
 OUTPUT_DIRECTORY = "result"
 RUN_RESULTS_DIR = "run_results.parquet"
 DETAILED_LOG_DIR = "detailed_run_log.parquet"
+KRAKEN_COMPARISON_DIR = "kraken_comparison.parquet"
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +100,7 @@ def initialize_logging() -> None:
     base_path = Path(OUTPUT_DIRECTORY)
     (base_path / RUN_RESULTS_DIR).mkdir(parents=True, exist_ok=True)
     (base_path / DETAILED_LOG_DIR).mkdir(parents=True, exist_ok=True)
+    (base_path / KRAKEN_COMPARISON_DIR).mkdir(parents=True, exist_ok=True)
 
 
 def write_detailed_log(run_id: str, detailed_log_data: List[Dict[str, Any]]) -> None:
@@ -161,6 +165,7 @@ def write_run_results(results_data: List[Dict[str, Any]]) -> None:
         "cumulative_processing_latency",
         "num_placements",
         "placements_at_cloud",
+        "beam_width_k",
         "network_size",
         "event_skew",
         "node_event_ratio",
@@ -180,6 +185,41 @@ def write_run_results(results_data: List[Dict[str, Any]]) -> None:
     table = pa.Table.from_pandas(df, preserve_index=False)
 
     output_dir = Path(OUTPUT_DIRECTORY) / RUN_RESULTS_DIR
+
+    _write_dataset_with_validation(table, output_dir)
+
+
+def write_kraken_comparison_log(results_data: List[Dict[str, Any]]) -> None:
+    """
+    Write a single-row, wide-format comparison of Kraken strategies.
+
+    This log does not use a fixed header, as columns are generated
+    dynamically based on the strategies being compared.
+
+    Args:
+        results_data: List containing a single dictionary with the
+            wide-format comparison row.
+
+    Raises:
+        OSError: If file writing fails.
+        ValueError: If result entries are missing required fields.
+        RuntimeError: If a written dataset fragment fails validation.
+    """
+    if not results_data:
+        return
+
+    # Convert the single-row dictionary into a DataFrame
+    df = pd.DataFrame(results_data)
+
+    # Ensure run_id and workload are strings
+    if "run_id" in df.columns:
+        df["run_id"] = df["run_id"].astype(str)
+    if "workload" in df.columns:
+        df["workload"] = df["workload"].astype(str)
+
+    table = pa.Table.from_pandas(df, preserve_index=False)
+
+    output_dir = Path(OUTPUT_DIRECTORY) / KRAKEN_COMPARISON_DIR
 
     _write_dataset_with_validation(table, output_dir)
 

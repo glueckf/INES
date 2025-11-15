@@ -19,6 +19,7 @@ from kraken2_0.utils.results_logger import (
     initialize_logging,
     write_detailed_log,
     write_run_results,
+    write_kraken_comparison_log,
 )
 
 
@@ -26,6 +27,7 @@ def run_kraken_solver(
     ines_context: Any,
     strategies_to_run: List[Any],
     enable_detailed_logging: bool = False,
+    compare_within_kraken: bool = False,
 ) -> Dict[str, Any]:
     """
     Main entry point for the Kraken 2.0 solver framework.
@@ -34,8 +36,9 @@ def run_kraken_solver(
 
     Args:
         ines_context: The INES simulation context object containing all problem data.
-        strategies_to_run: List of PlacementAlgorithm enums specifying which strategies to execute.
+        strategies_to_run: List of strategy configurations (dicts or enums) specifying which strategies to execute.
         enable_detailed_logging: If True, logs every placement decision to CSV for analysis.
+        compare_within_kraken: If True, logs all strategy results in a single wide-format row for comparison.
 
     Returns:
         Dictionary containing execution results with the following structure:
@@ -73,17 +76,39 @@ def run_kraken_solver(
     strategy_results = {}
     master_log_data = []  # Accumulate logs across all strategies
 
-    for strategy_enum in strategies_to_run:
-        strategy_name = (
-            str(strategy_enum.value)
-            if hasattr(strategy_enum, "value")
-            else str(strategy_enum)
-        )
+    for strategy_config in strategies_to_run:
+        # Get config, default to string if old format is used
+        if isinstance(strategy_config, dict):
+            algorithm_name = strategy_config.get("name")
+            k_value = strategy_config.get("k", None)
+        else:
+            algorithm_name = (
+                str(strategy_config.value)
+                if hasattr(strategy_config, "value")
+                else str(strategy_config)
+            )
+            k_value = None
+
+        # Generate a unique strategy name for logging
+        if algorithm_name == "k_beam" and k_value is not None:
+            strategy_name = f"k_beam_k={k_value}"
+        elif algorithm_name:
+            strategy_name = algorithm_name
+        else:
+            # Handle bad config
+            strategy_results["unknown_strategy"] = {
+                "status": "failure",
+                "error": "Invalid strategy config. Must be dict or enum.",
+                "execution_time_seconds": 0.0,
+                "k_value": None,
+            }
+            continue
 
         # Select and execute strategy
         strategy_start = time.time()
         try:
-            strategy = _select_strategy(strategy_enum)
+            # Pass the dict config directly to the factory
+            strategy = _select_strategy(strategy_config)
             solution = strategy.solve(problem)
             strategy_end = time.time()
 
@@ -95,6 +120,7 @@ def run_kraken_solver(
                 "solution": solution,
                 "metrics": metrics,
                 "execution_time_seconds": strategy_end - strategy_start,
+                "k_value": k_value,
             }
 
             # Collect and enrich detailed logs if enabled
@@ -110,6 +136,7 @@ def run_kraken_solver(
                 "status": "failure",
                 "error": str(e),
                 "execution_time_seconds": strategy_end - strategy_start,
+                "k_value": k_value,
             }
 
     # Write detailed logs to Parquet if enabled
@@ -120,11 +147,20 @@ def run_kraken_solver(
     end_time = time.time()
 
     # Prepare and write run results summary
-    run_results_data = _prepare_run_results_summary(
-        str(run_id), strategy_results, problem, ines_context
-    )
-    if run_results_data:
-        write_run_results(run_results_data)
+    if compare_within_kraken:
+        # Build the wide-format, single-row summary
+        comparison_data = _prepare_kraken_comparison_summary(
+            str(run_id), strategy_results, problem, ines_context
+        )
+        if comparison_data:
+            write_kraken_comparison_log(comparison_data)
+    else:
+        # Use the standard, long-format summary
+        run_results_data = _prepare_run_results_summary(
+            str(run_id), strategy_results, problem, ines_context
+        )
+        if run_results_data:
+            write_run_results(run_results_data)
 
     # Select best solution (lowest cost among successful strategies)
     best_solution = _select_best_solution(strategy_results)
@@ -196,12 +232,13 @@ def _gather_problem_parameters(ines_context: Any) -> Dict[str, Any]:
     return context
 
 
-def _select_strategy(algorithm_enum: Any):
+def _select_strategy(strategy_config: Any):
     """
     Factory function to instantiate the appropriate search strategy.
 
     Args:
-        algorithm_enum: PlacementAlgorithm enum value or string.
+        strategy_config: A dictionary (e.g., {"name": "k_beam", "k": 3})
+                         or a legacy enum/string.
 
     Returns:
         Instance of the corresponding SearchStrategy implementation.
@@ -212,26 +249,32 @@ def _select_strategy(algorithm_enum: Any):
     """
     from kraken2_0.search import GreedySearch, BeamSearch
 
-    # Get the algorithm name
-    algorithm_name = (
-        algorithm_enum.value
-        if hasattr(algorithm_enum, "value")
-        else str(algorithm_enum)
-    )
+    k_value = None
+    if isinstance(strategy_config, dict):
+        algorithm_name = strategy_config.get("name")
+        k_value = strategy_config.get("k")
+    else:
+        # Fallback for legacy enum/string
+        algorithm_name = (
+            strategy_config.value
+            if hasattr(strategy_config, "value")
+            else str(strategy_config)
+        )
 
     if algorithm_name == "greedy":
         return GreedySearch()
     elif algorithm_name == "k_beam":
-        # Use default k=3 (hardcoded in BeamSearch class)
-        return BeamSearch()
+        # Use k_value from config, or default (from BeamSearch class)
+        k_to_use = k_value if k_value is not None else 3
+        return BeamSearch(k=int(k_to_use))
     elif algorithm_name == "backtracking":
         raise NotImplementedError("Backtracking search not yet implemented")
     elif algorithm_name == "branch_and_cut":
         raise NotImplementedError("Branch and cut search not yet implemented")
     else:
         raise ValueError(
-            f"Unknown placement algorithm: {algorithm_enum}. "
-            f"Valid options: GREEDY, K_BEAM, BACKTRACKING, BRANCH_AND_CUT"
+            f"Unknown placement algorithm: {algorithm_name}. "
+            f"Valid options: greedy, k_beam, backtracking, branch_and_cut"
         )
 
 
@@ -385,6 +428,123 @@ def _enrich_log_with_solution(
     return enriched_log
 
 
+def _get_strategy_prefix(strategy_name: str, result: Dict[str, Any]) -> str:
+    """Generate a Parquet-friendly column prefix for a strategy.
+
+    Args:
+        strategy_name: The name of the strategy (e.g., "greedy", "k_beam_k=3").
+        result: The result dictionary containing k_value if applicable.
+
+    Returns:
+        A column prefix string (e.g., "kraken_greedy", "kraken_k_3_beam").
+    """
+    name = strategy_name.lower()
+    if name == "greedy":
+        return "kraken_greedy"
+    elif name.startswith("k_beam"):
+        k_value = result.get("k_value")
+        if k_value is not None:
+            # Replaces 'k_beam_k=3' with 'kraken_k_3_beam'
+            return f"kraken_k_{k_value}_beam"
+        else:
+            return "kraken_k_beam_unknown"
+    # Fallback for other strategies
+    return f"kraken_{name.replace('=', '_').replace('-', '_')}"
+
+
+def _prepare_kraken_comparison_summary(
+    run_id: str,
+    strategy_results: Dict[str, Any],
+    problem: PlacementProblem,
+    ines_context: Any,
+) -> List[Dict[str, Any]]:
+    """
+    Prepare a single-row, wide-format summary for Kraken strategy comparison.
+
+    Args:
+        run_id: Unique identifier for this run.
+        strategy_results: Dictionary of results from each strategy execution.
+        problem: PlacementProblem instance for workload information.
+        ines_context: INES context for configuration information.
+
+    Returns:
+        List containing a single dictionary with all comparison metrics.
+    """
+    if not strategy_results:
+        return []
+
+    # Start with common run information
+    comparison_row = {
+        "run_id": run_id,
+        "workload": ";".join(str(q) for q in problem.query_workload),
+    }
+
+    # Add config data (same as in _prepare_run_results_summary)
+    config = ines_context.config
+    cost_weight = getattr(config, "cost_weight", 0.5)
+    cost_weight = max(0.0, min(cost_weight, 1.0))
+    latency_weight = 1.0 - cost_weight
+
+    comparison_row.update(
+        {
+            "network_size": config.network_size,
+            "event_skew": config.event_skew,
+            "node_event_ratio": config.node_event_ratio,
+            "max_parents": config.max_parents,
+            "parent_factor": config.parent_factor,
+            "num_event_types": config.num_event_types,
+            "query_size": config.query_size,
+            "query_length": config.query_length,
+            "xi": config.xi,
+            "latency_threshold": config.latency_threshold,
+            "cost_weight": cost_weight,
+            "latency_weight": latency_weight,
+            "mode": config.mode.value
+            if hasattr(config.mode, "value")
+            else str(config.mode),
+            "algorithm": config.algorithm.value
+            if hasattr(config.algorithm, "value")
+            else str(config.algorithm),
+            "graph_density": getattr(ines_context, "graph_density", None),
+        }
+    )
+
+    # Iterate over each strategy and add its metrics with a unique prefix
+    for strategy_name, result in strategy_results.items():
+        prefix = _get_strategy_prefix(strategy_name, result)
+
+        # Add general metrics
+        comparison_row[f"{prefix}_status"] = result["status"]
+        comparison_row[f"{prefix}_computing_time"] = result["execution_time_seconds"]
+
+        if result["status"] == "success":
+            metrics = result["metrics"]
+            comparison_row[f"{prefix}_cost"] = metrics["total_cost"]
+            comparison_row[f"{prefix}_workload_cost"] = metrics["workload_cost"]
+            comparison_row[f"{prefix}_transmission_latency"] = metrics["max_latency"]
+            comparison_row[f"{prefix}_processing_latency"] = metrics[
+                "cumulative_processing_latency"
+            ]
+            comparison_row[f"{prefix}_num_placements"] = metrics["num_placements"]
+            comparison_row[f"{prefix}_placements_at_cloud"] = metrics[
+                "placements_at_cloud"
+            ]
+            comparison_row[f"{prefix}_average_cost_per_placement"] = metrics[
+                "average_cost_per_placement"
+            ]
+        else:
+            # Fill failed strategy metrics with None
+            comparison_row[f"{prefix}_cost"] = None
+            comparison_row[f"{prefix}_workload_cost"] = None
+            comparison_row[f"{prefix}_transmission_latency"] = None
+            comparison_row[f"{prefix}_processing_latency"] = None
+            comparison_row[f"{prefix}_num_placements"] = None
+            comparison_row[f"{prefix}_placements_at_cloud"] = None
+            comparison_row[f"{prefix}_average_cost_per_placement"] = None
+
+    return [comparison_row]
+
+
 def _prepare_run_results_summary(
     run_id: str,
     strategy_results: Dict[str, Any],
@@ -444,6 +604,7 @@ def _prepare_run_results_summary(
             "workload": workload_str,
             "status": result["status"],
             "execution_time_seconds": result["execution_time_seconds"],
+            "beam_width_k": result.get("k_value", None),
         }
 
         if result["status"] == "success":
