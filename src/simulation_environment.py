@@ -1346,48 +1346,48 @@ class Simulation:
         """
         # ----- ALL PUSH CALCULATION -----#
         try:
-            print("--- Running All Push Computation ---")
-            self.all_push_results = compute_all_push(self)
-            all_push_latency = self.all_push_results.get("transmission_latency", 0.0)
-            if self.latency_threshold is not None:
-                self.latency_threshold *= all_push_latency
-            print("--- ALL PUSH COMPUTATION COMPLETE ---")
-
-            # ----- INEV COMPUTATION -----#
-            print("--- Running INEv Computation ---")
-            inev_start_time = time.time()
-            ines_start_time = inev_start_time  # For consistency in logging
-            (self.eval_plan, self.central_eval_plan, self.experiment_result,
-             self.results, self.inev_results) = calculate_operatorPlacement(self, "test", 0)
-            inev_end_time = time.time()
-            print("--- INEV COMPUTATION COMPLETE ---")
-
-            # ----- INES COMPUTATION (using INEv results) -----#
-            print("--- Running INES Computation ---")
-            plan, reused_section = generate_eval_plan(
-                self.network, self.selectivities, self.eval_plan,
-                self.central_eval_plan, self.query_workload
-            )
-            deterministic_flag = self.config.is_selectivities_fixed()
-            ines_results = generate_prePP(
-                plan, "ppmuse", "e", 1, 0, 1, True, self.allPairs, deterministic_flag
-            )
-
-            # Update both INES and INEv results with topology adjustments
-            self.raw_ines_prepp_result = ines_results
-            ines_dict, inev_dict = update_results_for_topology(self, ines_results, self.inev_results)
-            ines_end_time = time.time()
-            inev_dict["computing_time"] = inev_end_time - inev_start_time
-            ines_dict["computing_time"] = ines_end_time - ines_start_time
-            self.ines_results = ines_dict
-            self.inev_results = inev_dict
-
-            print("--- INES COMPUTATION COMPLETE ---")
-
-            # ----- SOLELY PREPP COMPUTATION (from cloud) -----#
-            print("--- Running PrePP from Cloud Computation ---")
-            self.prepp_from_cloud_result = calculate_prepp_from_cloud(self, reused_section)
-            print("--- PREPP FROM CLOUD COMPUTATION COMPLETE ---")
+            # print("--- Running All Push Computation ---")
+            # self.all_push_results = compute_all_push(self)
+            # all_push_latency = self.all_push_results.get("transmission_latency", 0.0)
+            # if self.latency_threshold is not None:
+            #     self.latency_threshold *= all_push_latency
+            # print("--- ALL PUSH COMPUTATION COMPLETE ---")
+            #
+            # # ----- INEV COMPUTATION -----#
+            # print("--- Running INEv Computation ---")
+            # inev_start_time = time.time()
+            # ines_start_time = inev_start_time  # For consistency in logging
+            # (self.eval_plan, self.central_eval_plan, self.experiment_result,
+            #  self.results, self.inev_results) = calculate_operatorPlacement(self, "test", 0)
+            # inev_end_time = time.time()
+            # print("--- INEV COMPUTATION COMPLETE ---")
+            #
+            # # ----- INES COMPUTATION (using INEv results) -----#
+            # print("--- Running INES Computation ---")
+            # plan, reused_section = generate_eval_plan(
+            #     self.network, self.selectivities, self.eval_plan,
+            #     self.central_eval_plan, self.query_workload
+            # )
+            # deterministic_flag = self.config.is_selectivities_fixed()
+            # ines_results = generate_prePP(
+            #     plan, "ppmuse", "e", 1, 0, 1, True, self.allPairs, deterministic_flag
+            # )
+            #
+            # # Update both INES and INEv results with topology adjustments
+            # self.raw_ines_prepp_result = ines_results
+            # ines_dict, inev_dict = update_results_for_topology(self, ines_results, self.inev_results)
+            # ines_end_time = time.time()
+            # inev_dict["computing_time"] = inev_end_time - inev_start_time
+            # ines_dict["computing_time"] = ines_end_time - ines_start_time
+            # self.ines_results = ines_dict
+            # self.inev_results = inev_dict
+            #
+            # print("--- INES COMPUTATION COMPLETE ---")
+            #
+            # # ----- SOLELY PREPP COMPUTATION (from cloud) -----#
+            # print("--- Running PrePP from Cloud Computation ---")
+            # self.prepp_from_cloud_result = calculate_prepp_from_cloud(self, reused_section)
+            # print("--- PREPP FROM CLOUD COMPUTATION COMPLETE ---")
 
             # ----- KRAKEN COMPUTATION -----#
             print("--- Running Kraken Computation ---")
@@ -1396,11 +1396,16 @@ class Simulation:
             # TODO: Note that we currently have `strategies_to_run` but only one strategy can run at a time
             #  In the future, we should be able to run multiple strategies in one go and get their results together
             #  or each result separately
-            self.kraken_results = run_kraken_solver(
+            results = run_kraken_solver(
                 ines_context=self,
-                strategies_to_run=["greedy"],
-                enable_detailed_logging=False,
+                strategies_to_run=[
+                    {"name": "greedy"},
+                    {"name": "k_beam", "k": 3},
+                    {"name": "k_beam", "k": 5}
+                ],
+                compare_within_kraken=True
             )
+
             print(f"--- KRAKEN COMPUTATION COMPLETE ---")
             print(f"DEBUG: Kraken results keys: {self.kraken_results.keys() if self.kraken_results else 'None'}")
             if self.kraken_results and "strategies" in self.kraken_results:

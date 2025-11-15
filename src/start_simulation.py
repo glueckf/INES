@@ -579,9 +579,25 @@ def main() -> None:
     #     num_runs=1
     # )
 
-    # # Default configuration: Full parameter study
+    # Default configuration: Full parameter study
+    run_parameter_study(
+        network_sizes=[100],
+        workload_sizes=[5],
+        parent_factors=[1.8],
+        query_lengths=[5],
+        runs_per_combination=50,
+        node_event_ratios=[0.7],
+        num_event_types=[6],
+        event_skews=[2.0],
+        latency_threshold=None,
+        mode=SimulationMode.RANDOM,
+        enable_parallel=True,
+        max_workers=14,
+    )
+
+    # # Network
     # run_parameter_study(
-    #     network_sizes=[100],
+    #     network_sizes=[10, 30, 50, 100, 200, 500, 1000],
     #     workload_sizes=[5],
     #     parent_factors=[1.8],
     #     query_lengths=[5],
@@ -594,70 +610,54 @@ def main() -> None:
     #     enable_parallel=True,
     #     max_workers=14,
     # )
-
-    # Network
-    run_parameter_study(
-        network_sizes=[10, 30, 50, 100, 200, 500, 1000],
-        workload_sizes=[5],
-        parent_factors=[1.8],
-        query_lengths=[5],
-        runs_per_combination=50,
-        node_event_ratios=[0.7],
-        num_event_types=[6],
-        event_skews=[2.0],
-        latency_threshold=None,
-        mode=SimulationMode.RANDOM,
-        enable_parallel=True,
-        max_workers=14,
-    )
-
-    # Workload Size
-    run_parameter_study(
-        network_sizes=[100],
-        workload_sizes=[3, 5, 7, 10, 20, 40],
-        parent_factors=[1.8],
-        query_lengths=[5],
-        runs_per_combination=50,
-        node_event_ratios=[0.7],
-        num_event_types=[6],
-        event_skews=[2.0],
-        latency_threshold=None,
-        mode=SimulationMode.RANDOM,
-        enable_parallel=True,
-        max_workers=14,
-    )
-
-    # Query length
-    run_parameter_study(
-        network_sizes=[100],
-        workload_sizes=[5],
-        parent_factors=[1.8],
-        query_lengths=[3, 5, 8, 10, 20],
-        runs_per_combination=50,
-        node_event_ratios=[0.7],
-        num_event_types=[6],
-        event_skews=[2.0],
-        latency_threshold=None,
-        mode=SimulationMode.RANDOM,
-        enable_parallel=True,
-        max_workers=14,
-    )
-
-    # Event Skew
-    run_parameter_study(
-        network_sizes=[100],
-        workload_sizes=[5],
-        parent_factors=[1.8],
-        query_lengths=[5],
-        runs_per_combination=50,
-        node_event_ratios=[0.7],
-        num_event_types=[6],
-        event_skews=[1.0, 1.2, 1.4, 1.6, 1.8, 2.0],
-        latency_threshold=None,
-        mode=SimulationMode.RANDOM,
-        enable_parallel=True,
-        max_workers=14,
-    )
+    #
+    # # Workload Size
+    # run_parameter_study(
+    #     network_sizes=[100],
+    #     workload_sizes=[3, 5, 7, 10, 20, 40],
+    #     parent_factors=[1.8],
+    #     query_lengths=[5],
+    #     runs_per_combination=50,
+    #     node_event_ratios=[0.7],
+    #     num_event_types=[6],
+    #     event_skews=[2.0],
+    #     latency_threshold=None,
+    #     mode=SimulationMode.RANDOM,
+    #     enable_parallel=True,
+    #     max_workers=14,
+    # )
+    #
+    # # Query length
+    # run_parameter_study(
+    #     network_sizes=[100],
+    #     workload_sizes=[5],
+    #     parent_factors=[1.8],
+    #     query_lengths=[3, 5, 8, 10, 20],
+    #     runs_per_combination=50,
+    #     node_event_ratios=[0.7],
+    #     num_event_types=[6],
+    #     event_skews=[2.0],
+    #     latency_threshold=None,
+    #     mode=SimulationMode.RANDOM,
+    #     enable_parallel=True,
+    #     max_workers=14,
+    # )
+    #
+    # # Event Skew
+    # run_parameter_study(
+    #     network_sizes=[100],
+    #     workload_sizes=[5],
+    #     parent_factors=[1.8],
+    #     query_lengths=[5],
+    #     runs_per_combination=50,
+    #     node_event_ratios=[0.7],
+    #     num_event_types=[6],
+    #     event_skews=[1.0, 1.2, 1.4, 1.6, 1.8, 2.0],
+    #     latency_threshold=None,
+    #     mode=SimulationMode.RANDOM,
+    #     enable_parallel=True,
+    #     max_workers=14,
+    # )
 
 
 
