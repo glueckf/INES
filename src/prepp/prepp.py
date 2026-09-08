@@ -467,13 +467,32 @@ def determine_randomized_distribution_push_pull_costs(
     cloud_evaluation_node,
     forced_push_group=None,
 ):
-    """forced_push_group: when given (an iterable of primitive event letters,
-    e.g. ["A", "B"] to push a whole already-materialized sub-query's worth of
-    primitives together, or ["B"] for a single raw event), skip the
-    exact-plan search for algorithm "e" and instead cost a plan that pushes
-    exactly that group and pulls the rest — i.e. the player's own push/pull
-    choice rather than the optimizer's. None (the default) preserves the
-    original search-driven behavior exactly."""
+    """forced_push_group: when given, skip the exact-plan search for
+    algorithm "e" and instead cost a plan that pushes exactly this group and
+    pulls the rest — i.e. the player's own push/pull choice rather than the
+    optimizer's. None (the default) preserves the original search-driven
+    behavior exactly.
+
+    Must be an iterable of the query's own one-level dependency tokens, i.e.
+    entries of `query.primitive_operators` (`old_copy` below) exactly as
+    they appear there — a raw primitive letter like "B", or an
+    already-placed sub-query dependency by its own name like "SEQ(A, B)".
+    NOT its flattened leaf primitives (["A", "B"]) — despite the
+    "primitive_operators" name, that list is one-level: an already-placed
+    sub-query dependency appears as a single opaque name string, never
+    expanded. Passing flattened leaves silently matches nothing (`e in
+    forced_push_group` never holds for a multi-char name against single
+    letters), so the forced choice is dropped without error and the
+    exact-plan search runs anyway — this bit an earlier caller (verified
+    2026-09-08, see demo/export/score_one.py's history).
+
+    Also: only pass a group that leaves `rest` non-empty (i.e. don't forced
+    push *every* one-level dependency at once) — the single-group plan that
+    results has a separate, independently confirmed bug in how it's turned
+    into acquisition steps (cost off by a division-like factor in some
+    cases). Callers wanting "push everything" should cost the plain
+    all-push strategy directly instead of forcing the full dependency set
+    through this path."""
     total_greedy_costs = 0
     total_exact_costs = 0
     total_factorial_costs = 0

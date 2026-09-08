@@ -1,7 +1,7 @@
 // Renders the side panel: query selector, subquery tray, and the scorecard /
 // leaderboard. Pure HTML-string builders; main.ts owns the DOM + delegated events.
 
-import type { AppState } from "./state";
+import { ALL_PUSH, type AppState } from "./state";
 import type { Baselines, Projection, StrategyId } from "./types";
 import { eventIconSvg, glyphFor } from "./icons";
 
@@ -27,18 +27,22 @@ function fmtRate(n: number): string {
  * high-rate one is usually cheaper) or an already-placed sub-query (shown
  * with its own sN tag, since its role here was already decided one level
  * down — this operator only chooses between that combined result and its
- * other input(s), not the raw primitives underneath it again).
+ * other input(s), not the raw primitives underneath it again). A trailing
+ * "push all" chip is a separate, explicit choice (not just an artifact of
+ * clicking nothing) — all-push is a legitimate strategy in its own right,
+ * not merely the absence of a push/pull split.
  * Mandatory: state.readyToScore requires one of these per multi-dep operator.
  */
 function renderPushPullRow(state: AppState, name: string, proj: Projection): string {
   if (proj.deps.length < 2) return "";
   const sc = state.scenario!;
   const chosen = state.pushChoice[name];
+  const isAllPush = chosen === ALL_PUSH;
   const chips = proj.deps
     .map((dep) => {
       const sub = state.subMeta.get(dep);
-      const isPush = chosen === dep;
-      const isPull = !!chosen && !isPush;
+      const isPush = isAllPush || chosen === dep;
+      const isPull = !isAllPush && !!chosen && !isPush;
       const role = isPush ? "PUSH" : isPull ? "pull" : "";
       const roleHtml = role ? `<span class="pp-role">${role}</span>` : "";
       if (sub) {
@@ -64,7 +68,12 @@ function renderPushPullRow(state: AppState, name: string, proj: Projection): str
       );
     })
     .join("");
-  return `<div class="pp-row${chosen ? "" : " needed"}"><span class="pp-label">push</span>${chips}</div>`;
+  const allChip =
+    `<button class="pp-chip pp-chip-all${isAllPush ? " push" : ""}" data-pp="${encodeURIComponent(name)}::${encodeURIComponent(ALL_PUSH)}" ` +
+    `title="Push every input, pull nothing">` +
+    `<span class="pp-all-label">push all</span>${isAllPush ? `<span class="pp-role">PUSH</span>` : ""}` +
+    `</button>`;
+  return `<div class="pp-row${chosen ? "" : " needed"}"><span class="pp-label">push</span>${chips}${allChip}</div>`;
 }
 
 // Compact by design: once you've picked a size/query you mostly just need

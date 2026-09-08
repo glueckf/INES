@@ -34,6 +34,11 @@ does.
    rather than always the cheapest one, so a bad call actually costs what it
    costs (verified: pushing the wrong/high-rate stream costs ~150x more,
    roughly all-push) instead of silently being corrected.
+   **Correction (2026-09-08, see item #10):** that verification only ever
+   exercised pushing a raw primitive — pushing an already-placed sub-query
+   dependency was silently a no-op (always scored as the optimizer's own
+   pick, regardless of the player's actual choice) from when this shipped
+   until it was found and fixed today.
 2. **Simplify the query representation** for a non-technical audience.
    Currently queries are shown as raw expressions (`SEQ(A, B, C)`), which
    reads as programming syntax rather than "spot the shark alarm."
@@ -151,47 +156,95 @@ in the demo now. Two concrete asks:
    (`correls.png`, `correls_2.png`) are still full multi-subject scenes,
    not pre-cropped icons — revisit if a use for them comes up.
 
-## Push-pull feature, flagged — needs a decision (2026-09-04)
+## Push-pull feature (2026-09-04 → 2026-09-08)
 
 10. **"All-push is valid right now — you have to force one push/pull [choice]."**
-    Ambiguous as given; investigated two readings, one ruled out, one is a
-    real design question rather than a bug:
-    - **Ruled out**: a forced push/pull choice silently reverting to an
-      all-push cost due to a computation bug. Reproduced directly via
-      `python demo/export/score_one.py medium seq_abcd '{"SEQ(A, B)": 0,
-      "SEQ(A, B, D)": 0, "SEQ(A, B, C, D)": 0}' '{"SEQ(A, B, C, D)": "C"}'`
-      (and the symmetric case pushing the other dependency instead) — both
-      report `"strategy": "push_pull"` with identical cost (405.0) to each
-      other *and* to the un-forced optimizer's own pick. Traced this to a
-      legitimate degenerate case, not a bug: all three operators in that
-      placement sit at node 0, and `SEQ(A, B, D)` is *also* placed at node
-      0 — so whichever way the third operator's push/pull is split, the
-      already-co-located dependency costs 0 regardless, collapsing both
-      choices to the same number. Testing a non-degenerate 2-dependency
-      operator (`SEQ(A, B, D)`, mixing a primitive + a sub-query dep, at a
-      placement where they're *not* co-located) showed real
-      differentiation: 1310.56 vs. 1827.0 depending on which side was
-      pushed. So `forced_push_group` (`cost_calculator.py`,
-      `score_one.py`) is doing its job; no fix applied here.
-    - **Open design question**: `state.ts`'s `rescore()` shows the client's
-      instant `Engine.score()` result (labeled `mode: "estimate"`,
-      genuinely an all-push number — see [engine.ts](web/src/engine.ts) /
-      the Rust `score_all_push`) as the **official** score immediately,
-      even though `readyToScore` already required an explicit push/pull
-      call on every multi-dependency operator to get this far. Only once
-      the backend's async `refine()` resolves does `official.mode` flip to
-      `"pushpull"` and the number update to reflect the player's actual
-      choices — and if the backend is down/unreachable, it silently stays
-      on the all-push estimate forever (`refine()`'s catch just clears
-      `pending`, keeps the old estimate). If this is what "all-push is
-      valid right now" meant, the fix is a product decision, not a bug
-      fix: e.g. don't show a score at all until the backend round-trip
-      lands (worse latency, always-correct number), or label the interim
-      number more emphatically as provisional (already says "estimate" in
-      the mode field — check whether that surfaces clearly enough in
-      [panel.ts](web/src/panel.ts)'s scorecard UI). Needs the user to
-      confirm which reading (or a third one) they meant before touching
-      code.
+    Clarified (2026-09-08): the complaint was about the mandatory-choice hint
+    itself — "Still need a push/pull call for SEQ(A, B), SEQ(A, B, D),
+    SEQ(A, B, C, D)" kept firing even though all-push is a legitimate
+    strategy, because the chip UI only ever let you pick *one specific*
+    dependency to push (implicitly pulling the rest) — there was no way to
+    explicitly say "push everything" and have that count as a made
+    decision. DONE: added `ALL_PUSH` (`"__all_push__"`, [state.ts](web/src/state.ts))
+    as a real, selectable third option — a `push all` chip alongside the
+    per-dependency ones in `renderPushPullRow` ([panel.ts](web/src/panel.ts)),
+    same mandatory toggle mechanics as the existing chips (`setPushChoice`
+    needed no changes, it's generic on the string value). When active,
+    every per-dependency chip in that row also displays as `PUSH` (true to
+    what's actually happening — nothing is pulled), verified via DOM
+    inspection.
+
+    **Also found and fixed a real, previously-shipped correctness bug while
+    building this** (i.e. item #1's "communication extend," marked DONE
+    2026-09-04, was silently broken for one whole class of input since it
+    shipped): a player's push/pull choice was only ever actually honored
+    when they pushed a **raw primitive** (e.g. "A"). Pushing an
+    **already-placed sub-query dependency** (e.g. "SEQ(A, B)") looked
+    identical in the UI (chip highlighted, hint cleared, a score came back)
+    but the choice was silently discarded and the optimizer's own pick was
+    scored instead — confirmed by forcing every variation of a sub-query
+    dependency's push (flattened leaves `["A","B"]`, a single leaf `["A"]`)
+    across 36+ placement combinations and finding the result *always*
+    matched the unforced optimum exactly, while forcing a raw primitive
+    (`["D"]`) reliably diverged from it every time. Root cause: PrePP's
+    `forced_push_group` matching (`old_copy = query.primitive_operators` in
+    `determine_randomized_distribution_push_pull_costs`, [prepp.py](../src/prepp/prepp.py))
+    operates on the query's **one-level** dependency tokens — a sub-query
+    dependency appears there as its own name string ("SEQ(A, B)"), never
+    expanded — but `score_one.py` was flattening the player's sub-query
+    choice to its leaf primitives (`dep_obj.leafs()`) before passing it,
+    which then matches nothing in that one-level list; the intersection
+    silently comes back empty and the code falls through to the regular
+    search, with no error or signal that the player's choice was ignored.
+    Fixed by passing the chosen dependency's own name through unflattened
+    (`forced_push_group=[chosen_dep]`) — re-verified clean (0/20 failures)
+    across a systematic placement scan that a forced sub-query choice now
+    reliably diverges from the optimizer's own pick exactly like a forced
+    primitive choice does. Docstrings on `forced_push_group`
+    ([prepp.py](../src/prepp/prepp.py),
+    [cost_calculator.py](../src/kraken/components/cost_calculator.py)) were
+    themselves wrong in the same way (described flattening as correct) —
+    corrected, since that's very likely *why* the original bug happened.
+
+    A **second, separate bug** turned up chasing this: forcing every one of
+    a query's dependencies into a *single* group (i.e. "push everything,
+    nothing left to pull" — needed for the `push all` chip above) doesn't
+    reproduce the true all-push cost either — off by a division-like factor
+    in several tested placements (e.g. 609.0 instead of the correct 1827.0).
+    Not root-caused (looks like a bug in how PrePP turns a single-group,
+    no-`rest` plan into acquisition steps, downstream of the fix above) —
+    worked around rather than fixed: `push all` in `score_one.py` doesn't
+    go through `forced_push_group` at all, it directly uses
+    `cost_calculator.calculate(..., forced_push_group=None)`'s first entry
+    (`_compute_all_push_costs`'s result, always present, unaffected by any
+    forced-group path) — reliable by construction, verified against known
+    all-push numbers. If a real forced-single-group use case ever comes up,
+    this second bug still needs a proper root-cause pass.
+
+    Re-investigated the earlier "identical cost regardless of which
+    dependency is forced" finding from the first pass at this item in light
+    of the above — that specific case (both dependencies co-located at the
+    same node, distance 0 either way) is still a genuine coincidence and
+    not an instance of either bug, confirmed by re-running it after the fix
+    and getting the same result.
+
+    End-to-end tested through the real UI (topology → query → place all
+    three operators at König Cloud → force a sub-query dependency's push
+    directly, and separately toggle `push all` per operator → mandatory-
+    choice hint clears both ways → backend round-trip returns a correctly
+    differentiated `push-pull optimised` score), including the toggle-off
+    path restoring the pending state.
+
+    Still open: `state.ts`'s `rescore()` shows the client's instant
+    all-push `Engine.score()` estimate as the *official* score immediately
+    (before `readyToScore` even existed this made sense; now the player has
+    already committed to a real push/pull decision by the time a score
+    shows at all, so showing an all-push number first is a separate,
+    smaller rough edge) — only the backend's async `refine()` flips it to
+    the real push-pull number, silently staying on the estimate forever if
+    the backend is unreachable. Not the thing the user was flagging today,
+    but worth a look if it comes up again: block on the backend round-trip
+    vs. make the interim "estimate" label more prominent in the scorecard.
 11. **Kraken-plan reveal, improved toward push/pull edges.** Currently
     `toggleReveal()`/`view.reveal` in [reef.ts](web/src/reef.ts) only draws
     a ghost ring (`class="ghost"`) around whichever node Kraken placed each

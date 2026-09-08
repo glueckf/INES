@@ -42,15 +42,19 @@ class CostCalculator:
             p: Projection being placed
             n: Node ID where placement is considered
             s_current: Current solution state
-            forced_push_group: when given (the flattened primitives of
-                whichever dependency the player chose to push — one letter
-                for a raw event, or a whole sub-query's primitives together),
-                the push-pull strategy (if computed at all) pushes exactly
-                that group and pulls the rest, instead of letting PrePP
-                search for the cheapest split — this is how a player's own
-                push/pull choice gets scored, rather than the optimizer's.
-                None (the default)
-                is the original search-driven behavior.
+            forced_push_group: when given, the push-pull strategy (if
+                computed at all) pushes exactly that group and pulls the
+                rest, instead of letting PrePP search for the cheapest
+                split — this is how a player's own push/pull choice gets
+                scored, rather than the optimizer's. None (the default) is
+                the original search-driven behavior.
+                Must be the query's own one-level dependency tokens (a raw
+                primitive letter, or an already-placed sub-query's own name
+                string like "SEQ(A, B)") — NOT flattened leaf primitives;
+                see the forced_push_group docstring in
+                determine_randomized_distribution_push_pull_costs
+                (prepp.py) for why that distinction matters and what a
+                caller wanting "push everything" should do instead.
 
         Returns:
             List of dictionaries with strategy-specific costs and metrics

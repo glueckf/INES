@@ -7,10 +7,15 @@ For a projection with no push choice given, this picks the cheapest
 available communication strategy (push vs push-pull) at whatever node the
 caller placed it — the same thing the "Sequential" baseline already does for
 INEv's placement, generalized to any placement. For a projection where the
-player DID choose which primitive to push, that exact choice is costed
-instead (see forced_push_primitive in prepp.py / cost_calculator.py) — so a
-good push/pull call is rewarded and a bad one costs what it actually costs,
-rather than always silently falling back to the optimizer's own pick.
+player DID choose a dependency to push (a raw primitive letter, or an
+already-placed sub-query dependency by its own name), that exact choice is
+costed instead via `forced_push_group` (prepp.py / cost_calculator.py) — so
+a good push/pull call is rewarded and a bad one costs what it actually
+costs, rather than always silently falling back to the optimizer's own pick.
+The chosen dependency name is passed through as-is (not flattened to leaf
+primitives) — PrePP's own forced-group matching is one-level, so a
+flattened sub-query name would silently never match and fall through
+unnoticed.
 
 Runs as its own process (see server.py) so RNG state from scoring one
 topology can never leak into another's reconstruction — the same reason
@@ -19,7 +24,10 @@ export_scenario.py isolates each topology into its own subprocess.
 Usage: python score_one.py <topology_id> <scenario_id> '<placement-json>' ['<push-choice-json>']
 push-choice-json (optional, default "{}"): {projection_name: primitive_letter}
 — only for projections the player has made an explicit push/pull call on;
-any projection missing from it falls back to the optimizer's own choice.
+any projection missing from it falls back to the optimizer's own choice. The
+value can also be ALL_PUSH ("__all_push__", mirrors state.ts) for an explicit
+"push everything, pull nothing" choice — its own selectable option in the UI,
+not just what happens when nothing was chosen.
 Prints one JSON line to stdout: {"cost", "latency", "per_placement"} or
 {"error": "..."} on failure (exit code 1).
 """
@@ -50,6 +58,11 @@ from kraken.run import _gather_problem_parameters
 from kraken.problem import PlacementProblem
 import scenarios_def
 from topologies import TOPOLOGIES
+
+
+# Mirrors ALL_PUSH in demo/web/src/state.ts — an explicit "push everything,
+# pull nothing" choice, distinct from picking one specific dependency to push.
+ALL_PUSH = "__all_push__"
 
 
 def fail(message: str):
@@ -103,7 +116,6 @@ def main():
 
     deps_levels = compute_dependencies(sim, sim.h_mycombi, getattr(sim, "h_criticalMSTypes", None))
     order = sorted(deps_levels.keys(), key=lambda x: deps_levels[x])
-    by_name = {str(p): p for p in order}
 
     missing = [str(p) for p in order if str(p) not in placement]
     if missing:
@@ -119,26 +131,44 @@ def main():
             name = str(p)
             node = int(placement[name])
             # The player chooses over `deps` (one level — a raw primitive
-            # letter, or an already-placed sub-query dependency), but the
-            # engine costs push/pull over the fully flattened primitive set.
-            # A sub-query dependency means "push every primitive underlying
-            # it, together" (that's what "push the sub-query's result" means
-            # once you're back down at the primitive level PrePP works at).
+            # letter, or an already-placed sub-query dependency). PrePP's
+            # forced_push_group matching (prepp.py's `old_copy = query.
+            # primitive_operators`) is ITSELF one-level — a sub-query
+            # dependency appears as its own name string (e.g. "SEQ(A, B)"),
+            # never flattened to its leaf primitives. Passing flattened
+            # leaves here (an earlier version of this code did, via
+            # `dep_obj.leafs()`) never matches that one-level list, so the
+            # forced choice was silently dropped and the optimizer's own
+            # pick was scored instead — confirmed 2026-09-08 by comparing
+            # against dozens of placements where forcing a sub-query
+            # dependency's flattened leaves always reproduced the unforced
+            # result exactly, while forcing a raw primitive letter (which
+            # already matches one-level) correctly diverged from it. Fixed
+            # by passing `chosen_dep` itself, unflattened.
             chosen_dep = push_choice.get(name)
-            forced = None
-            if chosen_dep is not None:
-                dep_obj = by_name.get(chosen_dep)
-                forced = list(dep_obj.leafs()) if dep_obj is not None else [chosen_dep]
-            strategy_results = problem.cost_calculator.calculate(
-                p, node, s_current, forced_push_group=forced
-            )
-            if forced is not None:
+            if chosen_dep == ALL_PUSH:
+                # Not routed through forced_push_group at all: forcing a
+                # *single* group covering every dependency (i.e. nothing
+                # left to pull) hits a separate bug in PrePP's plan-to-
+                # acquisition-step conversion — verified cost off by a
+                # division-like factor (e.g. 609.0 instead of the true
+                # 1827.0) in several placements. `_compute_all_push_costs`
+                # (raw_strategies[0], always present and unaffected by
+                # forced_push_group) is independently, reliably correct, so
+                # use that directly for an explicit "push everything" call.
+                strategy_results = problem.cost_calculator.calculate(p, node, s_current, forced_push_group=None)
+                best = strategy_results[0]
+            elif chosen_dep is not None:
+                strategy_results = problem.cost_calculator.calculate(
+                    p, node, s_current, forced_push_group=[chosen_dep]
+                )
                 # The player made an explicit push/pull call — cost exactly
                 # that choice (last entry = the forced attempt, or the sole
                 # all-push entry if push-pull couldn't be computed at all),
                 # not whichever strategy happens to be cheapest.
                 best = strategy_results[-1]
             else:
+                strategy_results = problem.cost_calculator.calculate(p, node, s_current, forced_push_group=None)
                 best = min(strategy_results, key=lambda r: r["individual_cost"])
             per_placement[name] = {
                 "node": node,

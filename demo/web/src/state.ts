@@ -10,6 +10,13 @@ import type { SubMeta } from "./reef";
 
 const PALETTE = ["#e8613c", "#2f9e8f", "#6f5bd1", "#d99a1e", "#c0497e", "#3b7dd8"];
 
+/** Sentinel `pushChoice` value meaning "push every dependency, pull nothing" —
+ * a deliberate, explicit choice distinct from picking one specific dep to
+ * push (which pulls the rest). Without this, the only way to satisfy the
+ * mandatory push/pull call was to force a split; all-push is a legitimate
+ * strategy in its own right and needed its own selectable option. */
+export const ALL_PUSH = "__all_push__";
+
 export interface OfficialScore {
   cost: number;
   latency: number;
@@ -29,7 +36,8 @@ export class AppState {
   placement: Placement = {};
   activeSubquery: string | null = null;
   placementError: string | null = null;
-  /** subquery name -> primitive letter the player chose to push (rest pulled). */
+  /** subquery name -> the dep the player chose to push (rest pulled), or
+   * `ALL_PUSH` for an explicit "push everything" choice. */
   pushChoice: Record<string, string> = {};
   reveal = false;
   private descendants: Map<number, Set<number>> = new Map();
