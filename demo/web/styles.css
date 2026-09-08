@@ -110,9 +110,16 @@ body {
   gap: 12px; padding: 10px 12px;
 }
 .reef-wrap {
-  min-height: 0; min-width: 0;
+  min-height: 0; min-width: 0; max-height: 100%;
   border-radius: var(--radius); overflow: hidden;
   background: var(--sea-deep); border: 1px solid var(--line);
+  /* Matches the SVG's own viewBox (1000x640) so the drawing fills its box
+     edge to edge instead of being letterboxed by preserveAspectRatio when
+     the grid track's own shape doesn't match — that letterboxing was
+     wasting most of the box on tall/narrow viewports. align-self: start
+     stops the grid from stretching this back to the full row height. */
+  aspect-ratio: 1000 / 640;
+  align-self: center;
 }
 .reef, .reef-svg { width: 100%; height: 100%; display: block; }
 .loading, .fatal { color: var(--ink-soft); padding: 24px; font-size: 13px; }
@@ -151,33 +158,33 @@ body {
 .chip-tx { fill: var(--chip-tx); font-size: 12.5px; font-weight: 700; text-anchor: middle; pointer-events: none; }
 
 /* ---------- query selector — compact: pills + one active-query line ---------- */
-.qpills { display: flex; gap: 5px; }
+.qpills { display: flex; gap: 7px; }
 .qpill {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;
-  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
-  padding: 5px 4px; cursor: pointer; color: var(--ink);
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 9px 6px; cursor: pointer; color: var(--ink);
 }
 .qpill:hover { border-color: var(--line-strong); }
 .qpill.on { border-color: var(--accent); background: var(--accent-soft); }
-.qpill-badge { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+.qpill-badge { font-size: 15px; font-weight: 700; color: var(--ink-soft); }
 .qpill.on .qpill-badge { color: var(--accent); }
-.qpill-emblem { font-size: 16px; line-height: 1; }
-.qactive { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 5px; padding: 0 2px; }
-.qactive-expr { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 16px; font-weight: 650; display: inline-flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qpill-emblem { font-size: 20px; line-height: 1; }
+.qactive { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 6px; padding: 0 2px; }
+.qactive-expr { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 18px; font-weight: 650; display: inline-flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qactive-expr .evt-icon { vertical-align: -2px; }
-.qactive-count { font-size: 13px; color: var(--ink-soft); white-space: nowrap; flex: none; }
+.qactive-count { font-size: 14.5px; color: var(--ink-soft); white-space: nowrap; flex: none; }
 
 /* ---------- topology (reef size) selector — compact single-line pills ---------- */
-.tlist { display: flex; gap: 5px; }
+.tlist { display: flex; gap: 7px; }
 .tcard {
-  flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 5px;
-  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
-  padding: 5px 6px; cursor: pointer; color: var(--ink); min-width: 0;
+  flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 6px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 9px 8px; cursor: pointer; color: var(--ink); min-width: 0;
 }
 .tcard:hover { border-color: var(--line-strong); }
 .tcard.on { border-color: var(--accent); background: var(--accent-soft); }
-.tname { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tsize { font-size: 12px; color: var(--ink-soft); flex: none; }
+.tname { font-size: 16px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tsize { font-size: 14px; color: var(--ink-soft); flex: none; }
 .tcard.on .tsize { color: var(--accent); }
 
 /* ---------- cards ---------- */

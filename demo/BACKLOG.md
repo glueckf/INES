@@ -155,6 +155,29 @@ in the demo now. Two concrete asks:
    now resolves to the right `data-node`. The remaining reference images
    (`correls.png`, `correls_2.png`) are still full multi-subject scenes,
    not pre-cropped icons — revisit if a use for them comes up.
+13. **Reef letterboxing + selector control sizing (2026-09-09)** — DONE:
+    `.reef-wrap` was stretching to the grid row's full height regardless of
+    width, so on most real window shapes (including this repo's own dev
+    viewport) its box ended up far taller/narrower than the SVG's own
+    viewBox (1000×640, a landscape ratio) — `preserveAspectRatio` then
+    letterboxed the actual drawing down to fit, wasting up to ~65% of the
+    box as empty bars. Gave `.reef-wrap` that same `aspect-ratio` directly
+    (`align-self: center` so the grid stops force-stretching it) — the SVG
+    now fills its box edge to edge with zero internal waste, verified by
+    comparing rendered box dimensions to the SVG's own bounding rect at
+    1440px, 1024px, and 700px wide (exact 1.5625 aspect ratio, no overflow
+    at any width). Also enlarged the `.tcard`/`.qpill` (topology + query
+    selector) padding and font sizes, per direct request that they read
+    too small/cramped.
+    **Follow-up, not done**: on a large screen the reef card now looks
+    right, but the *panel* (topology/query selector, tray, scorecard —
+    `.panel`, capped at `minmax(280px, 352px)` in `.stage`'s grid-template-
+    columns) doesn't grow to use the freed-up width — it stays pinned at
+    its 352px cap regardless of how wide the reef card gets. Needs a look
+    at whether the panel's max-width should scale with viewport width (or
+    just be raised), and whether its *children* (tray rows, scorecard
+    leaderboard) actually benefit from more width or would just get
+    awkwardly sparse — not obvious without trying it.
 
 ## Push-pull feature (2026-09-04 → 2026-09-08)
 
