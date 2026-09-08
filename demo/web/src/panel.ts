@@ -168,10 +168,35 @@ export function renderTray(state: AppState): string {
   );
 }
 
+/**
+ * "Alpha" play control: cost_weight, 0-1, fed straight into the Rust
+ * scorer's normalize_point (score = cw*cost_norm + (1-cw)*latency_norm).
+ * Re-normalizing an already-known (cost, latency) is pure/instant — no
+ * rescoring or backend round-trip needed — so this can update live.
+ * Uses the "change" event (commits on release), not "input" (fires
+ * continuously while dragging): the whole panel re-renders via innerHTML
+ * replacement on every state change, which would destroy/recreate the
+ * slider element (and its drag state) on every tick if wired to "input".
+ */
+function renderAlphaSlider(state: AppState): string {
+  const cw = state.costWeight;
+  const pct = Math.round(cw * 100);
+  return (
+    `<div class="alpha-row" title="Drag, then release to re-rank the leaderboard">` +
+    `<span class="alpha-label">Cost</span>` +
+    `<input type="range" class="alpha-slider" min="0" max="100" step="5" value="${pct}" ` +
+    `data-action="alpha" aria-label="Cost vs latency balance, currently ${cw.toFixed(2)} cost weight">` +
+    `<span class="alpha-label">Latency</span>` +
+    `<span class="alpha-value">${cw.toFixed(2)}</span>` +
+    `</div>`
+  );
+}
+
 export function renderScorecard(state: AppState): string {
   const sc = state.scenario;
   const bl = state.baselines;
   if (!sc || !bl) return "";
+  const alphaSlider = renderAlphaSlider(state);
 
   if (!state.readyToScore || !state.official) {
     const pending = state.pendingPushChoices;
@@ -185,6 +210,7 @@ export function renderScorecard(state: AppState): string {
       `<div class="sc-empty-title">${title}</div>` +
       `<div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>` +
       `<div class="sc-empty-sub">You choose <b>where</b> each operator runs, and — for push-pull scoring — <b>which stream</b> it pushes. We compute the network cost and latency, then pit it against Kraken and four baselines.</div>` +
+      alphaSlider +
       `</div>`
     );
   }
@@ -242,6 +268,7 @@ export function renderScorecard(state: AppState): string {
     `<div class="sc-head">${verdict}${modeTag}</div>` +
     tiles +
     `<div class="lb-title">Leaderboard <span class="lb-hint">lower is better — cost & latency, balanced</span></div>` +
+    alphaSlider +
     `<div class="leaderboard">${board}</div>` +
     `<div class="sc-actions">` +
     `<button class="btn ghost" data-action="reveal">${state.reveal ? "Hide" : "Reveal"} Kraken's plan</button>` +

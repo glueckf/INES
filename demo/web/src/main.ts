@@ -103,6 +103,12 @@ function wire(): void {
     if (action === "reveal") state.toggleReveal();
     else if (action === "clear") state.clear();
   });
+  $("scorecard").addEventListener("change", (e) => {
+    const target = e.target as HTMLInputElement;
+    if (target.dataset?.action === "alpha") {
+      state.setCostWeight(Number(target.value) / 100);
+    }
+  });
 
   // modal
   $("infoBtn").addEventListener("click", openModal);

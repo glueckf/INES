@@ -10,6 +10,8 @@ interface WasmModule {
     score(json: string): string;
     baselines(): string;
     normalizePoint(cost: number, latency: number): string;
+    setCostWeight(cw: number): void;
+    getCostWeight(): number;
     free(): void;
   };
 }
@@ -54,6 +56,17 @@ export class Engine {
   /** Normalize an externally computed (cost, latency), e.g. the backend push-pull number. */
   normalizePoint(cost: number, latency: number): NormPoint {
     return JSON.parse(this.scorer.normalizePoint(cost, latency));
+  }
+
+  /** The cost/latency balance ("alpha") — 1.0 = cost-only, 0.0 = latency-only.
+   * Changes every subsequent score/baselines/normalizePoint call; the
+   * scenario's own exported weight is the initial value. */
+  setCostWeight(cw: number): void {
+    this.scorer.setCostWeight(cw);
+  }
+
+  getCostWeight(): number {
+    return this.scorer.getCostWeight();
   }
 
   dispose(): void {

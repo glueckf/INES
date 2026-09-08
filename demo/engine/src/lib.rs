@@ -286,6 +286,23 @@ impl Scorer {
         serde_json::to_string(&np).map_err(|e| JsError::new(&e.to_string()))
     }
 
+    /// Override the cost/latency balance (0.0 = latency-only, 1.0 = cost-only;
+    /// clamped) used by every subsequent normalize_point/score/baselines call —
+    /// the "alpha" play control. The scenario's own exported weight (the value
+    /// baked into norm_anchors' scenario at export time) is the initial value;
+    /// this only affects the live client-side re-normalization, not the
+    /// pre-computed strategy costs/latencies themselves.
+    #[wasm_bindgen(js_name = setCostWeight)]
+    pub fn set_cost_weight(&mut self, cost_weight: f64) {
+        self.scenario.config.cost_weight = cost_weight.clamp(0.0, 1.0);
+    }
+
+    /// The cost/latency weight currently in effect.
+    #[wasm_bindgen(js_name = getCostWeight)]
+    pub fn get_cost_weight(&self) -> f64 {
+        self.scenario.config.cost_weight
+    }
+
     /// The five baselines with their normalized scores, as JSON `{ id: {cost, latency, score, ...} }`.
     pub fn baselines(&self) -> Result<String, JsError> {
         let mut out: HashMap<String, NormPoint> = HashMap::new();

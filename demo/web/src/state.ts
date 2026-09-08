@@ -32,6 +32,11 @@ export class AppState {
   engine: Engine | null = null;
   baselines: Baselines | null = null;
   subMeta: Map<string, SubMeta> = new Map();
+  /** cost/latency balance ("alpha") the player controls — 1.0 = cost-only,
+   * 0.0 = latency-only. Persists across topology/query switches (each
+   * freshly-created Engine resets to the scenario's own exported weight,
+   * so this is explicitly reapplied in loadScenario). */
+  costWeight = 0.5;
 
   placement: Placement = {};
   activeSubquery: string | null = null;
@@ -100,6 +105,7 @@ export class AppState {
       const scenario = await fetchJson<Scenario>(`${this.base}${entry.file}`);
       this.engine?.dispose();
       this.engine = await Engine.create(scenario);
+      this.engine.setCostWeight(this.costWeight);
       this.scenario = scenario;
       this.baselines = this.engine.baselines();
       this.descendants = computeDescendants(scenario);
@@ -254,6 +260,25 @@ export class AppState {
 
   toggleReveal(): void {
     this.reveal = !this.reveal;
+    this.emit();
+  }
+
+  /** Re-normalize every already-known cost/latency (baselines + the
+   * player's own official score) under a new weight — no rescoring or
+   * backend round-trip needed, since normalize_point is a pure function of
+   * (cost, latency, anchors, weight) and both are already known. */
+  setCostWeight(cw: number): void {
+    this.costWeight = Math.min(1, Math.max(0, cw));
+    if (!this.engine) {
+      this.emit();
+      return;
+    }
+    this.engine.setCostWeight(this.costWeight);
+    this.baselines = this.engine.baselines();
+    if (this.official) {
+      const norm = this.engine.normalizePoint(this.official.cost, this.official.latency);
+      this.official = { ...this.official, norm };
+    }
     this.emit();
   }
 
