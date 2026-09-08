@@ -559,9 +559,9 @@
     "AND(SEQ(A, B, C), D, SEQ(E, F))": 0
    },
    "comm": "push",
-   "cost": 43380.0,
+   "cost": 16074.0,
    "latency": 3.0,
-   "processing_latency": 0.16611205600997941
+   "processing_latency": 0.061551064737307724
   },
   "inev": {
    "label": "INEv",
@@ -659,7 +659,7 @@
  },
  "norm_anchors": {
   "cost_min": 2409.4027170215786,
-  "cost_max": 43380.0,
+  "cost_max": 28920.061551064737,
   "latency_min": 3.0,
   "latency_max": 21.0
  },

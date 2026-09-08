@@ -496,9 +496,9 @@
     "SEQ(A, B, C)": 0
    },
    "comm": "push",
-   "cost": 28239.0,
+   "cost": 9417.0,
    "latency": 3.0,
-   "processing_latency": 996.7367722907055
+   "processing_latency": 332.38677660900083
   },
   "inev": {
    "label": "INEv",
@@ -563,7 +563,7 @@
  },
  "norm_anchors": {
   "cost_min": 250.43486973413556,
-  "cost_max": 28239.0,
+  "cost_max": 10416.4928,
   "latency_min": 3.0,
   "latency_max": 15.0
  },

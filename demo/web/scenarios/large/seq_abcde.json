@@ -1236,9 +1236,9 @@
     "SEQ(A, B, C, D, E)": 0
    },
    "comm": "push",
-   "cost": 563560.0,
+   "cost": 94040.0,
    "latency": 4.0,
-   "processing_latency": 5281827440.157043
+   "processing_latency": 881366762.1413307
   },
   "inev": {
    "label": "INEv",

@@ -245,7 +245,57 @@ in the demo now. Two concrete asks:
     the backend is unreachable. Not the thing the user was flagging today,
     but worth a look if it comes up again: block on the backend round-trip
     vs. make the interim "estimate" label more prominent in the scorecard.
-11. **Kraken-plan reveal, improved toward push/pull edges.** Currently
+11. **"All-Push" leaderboard baseline was ~2–7x inflated — fixed
+    2026-09-09.** Found by the user manually placing every operator of
+    SEQ(A,B,C,D) at König Cloud with `push all` chosen throughout and
+    getting 11.2k, while the leaderboard's "All-Push" row showed 33.7k for
+    the same query — a discrepancy that shouldn't exist, since that's
+    literally the placement+strategy the "All-Push" baseline is supposed to
+    represent. Root cause, in `compute_all_push()`
+    ([simulation_environment.py:302](../src/simulation_environment.py:302),
+    demo-only — confirmed **not** used anywhere in Kraken's own algorithm;
+    `kraken/run.py`'s one reference only reads the unaffected latency
+    field, and only in an opt-in study mode the demo doesn't use): for an
+    event type produced at k nodes, the code multiplied the event type's
+    *already-summed* total rate (`h_rates_data`) by the distance of
+    whichever single producer was closest to the cloud, once *per producer*
+    — so the true cost got multiplied by k instead of computed once. E.g.
+    verified directly on seq_abcd/medium: event A (3 producers, rate 1000
+    each) contributed 27000 instead of the correct 9000 (1000×3 + 1000×3 +
+    1000×3, all three producers being distance 3 from the cloud in that
+    topology). Fixed by summing each producer's own rate times its own
+    distance directly from `h_local_rate_lookup` (the same per-producer
+    data `CostCalculator._compute_all_push_costs` already uses correctly)
+    instead of re-deriving a "closest producer" search that was never the
+    right model for a strategy where every producer independently
+    transmits.
+
+    Re-exported all 8 scenarios and diffed old vs. new: **only**
+    `strategies.all_push.cost`/`processing_latency` changed anywhere — every
+    other baseline (INEv, Sequential, PrePP, Kraken, including Kraken's full
+    `per_placement`) is byte-identical, and the Rust goldens are untouched
+    (they were always computed via a separate, independently-correct
+    `ref_all_push` in `export_scenario.py`, which is *why* `cargo test`
+    never caught this — it was never exercising the buggy function).
+    `cargo test --release` (3/3 pass, including the sanity check that
+    Kraken's score beats every baseline) and a live browser check both
+    confirm the fix: placing everything at the cloud with `push all` now
+    matches the "All-Push" leaderboard row exactly (11.2k both ways).
+
+    One real, visible side effect worth knowing about: `norm_anchors.cost_max`
+    (used to normalize every strategy's 0–1 "score" — `min(costs)`/`max(costs)`
+    across all 5 baselines) was **all_push's inflated cost** in all 4
+    *medium*-topology scenarios (it was always the worst/highest number
+    there), so fixing all_push shrinks that anchor and every other
+    strategy's displayed *normalized score* shifts slightly, even though
+    every raw cost/latency number is unchanged. It also flips a ranking:
+    "All-Push" moves from dead last to *ahead of INEv* in all 4 medium
+    scenarios (e.g. seq_abcd: 11244 vs. INEv's unchanged 15897). Large
+    topology is unaffected — there, `cost_max` was already anchored by INEv
+    (which, for large's single-operator queries — see item #5 — happens to
+    equal the old buggy all_push number by coincidence, not by shared code
+    path), so nothing shifts there beyond All-Push's own row.
+12. **Kraken-plan reveal, improved toward push/pull edges.** Currently
     `toggleReveal()`/`view.reveal` in [reef.ts](web/src/reef.ts) only draws
     a ghost ring (`class="ghost"`) around whichever node Kraken placed each
     subquery on — it shows *where*, not *how it communicates*. The ask

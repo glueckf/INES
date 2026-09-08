@@ -303,18 +303,36 @@ def compute_all_push(context):
     """Calculate the All Push (central) placement cost and latency.
 
     This strategy places all operators at the cloud (node 0) and calculates
-    the cost of transmitting all primitive events to the cloud.
+    the cost of transmitting all primitive events to the cloud — every
+    producer of every primitive event type sends its own stream, so the
+    cost is the sum, over every (event type, producer node) pair, of that
+    producer's own rate times its own distance to the cloud.
 
     Args:
         context: Simulation context containing network, workload, and rate data
 
     Returns:
-        Dictionary containing cost, latency, node, routing_dict, and status
+        Dictionary containing cost, latency, and status
+
+    Note (fixed 2026-09-09): this used to iterate once per producer node of
+    an event type but multiply the event type's *total* combined rate
+    (`h_rates_data`) by the distance of whichever single producer happened
+    to be closest to the cloud, on every iteration — so an event type
+    produced at k nodes had its true cost multiplied by k (e.g. verified on
+    seq_abcd/medium: reported 33720.0 where the correct sum-of-producers
+    cost is 11244.0, a 3x inflation traced directly to A's 3 producers
+    dominating the total). Kraken's own placement search was never affected
+    — it uses a separate, always-correct computation
+    (CostCalculator._compute_all_push_costs in
+    kraken/components/cost_calculator.py) — this only fed the demo's
+    "All-Push" leaderboard reference row. Fixed by summing each producer's
+    own rate times its own distance directly from `h_local_rate_lookup`
+    (the same per-producer rate data CostCalculator already uses), instead
+    of re-deriving a "closest producer" search that was never the right
+    model for a strategy where every producer independently transmits.
     """
     try:
         print("--- Running All Push Scenario ---")
-
-        import networkx as nx
 
         start_time = time.time()
 
@@ -330,43 +348,18 @@ def compute_all_push(context):
         # Pre-fetch destination distances once (instead of accessing allPairs repeatedly)
         dest_distances = context.allPairs[destination]
 
-        # Calculate costs for central placement at cloud (node 0)
+        # Calculate costs for central placement at cloud (node 0): every
+        # producer of every event type sends its own stream, so sum each
+        # producer's own rate times its own distance to the destination.
         mycosts = 0
-        routing_dict = {}
         event_costs = {}  # Track costs per event type for processing latency calculation
 
         for eventtype in eventtypes:
-            event_rate = context.h_rates_data[eventtype]
-            routing_dict[eventtype] = {}
-            event_type_cost = 0
+            event_type_cost = 0.0
+            for node_id, rate in context.h_local_rate_lookup.get(eventtype, {}).items():
+                event_type_cost += rate * dest_distances[node_id]
 
-            for etb in context.h_IndexEventNodes[eventtype]:
-                # Get event node indices directly
-                index = context.h_IndexEventNodes[etb]
-                node_list = context.h_eventNodes[index]
-
-                # Find source with minimum distance in one pass
-                min_distance = float("inf")
-                best_source = None
-
-                for node_id, has_event in enumerate(node_list):
-                    if has_event == 1:
-                        distance = dest_distances[node_id]
-                        if distance < min_distance:
-                            min_distance = distance
-                            best_source = node_id
-
-                # Add transmission cost: rate × distance
-                cost = event_rate * min_distance
-                mycosts += cost
-                event_type_cost += cost
-
-                # Compute shortest path only once per event instance
-                shortest_path = nx.shortest_path(
-                    context.graph, best_source, destination, method="dijkstra"
-                )
-                routing_dict[eventtype][etb] = shortest_path
-
+            mycosts += event_type_cost
             event_costs[eventtype] = event_type_cost
 
         # Calculate processing latency using the correct formula
