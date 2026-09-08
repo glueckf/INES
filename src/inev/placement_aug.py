@@ -751,56 +751,77 @@ def compute_single_sink_placement(
             is_filter_input = (
                 eventtype in filter_input_objects or eventtype_str in filter_input_keys
             )
-            for etb_idx, etb in enumerate(IndexEventNodes[eventtype]):
-                possibleSources = get_nodes(etb, EventNodes, IndexEventNodes)
-                mySource = possibleSources[0]
-                for source in possibleSources:
-                    if allPairs[destination][source] < allPairs[destination][mySource]:
-                        mySource = source
+            has_filter = eventtype in projFilterDict.keys() and get_maximal_filter(
+                projFilterDict, eventtype, noFilter
+            )
+            is_primitive = eventtype in rates.keys()
 
-                etb_cost = 0
-                if eventtype in projFilterDict.keys() and get_maximal_filter(
-                    projFilterDict, eventtype, noFilter
-                ):  # case filter
-                    maximal_filter = get_maximal_filter(
-                        projFilterDict, eventtype, noFilter
-                    )
-                    decomposed_total = get_decomposed_total(maximal_filter, eventtype)
-                    base_cost = allPairs[destination][mySource] * decomposed_total
-                    etb_cost += base_cost
+            if is_primitive and not has_filter:
+                # Tuple count (rate) at each source times that source's own
+                # hop distance to the destination, summed over every source.
+                # The per-etb loop below (kept for the filter/projection
+                # cases) iterated once per producer *instance* here too, but
+                # multiplied by rates[eventtype] — the event type's already-
+                # summed total rate across every producer, not that one
+                # producer's own share — so a primitive with k producers had
+                # its true cost multiplied by k (fixed 2026-09-09; same bug,
+                # same fix, as new_compute_central_costs in this file and
+                # simulation_environment.compute_all_push()). Verified
+                # directly: for SEQ(A,B) at node 4 in the medium/seq_abcd
+                # demo scenario, this used to report 9008.0 where the
+                # correct sum-of-producers cost is 3004.0 (event A alone:
+                # 3 producers at rate 1000 each, 27000.0 -> 9000.0).
+                local_rates = (
+                    self.h_local_rate_lookup.get(eventtype, {}) if self else {}
+                )
+                eventtype_cost = sum(
+                    node_rate * allPairs[destination][node_id]
+                    for node_id, node_rate in local_rates.items()
+                )
+            else:
+                for etb_idx, etb in enumerate(IndexEventNodes[eventtype]):
+                    possibleSources = get_nodes(etb, EventNodes, IndexEventNodes)
+                    mySource = possibleSources[0]
+                    for source in possibleSources:
+                        if allPairs[destination][source] < allPairs[destination][mySource]:
+                            mySource = source
 
-                    if (
-                        len(IndexEventNodes[eventtype]) > 1
-                    ):  # filtered projection has ms placement
-                        partType = return_partitioning(eventtype, mycombi[eventtype])[0]
-                        key_single_select = get_key_single_select(partType, eventtype)
-                        ms_reduction = (
-                            allPairs[destination][mySource]
-                            * rates[partType]
-                            * singleSelectivities[key_single_select]
-                            * len(IndexEventNodes[eventtype])
+                    etb_cost = 0
+                    if has_filter:  # case filter
+                        maximal_filter = get_maximal_filter(
+                            projFilterDict, eventtype, noFilter
                         )
-                        ms_addition = (
-                            allPairs[destination][mySource]
-                            * rates[partType]
-                            * singleSelectivities[key_single_select]
-                        )
+                        decomposed_total = get_decomposed_total(maximal_filter, eventtype)
+                        base_cost = allPairs[destination][mySource] * decomposed_total
+                        etb_cost += base_cost
 
-                        etb_cost -= ms_reduction
-                        etb_cost += ms_addition
+                        if (
+                            len(IndexEventNodes[eventtype]) > 1
+                        ):  # filtered projection has ms placement
+                            partType = return_partitioning(eventtype, mycombi[eventtype])[0]
+                            key_single_select = get_key_single_select(partType, eventtype)
+                            ms_reduction = (
+                                allPairs[destination][mySource]
+                                * rates[partType]
+                                * singleSelectivities[key_single_select]
+                                * len(IndexEventNodes[eventtype])
+                            )
+                            ms_addition = (
+                                allPairs[destination][mySource]
+                                * rates[partType]
+                                * singleSelectivities[key_single_select]
+                            )
 
-                elif eventtype in rates.keys():  # case primitive event
-                    rate = rates[eventtype]
-                    distance = allPairs[destination][mySource]
-                    etb_cost = rate * distance
+                            etb_cost -= ms_reduction
+                            etb_cost += ms_addition
 
-                else:  # case projection
-                    num = num_etbs_by_key(etb, eventtype, IndexEventNodes)
-                    proj_rate = projrates[eventtype][1]
-                    distance = allPairs[destination][mySource]
-                    etb_cost = proj_rate * distance * num
+                    else:  # case projection (virtual/sub-query dependency)
+                        num = num_etbs_by_key(etb, eventtype, IndexEventNodes)
+                        proj_rate = projrates[eventtype][1]
+                        distance = allPairs[destination][mySource]
+                        etb_cost = proj_rate * distance * num
 
-                eventtype_cost += etb_cost
+                    eventtype_cost += etb_cost
 
             eventtype_costs[eventtype] = eventtype_cost
             mycosts += eventtype_cost
@@ -903,8 +924,19 @@ def compute_single_sink_placement(
 
 
 def new_compute_central_costs(
-    workload, IndexEventNodes, allPairs, rates, EventNodes, G
+    workload, IndexEventNodes, allPairs, rates, EventNodes, G, local_rate_lookup
 ):
+    """Cost of centrally placing at node 0: every producer of every leaf
+    event type in the workload sends its own stream, so cost is tuple count
+    (rate) at each source times that source's own hop distance to the
+    destination, summed over every source (fixed 2026-09-09 — see below).
+
+    local_rate_lookup: {event_type: {node_id: rate}}, one entry per node
+    that actually produces that event type — the same per-producer rate
+    data CostCalculator._compute_all_push_costs uses (kraken/components/
+    cost_calculator.py), and simulation_environment.compute_all_push()
+    since its own fix.
+    """
     # Adding all Eventtypes (simple events) to the list
     import networkx as nx
 
@@ -919,13 +951,8 @@ def new_compute_central_costs(
     destination = 0
     mycosts = 0
     for eventtype in eventtypes:
-        for etb in IndexEventNodes[eventtype]:
-            possibleSources = get_nodes(etb, EventNodes, IndexEventNodes)
-            mySource = possibleSources[0]
-            for source in possibleSources:
-                if allPairs[destination][source] <= allPairs[destination][mySource]:
-                    mySource = source
-            mycosts += rates[eventtype] * allPairs[destination][mySource]
+        for node_id, node_rate in local_rate_lookup.get(eventtype, {}).items():
+            mycosts += node_rate * allPairs[destination][node_id]
     if mycosts < costs:
         costs = mycosts
         node = destination

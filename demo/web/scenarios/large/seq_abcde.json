@@ -1246,9 +1246,9 @@
     "SEQ(A, B, C, D, E)": 0
    },
    "comm": "push",
-   "cost": 563560.0,
+   "cost": 94040.0,
    "latency": 4.0,
-   "processing_latency": 5281827440.157043
+   "processing_latency": 881366762.1413307
   },
   "sequential": {
    "label": "Sequential",
@@ -1292,7 +1292,7 @@
  },
  "norm_anchors": {
   "cost_min": 42272.96752384558,
-  "cost_max": 563560.0,
+  "cost_max": 94040.0,
   "latency_min": 4.0,
   "latency_max": 28.0
  },

@@ -123,7 +123,7 @@ def calculate_operator_placement(self, file_path: str, max_parents: int):
     print(f"[SEQUENTIAL] Network nodes: {len(network)} nodes")
     print(f"[SEQUENTIAL] Available event nodes: {list(IndexEventNodes.keys())}")
     ccosts = new_compute_central_costs(
-        wl, IndexEventNodes, allPairs, rates, EventNodes, self.graph
+        wl, IndexEventNodes, allPairs, rates, EventNodes, self.graph, self.h_local_rate_lookup
     )
     centralHopLatency = max(allPairs[ccosts[1]])
     numberHops = sum(allPairs[ccosts[1]])
