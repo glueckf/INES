@@ -200,7 +200,7 @@ export function renderScorecard(state: AppState): string {
   if (!sc || !bl) return "";
   const alphaSlider = renderAlphaSlider(state);
 
-  if (!state.readyToScore || !state.official) {
+  if (!state.readyToScore) {
     const pending = state.pendingPushChoices;
     const pct = Math.round((state.placedCount / sc.processing_order.length) * 100);
     const title =
@@ -217,6 +217,22 @@ export function renderScorecard(state: AppState): string {
     );
   }
 
+  if (state.scoring || !state.official) {
+    // Waiting for the backend's real push-pull number rather than showing
+    // the client-side all-push estimate first — that estimate ignores
+    // every push/pull choice the player just made, sometimes by several
+    // times the real cost, so a brief "crunching the numbers" beat reads
+    // better than a number that's about to change.
+    return (
+      `<div class="sc-scoring">` +
+      `<div class="sc-scoring-icon" aria-hidden="true">🐙</div>` +
+      `<div class="sc-scoring-title">Kraken is crunching the numbers…</div>` +
+      `<div class="sc-scoring-sub">Optimising push/pull for your placement.</div>` +
+      alphaSlider +
+      `</div>`
+    );
+  }
+
   const o = state.official;
   const krakenScore = bl.kraken.score;
   const beatKraken = o.norm.score <= krakenScore + 1e-9;
@@ -226,11 +242,10 @@ export function renderScorecard(state: AppState): string {
     ? `<span class="v-win">You matched Kraken.</span>`
     : `<span class="v-mid">You beat ${beaten} of 4 baselines — Kraken still wins.</span>`;
 
-  const modeTag = o.pending
-    ? `<span class="mode pending">optimising communication…</span>`
-    : o.mode === "pushpull"
+  const modeTag =
+    o.mode === "pushpull"
       ? `<span class="mode pp">push-pull optimised</span>`
-      : `<span class="mode est">all-push estimate</span>`;
+      : `<span class="mode est">all-push estimate — no live scoring available</span>`;
 
   // stat tiles vs Kraken
   const dCost = o.cost - bl.kraken.cost;

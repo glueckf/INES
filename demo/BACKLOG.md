@@ -268,24 +268,38 @@ in the demo now. Two concrete asks:
     differentiated `push-pull optimised` score), including the toggle-off
     path restoring the pending state.
 
-    Still open: `state.ts`'s `rescore()` shows the client's instant
-    all-push `Engine.score()` estimate as the *official* score immediately
-    (before `readyToScore` even existed this made sense; now the player has
-    already committed to a real push/pull decision by the time a score
-    shows at all, so showing an all-push number first is a separate,
-    smaller rough edge) — only the backend's async `refine()` flips it to
-    the real push-pull number, silently staying on the estimate forever if
-    the backend is unreachable. Not the thing the user was flagging today,
-    but worth a look if it comes up again: block on the backend round-trip
-    vs. make the interim "estimate" label more prominent in the scorecard.
-    **Revisited, not changed**: walked through the exact sequence with the
-    user (rescore() only ever runs once readyToScore is true, so the
-    all-push estimate is only ever visible for the backend's response time
-    — normally imperceptibly short; the real risk is only if the backend
-    is slow or down). User's takeaway was that this isn't experienced as a
-    problem in normal use; redirected to two other, unrelated small asks
-    (see item #14) rather than pursuing a fix here. Leaving this note as-is
-    for whoever picks it up next — still a real (if rare) rough edge.
+    **Follow-up — DONE.** `state.ts`'s `rescore()` used to show the
+    client's instant all-push `Engine.score()` estimate as the *official*
+    score immediately, then silently swap it for the real push-pull number
+    once the backend replied (or leave the wrong estimate sitting there
+    forever if the backend was unreachable). Demonstrated the actual
+    impact live rather than just describing it: for one real placement,
+    read the scorecard tile in the same synchronous tick as the triggering
+    click (before the backend could possibly have responded) — it showed
+    "11.2k" (mode: "optimising communication…"); ~2s later, once the
+    backend replied, the *same* tile showed "1.78k" (mode: "push-pull
+    optimised") — a ~6x difference, for the identical placement and push
+    choices, because the first number ignores every push/pull decision
+    the player made and just assumes everything is pushed. Once that
+    landed, the fix requested was the "block" option from the original
+    two: `rescore()` now sets `official = null` and `scoring = true`
+    while a backend request is in flight, instead of populating `official`
+    with the estimate first — the scorecard shows a loading state (🐙
+    wiggle animation + "Kraken is crunching the numbers…") the whole
+    time, only ever showing *one* number once it's the real one. If the
+    backend is unreachable (or was never configured), it falls back to
+    the estimate rather than hanging forever, now labeled plainly ("all-push
+    estimate — no live scoring available") instead of a badge that could
+    be mistaken for a neutral status indicator. Removed the now-dead
+    `OfficialScore.pending` field (`official` is either null-while-scoring
+    or a fully-resolved result — there's no in-between state to track
+    anymore) and the matching dead `.mode.pending` CSS rule. Verified all
+    three paths live: the loading state (read synchronously, same tick,
+    so no race with the backend could have produced it by luck), the
+    success transition (correct number + label), and the failure fallback
+    (killed the backend mid-session, confirmed it degrades to the labeled
+    estimate instead of hanging) — then restarted the backend and
+    confirmed the success path still works.
 11. **"All-Push" leaderboard baseline was ~2–7x inflated — fixed
     2026-09-09.** Found by the user manually placing every operator of
     SEQ(A,B,C,D) at König Cloud with `push all` chosen throughout and

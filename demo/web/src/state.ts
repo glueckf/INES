@@ -1,7 +1,11 @@
 // Central application state + scoring orchestration. Framework-free: subscribers
-// are notified on every change and re-render. Scoring is two-stage: an instant
-// client-side all-push estimate, then (if a backend is configured) an async
-// push-pull refinement that becomes the "official" number.
+// are notified on every change and re-render. Scoring waits for the real
+// push-pull number from the backend instead of flashing the client-side
+// all-push estimate first (that estimate ignores the player's own push/pull
+// choices entirely, sometimes wildly — see BACKLOG.md item #10): `official`
+// stays null and `scoring` stays true until the backend replies, at which
+// point either the real number (mode "pushpull") or, only if the backend is
+// unreachable, the estimate (mode "estimate", clearly labeled) fills it in.
 
 import { Engine } from "./engine";
 import { refinePushPull, backendConfigured, type PushPullResult } from "./backend";
@@ -21,8 +25,7 @@ export interface OfficialScore {
   cost: number;
   latency: number;
   norm: NormPoint;
-  mode: "estimate" | "pushpull"; // estimate = client all-push; pushpull = backend-refined
-  pending: boolean; // a refinement request is in flight
+  mode: "estimate" | "pushpull"; // estimate = client all-push (only when there's no real number to wait for); pushpull = backend-refined
 }
 
 export class AppState {
@@ -56,6 +59,10 @@ export class AppState {
 
   clientScore: ScoreResult | null = null;
   official: OfficialScore | null = null;
+  /** True from the moment the placement is complete until the backend's
+   * real push-pull number lands (or fails) — the scorecard shows a
+   * "scoring…" state instead of a number while this is true. */
+  scoring = false;
   loading = false;
   error: string | null = null;
 
@@ -136,6 +143,7 @@ export class AppState {
       this.reveal = false;
       this.clientScore = null;
       this.official = null;
+      this.scoring = false;
       // auto-select the first (deepest-dependency) subquery to guide the user
       this.activeSubquery = scenario.processing_order[0] ?? null;
     } catch (e) {
@@ -302,6 +310,7 @@ export class AppState {
     this.reveal = false;
     this.clientScore = null;
     this.official = null;
+    this.scoring = false;
     this.emit();
   }
 
@@ -362,24 +371,38 @@ export class AppState {
     if (!this.engine || !this.readyToScore) {
       this.clientScore = null;
       this.official = null;
+      this.scoring = false;
       this.emit();
       return;
     }
+    // Always compute the instant client-side estimate (cheap — pure WASM,
+    // no network) — but it ignores every push/pull choice the player made
+    // (it can only model all-push), so it's kept internal, not shown as
+    // "official", unless there's no backend to eventually give a real
+    // number instead.
     this.clientScore = this.engine.score(this.placement);
-    // instant estimate becomes the official number until (if) push-pull refines it
-    this.official = {
-      cost: this.clientScore.total_cost,
-      latency: this.clientScore.total_latency,
-      norm: {
-        cost_norm: this.clientScore.cost_norm,
-        latency_norm: this.clientScore.latency_norm,
-        score: this.clientScore.score,
-      },
-      mode: "estimate",
-      pending: backendConfigured(),
-    };
+    if (!backendConfigured()) {
+      this.official = this.estimateAsOfficial();
+      this.scoring = false;
+      this.emit();
+      return;
+    }
+    // Wait for the real push-pull number rather than flashing the (often
+    // very wrong — sometimes off by several times) all-push estimate first.
+    this.official = null;
+    this.scoring = true;
     this.emit();
-    if (backendConfigured()) this.refine();
+    this.refine();
+  }
+
+  private estimateAsOfficial(): OfficialScore {
+    const c = this.clientScore!;
+    return {
+      cost: c.total_cost,
+      latency: c.total_latency,
+      norm: { cost_norm: c.cost_norm, latency_norm: c.latency_norm, score: c.score },
+      mode: "estimate",
+    };
   }
 
   private async refine(): Promise<void> {
@@ -395,11 +418,15 @@ export class AppState {
       result = null;
     }
     if (token !== this.refineToken || !this.readyToScore) return; // stale / placement or push choice changed
+    this.scoring = false;
     if (result && this.engine) {
       const norm = this.engine.normalizePoint(result.cost, result.latency);
-      this.official = { cost: result.cost, latency: result.latency, norm, mode: "pushpull", pending: false };
-    } else if (this.official) {
-      this.official = { ...this.official, pending: false }; // refinement unavailable; keep estimate
+      this.official = { cost: result.cost, latency: result.latency, norm, mode: "pushpull" };
+    } else {
+      // backend unreachable — fall back to the estimate rather than leaving
+      // the player with nothing; still clearly labeled "estimate", not silently
+      // presented as the real number.
+      this.official = this.estimateAsOfficial();
     }
     this.emit();
   }
