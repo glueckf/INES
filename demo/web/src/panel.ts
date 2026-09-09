@@ -138,13 +138,15 @@ export function renderTray(state: AppState): string {
             : `<span class="pill mini evt" style="background:${glyphFor(d).color}">${eventIconSvg(d, 11)}${d}</span>`;
         })
         .join("");
+      const autoReason = state.autoPlacedReason[name];
       const row =
         `<div class="tray-row ${active ? "active" : ""} ${placed ? "placed" : ""}" data-sub="${encodeURIComponent(name)}" tabindex="0" role="button" aria-pressed="${active}">` +
         `<span class="tag" style="background:${m.color}">${m.tag}${m.isRoot ? "★" : ""}</span>` +
         `<span class="tray-body"><span class="tray-name">${titleWithIcons(name)}</span>` +
         `<span class="tray-inputs">needs ${inputs}</span></span>` +
-        `<span class="tray-loc">${placed ? (node === 0 ? "👑 König Cloud" : "n" + node) : "—"}</span>` +
-        `</div>`;
+        `<span class="tray-loc"${autoReason ? ` title="${escapeHtml(autoReason)}"` : ""}>${placed ? (node === 0 ? "👑 König Cloud" : "n" + node) : "—"}${autoReason ? ` <span class="tray-auto-badge">auto</span>` : ""}</span>` +
+        `</div>` +
+        (autoReason ? `<div class="tray-note">${escapeHtml(autoReason)}</div>` : "");
       return row + renderPushPullRow(state, name, proj);
     })
     .join("");

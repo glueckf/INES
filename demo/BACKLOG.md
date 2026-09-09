@@ -278,6 +278,14 @@ in the demo now. Two concrete asks:
     the backend is unreachable. Not the thing the user was flagging today,
     but worth a look if it comes up again: block on the backend round-trip
     vs. make the interim "estimate" label more prominent in the scorecard.
+    **Revisited, not changed**: walked through the exact sequence with the
+    user (rescore() only ever runs once readyToScore is true, so the
+    all-push estimate is only ever visible for the backend's response time
+    — normally imperceptibly short; the real risk is only if the backend
+    is slow or down). User's takeaway was that this isn't experienced as a
+    problem in normal use; redirected to two other, unrelated small asks
+    (see item #14) rather than pursuing a fix here. Leaving this note as-is
+    for whoever picks it up next — still a real (if rare) rough edge.
 11. **"All-Push" leaderboard baseline was ~2–7x inflated — fixed
     2026-09-09.** Found by the user manually placing every operator of
     SEQ(A,B,C,D) at König Cloud with `push all` chosen throughout and
@@ -344,6 +352,37 @@ in the demo now. Two concrete asks:
     a design pass on how that reads visually next to the existing
     push/pull chip colors without the reef getting busier than the
     legibility work (item 6) just fixed.
+14. **Alpha default + forced-cloud auto-placement — DONE.** Two small,
+    unrelated asks from the same session:
+    - Default `cost_weight` (the "alpha" slider) changed from 0.5 to 0.6
+      ([state.ts](web/src/state.ts)) — 0.6 is the paper's own reported best
+      cost/latency balance, and at 0.5 Kraken doesn't clearly beat every
+      baseline on medium topology (see item #11's normalization note). The
+      exported scenario JSON still bakes in 0.5 as its own fallback, but
+      that's harmless: `loadScenario()` always overwrites the engine's
+      weight with `state.costWeight` right after construction, so the
+      JSON's value is never actually used once the page has loaded.
+    - Placing an operator whose sub-query dependency already sits at König
+      Cloud (node 0) is now automatic instead of requiring a click.
+      Mathematically, node 0 is the *only* valid placement in that case —
+      `computeDescendants()` builds each node's reachable set by walking
+      *down* through `children`, so node 0 (the tree's root) is nobody's
+      descendant but its own; `placementIssue()`'s reachability check can
+      therefore only pass at node 0 itself once a dependency is parked
+      there. `reconcileForcedCloudPlacements()` in state.ts runs after
+      every placement change, auto-placing (and, symmetrically,
+      auto-*un*placing on pick-up) anything newly forced, looping to catch
+      cascades — placing one operator at the cloud can force the next one,
+      which can force the one after that. Each auto-placement records a
+      reason (`state.autoPlacedReason`) shown as a small "auto" badge +
+      tooltip on the location, plus a one-line note under the row
+      ([panel.ts](web/src/panel.ts)) so it doesn't look like the game
+      placed something on its own for no reason. Verified end-to-end:
+      placing just the first (deepest-dependency) operator of a 3-operator
+      query at the cloud correctly cascades both remaining operators there
+      automatically with correct per-row reasons; picking the first one
+      back up correctly un-places both cascaded ones too; placing at a
+      *non*-cloud node correctly does **not** trigger anything.
 
 ## Engine (research code, not demo) — flagged, not scoped
 

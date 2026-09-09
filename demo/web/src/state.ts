@@ -33,10 +33,14 @@ export class AppState {
   baselines: Baselines | null = null;
   subMeta: Map<string, SubMeta> = new Map();
   /** cost/latency balance ("alpha") the player controls — 1.0 = cost-only,
-   * 0.0 = latency-only. Persists across topology/query switches (each
-   * freshly-created Engine resets to the scenario's own exported weight,
-   * so this is explicitly reapplied in loadScenario). */
-  costWeight = 0.5;
+   * 0.0 = latency-only. Defaults to 0.6, the paper's own reported best
+   * cost/latency balance (not 0.5 — at that weight Kraken's own score
+   * doesn't clearly beat every baseline on the medium topology, see
+   * demo/BACKLOG.md item #11's "0.5 vs 0.6" note). Persists across
+   * topology/query switches (each freshly-created Engine resets to the
+   * scenario's own exported weight, so this is explicitly reapplied in
+   * loadScenario). */
+  costWeight = 0.6;
 
   placement: Placement = {};
   activeSubquery: string | null = null;
@@ -44,6 +48,9 @@ export class AppState {
   /** subquery name -> the dep the player chose to push (rest pulled), or
    * `ALL_PUSH` for an explicit "push everything" choice. */
   pushChoice: Record<string, string> = {};
+  /** subquery name -> why it was placed for the player instead of by
+   * clicking a node — see reconcileForcedCloudPlacements(). */
+  autoPlacedReason: Record<string, string> = {};
   reveal = false;
   private descendants: Map<number, Set<number>> = new Map();
 
@@ -125,6 +132,7 @@ export class AppState {
       this.placement = {};
       this.placementError = null;
       this.pushChoice = {};
+      this.autoPlacedReason = {};
       this.reveal = false;
       this.clientScore = null;
       this.official = null;
@@ -219,24 +227,77 @@ export class AppState {
     }
     this.placementError = null;
     this.placement[this.activeSubquery] = node;
-    // auto-advance to the next unplaced subquery
+    this.reconcileForcedCloudPlacements();
+    // auto-advance to the next unplaced subquery (skips anything the
+    // reconcile above just placed for the player)
     const next = this.subqueries.find((s) => !(s in this.placement));
     this.activeSubquery = next ?? null;
     this.reveal = false;
     this.rescore();
   }
 
+  /**
+   * Auto-place (and, symmetrically, auto-unplace) operators for which
+   * König Cloud is mathematically the *only* valid node: once any
+   * sub-query dependency of an operator sits at the cloud (node 0, the
+   * tree's root), no other node can ever host that operator — node 0 is
+   * nobody's descendant but its own (see computeDescendants below), so
+   * placementIssue() can only ever pass at node 0 itself for that
+   * dependency. Rather than making the player click the one node that was
+   * already the only option, place it for them and record why (rendered
+   * in the tray). Runs after every placement change and loops to catch
+   * cascades — placing (or picking up) one operator at the cloud can force
+   * (or unforce) the next one too.
+   */
+  private reconcileForcedCloudPlacements(): void {
+    const sc = this.scenario;
+    if (!sc) return;
+    let changed = true;
+    while (changed) {
+      changed = false;
+      // undo anything auto-placed that no longer needs to be (its forcing
+      // dependency was picked up or moved elsewhere)
+      for (const name of Object.keys(this.autoPlacedReason)) {
+        if (!(name in this.placement)) {
+          delete this.autoPlacedReason[name];
+        } else if (this.placementIssue(name, 0)) {
+          delete this.placement[name];
+          delete this.autoPlacedReason[name];
+          changed = true;
+        }
+      }
+      // place anything newly forced
+      for (const name of this.subqueries) {
+        if (name in this.placement) continue;
+        const proj = sc.projections.find((p) => p.name === name);
+        if (!proj) continue;
+        const forcingDep = proj.deps.find(
+          (dep) => !sc.event_map.producers[dep] && this.placement[dep] === 0
+        );
+        if (forcingDep) {
+          this.placement[name] = 0;
+          this.autoPlacedReason[name] =
+            `Placed at König Cloud automatically — its input ${forcingDep} is already there, and no other node can reach it.`;
+          changed = true;
+        }
+      }
+    }
+  }
+
   pickUp(name: string): void {
     delete this.placement[name];
+    delete this.autoPlacedReason[name];
     this.activeSubquery = name;
     this.placementError = null;
     this.reveal = false;
+    this.reconcileForcedCloudPlacements();
     this.rescore();
   }
 
   clear(): void {
     this.placement = {};
     this.pushChoice = {};
+    this.autoPlacedReason = {};
     this.activeSubquery = this.subqueries[0] ?? null;
     this.reveal = false;
     this.clientScore = null;
