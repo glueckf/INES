@@ -106,7 +106,7 @@ body {
 /* ---------- stage layout ---------- */
 .stage {
   flex: 1; min-height: 0;
-  display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 352px);
+  display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, min(640px, 32vw));
   gap: 12px; padding: 10px 12px;
 }
 .reef-wrap {

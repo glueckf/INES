@@ -169,15 +169,25 @@ in the demo now. Two concrete asks:
     at any width). Also enlarged the `.tcard`/`.qpill` (topology + query
     selector) padding and font sizes, per direct request that they read
     too small/cramped.
-    **Follow-up, not done**: on a large screen the reef card now looks
-    right, but the *panel* (topology/query selector, tray, scorecard —
-    `.panel`, capped at `minmax(280px, 352px)` in `.stage`'s grid-template-
-    columns) doesn't grow to use the freed-up width — it stays pinned at
-    its 352px cap regardless of how wide the reef card gets. Needs a look
-    at whether the panel's max-width should scale with viewport width (or
-    just be raised), and whether its *children* (tray rows, scorecard
-    leaderboard) actually benefit from more width or would just get
-    awkwardly sparse — not obvious without trying it.
+    **Follow-up — DONE (2026-09-10)**: the panel's fixed 352px cap is now
+    `minmax(280px, min(640px, 32vw))` — scales with viewport (32vw) between
+    a 280px floor and a 640px ceiling, instead of a single fixed value.
+    (First landed at a 480px/30vw cap; the user's own screen — a wide
+    external monitor — still showed the panel visibly narrow relative to
+    the reef, so raised to 640px/32vw the same session.) Checked whether
+    the panel's children actually benefit from more width or would just
+    look sparse: every child already uses flexible sizing (`flex: 1`,
+    `minmax(0, 1fr)` — `.lb-row`'s grid, `.tray-row`, tiles, the alpha
+    slider), so widening the container just gives the leaderboard bars and
+    text more room rather than leaving awkward gaps — confirmed by placing
+    a full scenario and scanning for `scrollWidth > clientWidth` overflow
+    at 2560px (none found). Verified panel width resolves to 640px (capped)
+    at 2560px viewport and ~614px at 1920px (32vw, just shy of the cap —
+    reasonable, since 1920px is not the "wide external monitor" case this
+    was raised for), and still respects the 280px floor on small windows.
+    The narrow-screen
+    override (`@media max-width: 720px`) was left untouched — a different,
+    mobile-usability concern, not today's ask.
 
 ## Push-pull feature (2026-09-04 → 2026-09-08)
 
