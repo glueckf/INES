@@ -288,7 +288,8 @@ export function renderScorecard(state: AppState): string {
     alphaSlider +
     `<div class="leaderboard">${board}</div>` +
     (state.reveal
-      ? `<div class="plan-legend"><span class="plan-swatch push"></span>push` +
+      ? `<div class="plan-legend"><span class="plan-legend-hint">edge color = event type ·</span>` +
+        `<span class="plan-swatch push"></span>push` +
         `<span class="plan-swatch pull"></span>pull</div>`
       : "") +
     `<div class="sc-actions">` +

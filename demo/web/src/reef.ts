@@ -4,7 +4,7 @@
 // re-render on each state change (12 nodes is cheap); clicks handled by delegation.
 
 import type { Scenario } from "./types";
-import { eventIconGroup } from "./icons";
+import { eventIconGroup, glyphFor } from "./icons";
 
 export interface SubMeta {
   idx: number;
@@ -199,8 +199,13 @@ export function renderReef(scenario: Scenario, layout: Layout, subMeta: Map<stri
       return path.reverse();
     };
 
-    // hop key -> roles that travel over it, across every dependency edge
-    const hopRoles = new Map<string, Set<"push" | "pull">>();
+    const depColor = (dep: string) => subMeta.get(dep)?.color ?? glyphFor(dep).color;
+
+    // hop key -> dep name -> role, across every dependency edge. Keyed by
+    // dep (not just role) so two different event types crossing the same
+    // physical link each keep their own identity/color instead of
+    // collapsing into one push/pull line.
+    const hopDeps = new Map<string, Map<string, "push" | "pull">>();
     for (const proj of scenario.projections) {
       const here = reveal[proj.name];
       if (!here) continue;
@@ -212,25 +217,43 @@ export function renderReef(scenario: Scenario, layout: Layout, subMeta: Map<stri
           if (!path) continue;
           for (let i = 0; i < path.length - 1; i++) {
             const key = `${Math.min(path[i], path[i + 1])}-${Math.max(path[i], path[i + 1])}`;
-            if (!hopRoles.has(key)) hopRoles.set(key, new Set());
-            hopRoles.get(key)!.add(role);
+            if (!hopDeps.has(key)) hopDeps.set(key, new Map());
+            hopDeps.get(key)!.set(dep, role);
           }
         }
       }
     }
 
-    // Draw push (solid) first, pull (dashed) on top -- where a hop carries
-    // both, the pull dashes' gaps let the push color underneath show
-    // through, reading as "mixed" without a third style.
-    let pushOverlay = "";
+    // A hop shared by several event types fans them out as parallel offset
+    // strokes (each keeping its own event-type color) rather than
+    // collapsing to one line, so which event is pushed/pulled stays legible
+    // even where paths converge (e.g. trunk hops near the cloud). Solid
+    // pushes are grouped after dashed pulls only so a push's opaque stroke
+    // isn't hidden under an adjacent pull's dash gaps at the fan's edges.
+    const FAN_GAP = 5;
     let pullOverlay = "";
-    for (const [key, roles] of hopRoles) {
+    let pushOverlay = "";
+    for (const [key, deps] of hopDeps) {
       const [u, v] = key.split("-").map(Number);
-      const d = edgePath(pos(u), pos(v));
-      if (roles.has("push")) pushOverlay += `<path class="plan-edge push" d="${d}"/>`;
-      if (roles.has("pull")) pullOverlay += `<path class="plan-edge pull" d="${d}"/>`;
+      const a = pos(u);
+      const b = pos(v);
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const perp = { x: -dy / len, y: dx / len };
+      const entries = [...deps.entries()];
+      entries.forEach(([dep, role], i) => {
+        const offset = (i - (entries.length - 1) / 2) * FAN_GAP;
+        const oa = { x: a.x + perp.x * offset, y: a.y + perp.y * offset };
+        const ob = { x: b.x + perp.x * offset, y: b.y + perp.y * offset };
+        const d = edgePath(oa, ob);
+        const color = depColor(dep);
+        const stroke = `<path class="plan-edge ${role}" d="${d}" style="stroke:${color}"/>`;
+        if (role === "pull") pullOverlay += stroke;
+        else pushOverlay += stroke;
+      });
     }
-    planEdges = pushOverlay + pullOverlay;
+    planEdges = pullOverlay + pushOverlay;
   }
 
   // --- nodes ---

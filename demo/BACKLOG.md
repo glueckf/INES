@@ -466,17 +466,46 @@ in the demo now. Two concrete asks:
     `push ▬ / pull ┄` legend next to the reveal button, shown only while
     revealed.
 
-    Verified end-to-end both times (not just typecheck): first pass drove
+    **Revised again — color now identifies the event type, not push/pull.**
+    Feedback: even with push/pull legible, it was still unclear *which*
+    event type was being pushed or pulled on a given edge — a real gap,
+    since a hop can carry several different event types at once (e.g. one
+    physical link both pulling `A` for one placement and pushing `B` for
+    another). Color now comes from the dependency's own identity — the same
+    per-letter glyph colors already used for event pods/chips
+    (`glyphFor(dep).color` from [icons.ts](web/src/icons.ts)) for
+    primitives, or the subquery's own chip color (`subMeta.get(dep).color`)
+    for a subquery dep — set inline per `<path>` rather than via a CSS
+    class, since it now varies per dependency instead of just per role.
+    Push/pull moved from color to line style alone (solid vs. dashed),
+    matching a small `edge color = event type · push / pull` legend. Where
+    several event types share one physical hop, each now fans out as its
+    own parallel offset stroke (computed via the true perpendicular to that
+    hop, ~5px apart) instead of collapsing into one line — confirmed this
+    actually happens in practice, not just in theory: the medium reef's
+    `n4↔n10` hop carries both `A` (pulled, into `SEQ(A,B)`) and `B` (pushed,
+    same placement) simultaneously, and now renders as two adjacent
+    differently-colored strokes rather than one merged line. Removed the
+    now-unused `--push`/`--pull` CSS tokens (color is no longer role-based).
+
+    Verified end-to-end all three times (not just typecheck): pass 1 drove
     the real UI for medium `seq_abcd`, all 3 operators placed, revealed —
     12 edges, 3 `pull` (A's 3 producers) / 9 `push`, matching the exported
-    `SEQ(A,B).edges = {A: pull, B: push}` exactly. After the rework, redrove
-    the same scenario and asserted in the live DOM that every rendered
-    `.plan-edge`'s endpoints exactly match an existing `.edge`'s endpoints
-    (0 mismatches) — i.e. confirmed the "no invented edges" fix actually
-    holds, not just that it typechecks. No console errors, `tsc --noEmit`
-    clean both times. Full scenario re-export re-ran the exporter's own
-    all-push cross-check (`ref_all_push` vs. the engine) with zero
-    mismatches across all 8 scenarios, so nothing else moved.
+    `SEQ(A,B).edges = {A: pull, B: push}` exactly. Pass 2 (existing-edges
+    rework) redrove the same scenario and asserted in the live DOM that
+    every rendered `.plan-edge`'s endpoints exactly match an existing
+    `.edge`'s endpoints (0 mismatches). Pass 3 (per-event color) redrove it
+    again and read the actual `stroke` inline style + `d` of every rendered
+    edge: 5 distinct colors present, one per non-colocated dependency (`A`,
+    `B`, `C`, `D`, and `SEQ(A,B)`'s own chip color) — the 6th dependency,
+    `SEQ(A,B,D)` feeding `SEQ(A,B,C,D)`, correctly produced *no* edge since
+    both are placed at the same node (König Cloud), confirming the
+    already-colocated skip still holds — and the shared `n4↔n10` hop showed
+    up as two separate offset strokes (`A` pull + `B` push) exactly as
+    intended. No console errors, `tsc --noEmit` clean all three times. Full
+    scenario re-export re-ran the exporter's own all-push cross-check
+    (`ref_all_push` vs. the engine) with zero mismatches across all 8
+    scenarios, so nothing else moved.
 14. **Alpha default + forced-cloud auto-placement — DONE.** Two small,
     unrelated asks from the same session:
     - Default `cost_weight` (the "alpha" slider) changed from 0.5 to 0.6
