@@ -80,6 +80,43 @@ does.
    same kind of hand-curated topology design that produced the 12-node reef,
    not a quick parameter tweak — worth a dedicated pass, not a side task.
 
+   **Investigated (2026-09-10), ruled out as the cause — but a real bug
+   found anyway.** Suspected the same "already-summed rate × producer
+   count" overcounting bug found 3x last week (item #11) might also be in
+   combigen's own decompose/don't-decompose decision, which would mean
+   large topology's "never worth decomposing" conclusion was itself an
+   artifact rather than a real property of random topologies. Found the
+   *exact* pattern (`rates[event] * len(nodes[event])`, where
+   `rates[event]` is already the summed total across every producer) in
+   **6 places**, not 3: `total_rate()`
+   ([projections.py:416](../src/simulator/projections.py:416)) plus two
+   near-duplicate `optimistic_total_rate`/`optimistic_total_rate_single`
+   functions in both
+   [projections.py](../src/simulator/projections.py) and
+   [combigen.py](../src/simulator/combigen.py) — and confirmed `total_rate()`
+   is exactly the function `new_is_partitioning()`
+   ([projections.py:253](../src/simulator/projections.py:253), the actual
+   accept/reject gate `get_best_chain_combis` calls per-candidate) uses on
+   the "cost of not partitioning" side of its decision inequality.
+   Tested directly rather than reasoning about it: patched all 6 occurrences
+   locally (removed the `* len(nodes[...])`), re-ran combigen on the exact
+   large/24-node/seq_abcd case that currently collapses to 1 operator —
+   confirmed via a trace print that the patched code path really did run
+   (16 calls) — and got the **same result**, still 1 operator, no
+   decomposition. Patch was local/uncommitted and has been fully reverted
+   (`git status` clean). So: this bug is real and independently confirmed,
+   but it is **not** why large topology never decomposes — `new_is_partitioning`'s
+   comparison also involves Steiner-tree edge counts and the network's
+   longest-path distance (`minimum_subgraph`/`fill_my_dist_matrice` in
+   [projections.py](../src/simulator/projections.py)), and those structural
+   terms are what's actually driving the "not worth it" outcome for random
+   topologies, independent of the rate bug. The bug is still worth fixing on
+   its own merits eventually — it affects every cost comparison combigen's
+   MS-placement/chain-combination search makes, on *every* topology
+   including the working medium one, potentially causing it to decompose at
+   a suboptimal point even where it does decompose — just flagging that as
+   a separate, lower-urgency item; it does not unblock this one.
+
 ## Gamification (later — once the above works)
 
 - Weave the "Hai-Alarm" fairy-tale framing into the actual UI copy (query
