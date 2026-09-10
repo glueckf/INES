@@ -15,6 +15,8 @@
   --warm: #d98324;
   --good: #1f9d76;
   --bad: #cf5049;
+  --push: var(--warm);
+  --pull: #0f9b8e;
 
   --node-fill: #eef1f5;
   --node-stroke: #c3ccd6;
@@ -54,6 +56,8 @@
     --warm: #e2a04e;
     --good: #38c79a;
     --bad: #e2726b;
+    --push: var(--warm);
+    --pull: #2dd4bf;
 
     --node-fill: #1d2530;
     --node-stroke: #3a4757;
@@ -153,18 +157,16 @@ body {
 .node:focus-visible .node-dot { stroke: var(--accent); stroke-width: 3; }
 .ghost { fill: none; stroke: var(--warm); stroke-width: 2; stroke-dasharray: 3 4; }
 
-/* Kraken plan overlay: dependency edges colored by push/pull, mirroring the
-   push/pull chip colors (.pp-chip.push/.pull in the panel). */
-.plan-edge { fill: none; stroke-width: 2.4; pointer-events: none; }
-.plan-edge.push { stroke: var(--accent); opacity: 0.9; }
-.plan-edge.pull { stroke: var(--ink-soft); opacity: 0.6; stroke-dasharray: 5 4; }
-.plan-edge-lbl {
-  text-anchor: middle; font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.04em; pointer-events: none;
-  paint-order: stroke fill; stroke: var(--scene-text-halo); stroke-width: 3px; stroke-linejoin: round;
-}
-.plan-edge-lbl.push { fill: var(--accent); }
-.plan-edge-lbl.pull { fill: var(--ink-soft); }
+/* Kraken plan overlay: highlights the *existing* topology edges a dependency
+   actually travels over, colored by push/pull -- push (warm orange) reuses
+   the ghost ring's own hue since both mark "this is Kraken's choice"; pull
+   (teal) is a fitting, clearly distinct companion, chosen apart from
+   --sea-* so it doesn't blend into the reef backdrop. Where a hop carries
+   both, the dashed pull stroke's gaps let the solid push color underneath
+   show through. */
+.plan-edge { fill: none; stroke-width: 3.2; pointer-events: none; }
+.plan-edge.push { stroke: var(--push); opacity: 0.95; }
+.plan-edge.pull { stroke: var(--pull); opacity: 0.95; stroke-dasharray: 7 5; }
 
 .chip { cursor: pointer; }
 .chip rect { stroke: color-mix(in srgb, #000 12%, transparent); stroke-width: 0.75; }
@@ -312,6 +314,15 @@ body {
 .lb-row.kraken .lb-fill { background: var(--accent); }
 .lb-score { font-size: 14.5px; font-weight: 700; font-variant: tabular-nums; text-align: right; }
 .lb-detail { grid-column: 2 / span 3; font-size: 12.5px; color: var(--ink-soft); font-variant: tabular-nums; }
+
+.plan-legend {
+  display: flex; align-items: center; gap: 4px; margin-top: 8px;
+  font-size: 12px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.plan-swatch { display: inline-block; width: 14px; height: 3.2px; border-radius: 2px; margin-left: 6px; }
+.plan-swatch:first-child { margin-left: 0; }
+.plan-swatch.push { background: var(--push); }
+.plan-swatch.pull { background: repeating-linear-gradient(90deg, var(--pull) 0 4px, transparent 4px 6px); }
 
 .sc-actions { display: flex; gap: 8px; margin-top: 10px; }
 .btn { flex: 1; border: 1px solid var(--accent); border-radius: 9px; padding: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; background: var(--accent); color: #fff; }

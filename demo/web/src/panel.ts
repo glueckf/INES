@@ -287,6 +287,10 @@ export function renderScorecard(state: AppState): string {
     `<div class="lb-title">Leaderboard <span class="lb-hint">lower is better — cost & latency, balanced</span></div>` +
     alphaSlider +
     `<div class="leaderboard">${board}</div>` +
+    (state.reveal
+      ? `<div class="plan-legend"><span class="plan-swatch push"></span>push` +
+        `<span class="plan-swatch pull"></span>pull</div>`
+      : "") +
     `<div class="sc-actions">` +
     `<button class="btn ghost" data-action="reveal">${state.reveal ? "Hide" : "Reveal"} Kraken's plan</button>` +
     `<button class="btn" data-action="clear">Try again</button>` +

@@ -163,31 +163,74 @@ export function renderReef(scenario: Scenario, layout: Layout, subMeta: Map<stri
     }
   }
 
-  // --- Kraken plan overlay: push/pull edges between each subquery's
-  // dependencies and where Kraken placed it. A primitive dep can have
-  // several producer nodes (event_map.producers); a subquery dep resolves
-  // to wherever *its own* reveal entry placed it.
+  // --- Kraken plan overlay: highlight *existing* topology edges push/pull,
+  // rather than drawing new point-to-point lines that don't correspond to
+  // any real link. A dependency's data travels along the actual tree path
+  // (possibly several hops) between its source and where Kraken placed the
+  // consumer, so each hop on that path gets colored, not just the endpoints.
   let planEdges = "";
   if (view.reveal) {
     const reveal = view.reveal;
+    const adjacency = new Map<number, number[]>();
+    const link = (u: number, v: number) => {
+      if (!adjacency.has(u)) adjacency.set(u, []);
+      adjacency.get(u)!.push(v);
+    };
+    for (const n of nodes) for (const p of n.parents) { link(n.id, p); link(p, n.id); }
+
+    const pathBetween = (start: number, goal: number): number[] | null => {
+      if (start === goal) return [start];
+      const prev = new Map<number, number>();
+      const queue = [start];
+      const seen = new Set([start]);
+      for (let i = 0; i < queue.length; i++) {
+        const u = queue[i];
+        if (u === goal) break;
+        for (const v of adjacency.get(u) ?? []) {
+          if (seen.has(v)) continue;
+          seen.add(v);
+          prev.set(v, u);
+          queue.push(v);
+        }
+      }
+      if (!seen.has(goal)) return null;
+      const path = [goal];
+      while (path[path.length - 1] !== start) path.push(prev.get(path[path.length - 1])!);
+      return path.reverse();
+    };
+
+    // hop key -> roles that travel over it, across every dependency edge
+    const hopRoles = new Map<string, Set<"push" | "pull">>();
     for (const proj of scenario.projections) {
       const here = reveal[proj.name];
       if (!here) continue;
-      const b = pos(here.node);
       for (const dep of proj.deps) {
         const role = here.edges?.[dep] ?? "push";
         const sources = reveal[dep] ? [reveal[dep].node] : scenario.event_map.producers[dep] ?? [];
         for (const srcId of sources) {
-          if (srcId === here.node) continue;
-          const a = pos(srcId);
-          const mx = (a.x + b.x) / 2;
-          const my = (a.y + b.y) / 2;
-          planEdges +=
-            `<path class="plan-edge ${role}" d="${edgePath(a, b)}"/>` +
-            `<text class="plan-edge-lbl ${role}" x="${mx}" y="${my}">${role}</text>`;
+          const path = pathBetween(srcId, here.node);
+          if (!path) continue;
+          for (let i = 0; i < path.length - 1; i++) {
+            const key = `${Math.min(path[i], path[i + 1])}-${Math.max(path[i], path[i + 1])}`;
+            if (!hopRoles.has(key)) hopRoles.set(key, new Set());
+            hopRoles.get(key)!.add(role);
+          }
         }
       }
     }
+
+    // Draw push (solid) first, pull (dashed) on top -- where a hop carries
+    // both, the pull dashes' gaps let the push color underneath show
+    // through, reading as "mixed" without a third style.
+    let pushOverlay = "";
+    let pullOverlay = "";
+    for (const [key, roles] of hopRoles) {
+      const [u, v] = key.split("-").map(Number);
+      const d = edgePath(pos(u), pos(v));
+      if (roles.has("push")) pushOverlay += `<path class="plan-edge push" d="${d}"/>`;
+      if (roles.has("pull")) pullOverlay += `<path class="plan-edge pull" d="${d}"/>`;
+    }
+    planEdges = pushOverlay + pullOverlay;
   }
 
   // --- nodes ---

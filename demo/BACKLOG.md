@@ -438,24 +438,45 @@ in the demo now. Two concrete asks:
     of that placement's `acquisition_steps`, threaded through
     `per_placement` (`types.ts`). `main.ts` passes
     `strategies.kraken.per_placement` as the reveal payload (was just
-    `.placement`, bare node ids). `reef.ts` draws one bezier edge per
-    dependency — resolving a subquery dep to wherever *its own* reveal
-    entry placed it, a primitive dep to every node in
-    `event_map.producers[dep]` (can be several, e.g. `A` had 3 producers
-    on the medium reef) — styled `.plan-edge.push`/`.pull` (solid accent
-    blue / dashed muted, mirroring `.pp-chip.push`/`.pull`) with a
-    `PUSH`/`pull`-style text label at the midpoint.
+    `.placement`, bare node ids).
 
-    Verified end-to-end (not just typecheck): drove the real UI for medium
-    `seq_abcd`, placed all 3 operators, revealed the plan, and inspected
-    the rendered SVG directly — 12 plan-edges total, 3 `pull` (A's 3
-    producer nodes → the node holding `SEQ(A,B)`) and 9 `push`, matching
-    the exported JSON exactly
-    (`SEQ(A,B).edges = {A: pull, B: push}`, both downstream placements
-    `all_push`). No console errors, `tsc --noEmit` clean. Full scenario
-    re-export re-ran the exporter's own all-push cross-check
-    (`ref_all_push` vs. the engine) with zero mismatches across all 8
-    scenarios, so nothing else moved.
+    **Revised after first-pass feedback.** The first version drew a new
+    bezier straight from each dependency's source node to the consumer's
+    node — a line that often didn't correspond to any real link in the
+    topology (e.g. skipping over intermediate fog towers). Feedback: don't
+    invent edges, highlight the *existing* ones; and the accent-blue/muted
+    grey pairing didn't read as clearly push-vs-pull as it should.
+    `reef.ts` now builds an adjacency graph from the same
+    `node.parents`/`children` the base topology edges are drawn from, BFS's
+    the real hop-by-hop path from each dependency's source to the
+    consumer's node (a primitive dep can have several producers —
+    `event_map.producers[dep]` — each gets its own path; a subquery dep
+    resolves to wherever *its own* reveal entry placed it), and accumulates
+    push/pull roles per physical hop. Overlays are drawn only on `d` strings
+    that are exact matches (verified) of the base `.edge` paths — solid push
+    first, dashed pull on top, so a hop carrying both reads as push showing
+    through the pull dashes' gaps rather than needing a third "mixed" style.
+    Colors moved off `--accent`/`--ink-soft` to two new dedicated tokens:
+    `--push` (aliases `--warm`, the same orange already used for the ghost
+    ring — both mark "this is Kraken's own choice") and `--pull` (a fresh
+    teal, `#0f9b8e`/`#2dd4bf` light/dark, picked distinct from the `--sea-*`
+    backdrop colors so it doesn't blend into the reef). Per-edge text labels
+    were dropped (they'd stack illegibly on shared trunk hops near the
+    cloud, where most paths converge) in favor of one small
+    `push ▬ / pull ┄` legend next to the reveal button, shown only while
+    revealed.
+
+    Verified end-to-end both times (not just typecheck): first pass drove
+    the real UI for medium `seq_abcd`, all 3 operators placed, revealed —
+    12 edges, 3 `pull` (A's 3 producers) / 9 `push`, matching the exported
+    `SEQ(A,B).edges = {A: pull, B: push}` exactly. After the rework, redrove
+    the same scenario and asserted in the live DOM that every rendered
+    `.plan-edge`'s endpoints exactly match an existing `.edge`'s endpoints
+    (0 mismatches) — i.e. confirmed the "no invented edges" fix actually
+    holds, not just that it typechecks. No console errors, `tsc --noEmit`
+    clean both times. Full scenario re-export re-ran the exporter's own
+    all-push cross-check (`ref_all_push` vs. the engine) with zero
+    mismatches across all 8 scenarios, so nothing else moved.
 14. **Alpha default + forced-cloud auto-placement — DONE.** Two small,
     unrelated asks from the same session:
     - Default `cost_weight` (the "alpha" slider) changed from 0.5 to 0.6
