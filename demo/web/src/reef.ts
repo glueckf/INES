@@ -13,11 +13,16 @@ export interface SubMeta {
   isRoot: boolean;
 }
 
+export interface RevealEntry {
+  node: number;
+  edges?: Record<string, "push" | "pull">; // dep name -> how it's acquired
+}
+
 export interface ReefView {
   placement: Record<string, number>;
   activeSubquery: string | null;
   sourceNodes: Set<number>; // leaves/deps feeding the active subquery
-  reveal: Record<string, number> | null; // Kraken plan overlay, or null
+  reveal: Record<string, RevealEntry> | null; // Kraken plan overlay, or null
 }
 
 const VB_W = 1000;
@@ -158,6 +163,33 @@ export function renderReef(scenario: Scenario, layout: Layout, subMeta: Map<stri
     }
   }
 
+  // --- Kraken plan overlay: push/pull edges between each subquery's
+  // dependencies and where Kraken placed it. A primitive dep can have
+  // several producer nodes (event_map.producers); a subquery dep resolves
+  // to wherever *its own* reveal entry placed it.
+  let planEdges = "";
+  if (view.reveal) {
+    const reveal = view.reveal;
+    for (const proj of scenario.projections) {
+      const here = reveal[proj.name];
+      if (!here) continue;
+      const b = pos(here.node);
+      for (const dep of proj.deps) {
+        const role = here.edges?.[dep] ?? "push";
+        const sources = reveal[dep] ? [reveal[dep].node] : scenario.event_map.producers[dep] ?? [];
+        for (const srcId of sources) {
+          if (srcId === here.node) continue;
+          const a = pos(srcId);
+          const mx = (a.x + b.x) / 2;
+          const my = (a.y + b.y) / 2;
+          planEdges +=
+            `<path class="plan-edge ${role}" d="${edgePath(a, b)}"/>` +
+            `<text class="plan-edge-lbl ${role}" x="${mx}" y="${my}">${role}</text>`;
+        }
+      }
+    }
+  }
+
   // --- nodes ---
   let g = "";
   for (const n of nodes) {
@@ -224,7 +256,7 @@ export function renderReef(scenario: Scenario, layout: Layout, subMeta: Map<stri
     // reveal overlay (Kraken plan): draw a ghost ring where kraken places each sub
     let ghost = "";
     if (view.reveal) {
-      const here = Object.entries(view.reveal).filter(([, nn]) => nn === n.id);
+      const here = Object.values(view.reveal).filter((entry) => entry.node === n.id);
       if (here.length) {
         ghost = `<circle class="ghost" cx="${x}" cy="${y}" r="${r + 8}"/>`;
       }
@@ -244,6 +276,7 @@ export function renderReef(scenario: Scenario, layout: Layout, subMeta: Map<stri
     `<svg viewBox="0 0 ${VB_W} ${VB_H}" class="reef-svg" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Fog-cloud topology; tap a node to place the selected operator">` +
     background() +
     `<g class="edges">${edges}</g>` +
+    `<g class="plan-edges">${planEdges}</g>` +
     `<g class="nodes">${g}</g>` +
     `</svg>`
   );

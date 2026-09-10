@@ -19,7 +19,7 @@ function reefView(): ReefView {
     placement: state.placement,
     activeSubquery: state.activeSubquery,
     sourceNodes: state.activeSourceNodes,
-    reveal: state.reveal && state.scenario ? state.scenario.strategies.kraken.placement : null,
+    reveal: state.reveal && state.scenario ? state.scenario.strategies.kraken.per_placement ?? null : null,
   };
 }
 

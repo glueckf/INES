@@ -596,28 +596,45 @@
      "strategy": "push_pull",
      "cost": 20.031100000000002,
      "lt": 3.0,
-     "lp": 0.04310807884154461
+     "lp": 0.04310807884154461,
+     "edges": {
+      "B": "push",
+      "A": "pull"
+     }
     },
     "SEQ(A, B, D)": {
      "node": 0,
      "strategy": "all_push",
      "cost": 1859.2488,
      "lt": 3.0,
-     "lp": 33.81337491859964
+     "lp": 33.81337491859964,
+     "edges": {
+      "SEQ(A, B)": "push",
+      "D": "push"
+     }
     },
     "SEQ(A, B, E)": {
      "node": 0,
      "strategy": "all_push",
      "cost": 4832.2488,
      "lt": 3.0,
-     "lp": 146.3419443791887
+     "lp": 146.3419443791887,
+     "edges": {
+      "SEQ(A, B)": "push",
+      "E": "push"
+     }
     },
     "SEQ(A, B, C, D, E)": {
      "node": 0,
      "strategy": "all_push",
      "cost": 405.0,
      "lt": 3.0,
-     "lp": 189.8044835190917
+     "lp": 189.8044835190917,
+     "edges": {
+      "C": "push",
+      "SEQ(A, B, D)": "push",
+      "SEQ(A, B, E)": "push"
+     }
     }
    }
   }

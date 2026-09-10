@@ -54,7 +54,14 @@ export interface Strategy {
   processing_latency: number;
   per_placement?: Record<
     string,
-    { node: number; strategy: string; cost: number; lt: number; lp: number }
+    {
+      node: number;
+      strategy: string;
+      cost: number;
+      lt: number;
+      lp: number;
+      edges?: Record<string, "push" | "pull">; // dep name -> how it's acquired
+    }
   >;
 }
 

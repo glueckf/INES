@@ -409,22 +409,53 @@ in the demo now. Two concrete asks:
     (which, for large's single-operator queries — see item #5 — happens to
     equal the old buggy all_push number by coincidence, not by shared code
     path), so nothing shifts there beyond All-Push's own row.
-12. **Kraken-plan reveal, improved toward push/pull edges.** Currently
-    `toggleReveal()`/`view.reveal` in [reef.ts](web/src/reef.ts) only draws
-    a ghost ring (`class="ghost"`) around whichever node Kraken placed each
-    subquery on — it shows *where*, not *how it communicates*. The ask
-    (as given) is to extend this toward showing push vs. pull on the
-    edges themselves — e.g. color or dash-style the edge between a
-    dependency and its consumer according to Kraken's own push/pull
-    strategy for that edge, mirroring the push/pull chip UI's push/pull
-    coloring. Not scoped: needs (a) the reveal payload to actually carry
-    per-edge push/pull info (right now `view.reveal` is just
-    `Record<string, number>` — subquery → node, no strategy attached; the
-    backend's `per_placement[name].strategy` from `score_one.py` has this
-    but it isn't currently threaded into the reveal path at all), and (b)
-    a design pass on how that reads visually next to the existing
-    push/pull chip colors without the reef getting busier than the
-    legibility work (item 6) just fixed.
+12. **Kraken-plan reveal, improved toward push/pull edges — DONE.** Was:
+    `toggleReveal()`/`view.reveal` in [reef.ts](web/src/reef.ts) only drew
+    a ghost ring around whichever node Kraken placed each subquery on — it
+    showed *where*, not *how it communicates*.
+
+    The per-subquery `strategy` field (`"all_push"`/`"push_pull"`) already
+    exported wasn't enough — it doesn't say *which* dependency was pulled
+    when a placement is mixed. That detail lives one level deeper, in
+    `PlacementInfo.acquisition_steps` (`src/kraken/data/state.py`), which
+    `export_scenario.py` discarded before. Traced the actual semantics
+    empirically (a written-out reasoning trap: the field named
+    `pull_request.events` is *not* the dep being pulled — it's the
+    already-received deps used as a semi-join filter; the dep actually
+    being acquired in a step is `step.events_to_pull`, and whether that
+    acquisition was push or pull is `step.is_push_based`). Verified on a
+    real run before writing any frontend code: for `SEQ(A,B)` (medium
+    topology, strategy `push_pull`), step 0 acquires B with no pull
+    request (pushed), step 1 acquires A with
+    `pull_request.events=['B']` (A pulled, using already-received B as a
+    filter) — confirmed by cross-reading
+    `determine_costs_for_pull_request`'s own docstring in
+    [push_pull_plan_generator.py](../src/prepp/push_pull_plan_generator.py):
+    `eventtypes_in_pull_request` empty ⇒ push step.
+
+    `export_scenario.py` now builds an `edges: Record<dep, "push"|"pull">`
+    per Kraken placement from `events_to_pull`/`is_push_based` across all
+    of that placement's `acquisition_steps`, threaded through
+    `per_placement` (`types.ts`). `main.ts` passes
+    `strategies.kraken.per_placement` as the reveal payload (was just
+    `.placement`, bare node ids). `reef.ts` draws one bezier edge per
+    dependency — resolving a subquery dep to wherever *its own* reveal
+    entry placed it, a primitive dep to every node in
+    `event_map.producers[dep]` (can be several, e.g. `A` had 3 producers
+    on the medium reef) — styled `.plan-edge.push`/`.pull` (solid accent
+    blue / dashed muted, mirroring `.pp-chip.push`/`.pull`) with a
+    `PUSH`/`pull`-style text label at the midpoint.
+
+    Verified end-to-end (not just typecheck): drove the real UI for medium
+    `seq_abcd`, placed all 3 operators, revealed the plan, and inspected
+    the rendered SVG directly — 12 plan-edges total, 3 `pull` (A's 3
+    producer nodes → the node holding `SEQ(A,B)`) and 9 `push`, matching
+    the exported JSON exactly
+    (`SEQ(A,B).edges = {A: pull, B: push}`, both downstream placements
+    `all_push`). No console errors, `tsc --noEmit` clean. Full scenario
+    re-export re-ran the exporter's own all-push cross-check
+    (`ref_all_push` vs. the engine) with zero mismatches across all 8
+    scenarios, so nothing else moved.
 14. **Alpha default + forced-cloud auto-placement — DONE.** Two small,
     unrelated asks from the same session:
     - Default `cost_weight` (the "alpha" slider) changed from 0.5 to 0.6

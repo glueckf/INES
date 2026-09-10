@@ -153,6 +153,19 @@ body {
 .node:focus-visible .node-dot { stroke: var(--accent); stroke-width: 3; }
 .ghost { fill: none; stroke: var(--warm); stroke-width: 2; stroke-dasharray: 3 4; }
 
+/* Kraken plan overlay: dependency edges colored by push/pull, mirroring the
+   push/pull chip colors (.pp-chip.push/.pull in the panel). */
+.plan-edge { fill: none; stroke-width: 2.4; pointer-events: none; }
+.plan-edge.push { stroke: var(--accent); opacity: 0.9; }
+.plan-edge.pull { stroke: var(--ink-soft); opacity: 0.6; stroke-dasharray: 5 4; }
+.plan-edge-lbl {
+  text-anchor: middle; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; pointer-events: none;
+  paint-order: stroke fill; stroke: var(--scene-text-halo); stroke-width: 3px; stroke-linejoin: round;
+}
+.plan-edge-lbl.push { fill: var(--accent); }
+.plan-edge-lbl.pull { fill: var(--ink-soft); }
+
 .chip { cursor: pointer; }
 .chip rect { stroke: color-mix(in srgb, #000 12%, transparent); stroke-width: 0.75; }
 .chip-tx { fill: var(--chip-tx); font-size: 12.5px; font-weight: 700; text-anchor: middle; pointer-events: none; }

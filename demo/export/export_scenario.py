@@ -179,11 +179,28 @@ def build_scenario(spec, topology):
     kraken_per = {}
     kraken_comm = set()
     for pi in g["solution"].placements.values():
+        # Per-dependency push/pull: each AcquisitionStep names which of this
+        # placement's deps it acquires (`events_to_pull`) and whether that
+        # happened via push or pull (`is_push_based`, false once a
+        # PullRequest with events is attached). Verified empirically against
+        # a real run: for SEQ(A,B) (strategy="push_pull"), step 0 acquires B
+        # with pull_request=None (pushed), step 1 acquires A with
+        # pull_request.events=['B'] (A is pulled, using already-received B as
+        # a semi-join filter) -- confirming the dep actually being acquired
+        # in a step is `events_to_pull`, not `pull_request.events` (that
+        # names the filter events sent along with the request, not the
+        # dep being fetched).
+        edges = {}
+        for step in pi.acquisition_steps.steps:
+            label = "push" if step.is_push_based else "pull"
+            for dep in step.events_to_pull:
+                edges[str(dep)] = label
         kraken_per[str(pi.projection)] = {
             "node": int(pi.node), "strategy": pi.strategy,
             "cost": float(pi.individual_cost),
             "lt": float(pi.individual_transmission_latency),
             "lp": float(pi.individual_processing_latency),
+            "edges": edges,
         }
         kraken_comm.add(pi.strategy)
 

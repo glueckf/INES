@@ -1287,7 +1287,15 @@
      "strategy": "all_push",
      "cost": 106880.0,
      "lt": 4.0,
-     "lp": 7645564.52276913
+     "lp": 7645564.52276913,
+     "edges": {
+      "A": "push",
+      "B": "push",
+      "C": "push",
+      "D": "push",
+      "E": "push",
+      "F": "push"
+     }
     }
    }
   }
