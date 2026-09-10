@@ -110,12 +110,34 @@ does.
    longest-path distance (`minimum_subgraph`/`fill_my_dist_matrice` in
    [projections.py](../src/simulator/projections.py)), and those structural
    terms are what's actually driving the "not worth it" outcome for random
-   topologies, independent of the rate bug. The bug is still worth fixing on
-   its own merits eventually — it affects every cost comparison combigen's
-   MS-placement/chain-combination search makes, on *every* topology
-   including the working medium one, potentially causing it to decompose at
-   a suboptimal point even where it does decompose — just flagging that as
-   a separate, lower-urgency item; it does not unblock this one.
+   topologies, independent of the rate bug.
+
+   **Follow-up, same day — this is *not* INEv-scoped, and it's bigger than
+   "an edge case."** `self.h_mycombi` (the decomposition — which
+   sub-queries exist as operators at all) is computed **once** in
+   `Simulation.setup()`, shared by all five strategies including Kraken;
+   none of them recompute it. Re-ran the same patch-and-compare test on the
+   *medium* topology (the demo's actual working 12-node reef, not the
+   already-ruled-out large one) across all 4 story queries: the
+   decomposition changes on **3 of 4** — `seq_abc` collapses from 2
+   operators to 1, `seq_abcd`/`seq_abcde` get entirely different
+   intermediate sub-queries (e.g. `SEQ(A, B, D)` replaced by
+   `SEQ(B, D)` + `SEQ(A, B, C)`), `and_nested` keeps 5 operators but a
+   different set of them. Since Kraken runs on top of whatever `h_mycombi`
+   decided, fixing this bug would change Kraken's own placement choices and
+   numbers on the demo's primary topology — not just INEv's. Grepped
+   `src/kraken/` directly to confirm Kraken never calls any of the 6 buggy
+   functions itself (no hits) — it's a shared-upstream-dependency problem,
+   not a direct one.
+
+   Wrote this up as a full GitHub issue (title, root cause, all 6
+   locations, the empirical before/after tables for both topologies,
+   suggested fix) and handed it to the user as text to file themselves —
+   `gh` isn't installed in this environment and installing it / hunting for
+   credentials wasn't asked for. Scoped as engine work (moved to the
+   "Engine (research code, not demo)" section in spirit — this is a
+   correctness issue in the shared algorithm, not something the demo layer
+   can work around), not something to fix casually inside a demo session.
 
 ## Gamification (later — once the above works)
 
