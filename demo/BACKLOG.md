@@ -537,6 +537,22 @@ in the demo now. Two concrete asks:
       automatically with correct per-row reasons; picking the first one
       back up correctly un-places both cascaded ones too; placing at a
       *non*-cloud node correctly does **not** trigger anything.
+15. **"Try again" after revealing Kraken's plan should surface a new
+    topology — DONE.** Was: `clear()` (`data-action="clear"`) only reset
+    placement/push-choice/score for the *same* scenario — after revealing
+    the answer, "Try again" just replayed the identical puzzle you'd
+    already seen solved. `clear()` in [state.ts](web/src/state.ts) now
+    checks whether `this.reveal` was true before resetting; if so, it picks
+    a random topology other than the current one from the manifest and
+    calls the existing `selectTopology()` (which already keeps the same
+    query selected where it exists there, and does its own full reset via
+    `loadScenario()`). A plain "Try again" without having revealed is
+    untouched — same topology, same query, as before.
+
+    Verified live: drove the real UI for medium `seq_abcd`, confirmed (a) a
+    plain place-all → Try again keeps `Reef 12n` selected, and (b)
+    place-all → Reveal → Try again jumps to `Grand Reef 24n`. No console
+    errors, `tsc --noEmit` clean.
 
 ## Engine (research code, not demo) — flagged, not scoped
 

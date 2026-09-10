@@ -303,6 +303,14 @@ export class AppState {
   }
 
   clear(): void {
+    // If the plan was revealed, retrying the identical topology/query is a
+    // non-challenge -- jump to a different topology instead (same query
+    // where it exists there, via selectTopology) so "try again" is a fresh
+    // puzzle, not a replay of the one whose answer was just shown.
+    const jumpToOtherTopology = this.reveal && this.manifest
+      ? this.manifest.topologies.filter((t) => t.id !== this.topologyId)
+      : [];
+
     this.placement = {};
     this.pushChoice = {};
     this.autoPlacedReason = {};
@@ -312,6 +320,11 @@ export class AppState {
     this.official = null;
     this.scoring = false;
     this.emit();
+
+    if (jumpToOtherTopology.length) {
+      const next = jumpToOtherTopology[Math.floor(Math.random() * jumpToOtherTopology.length)];
+      void this.selectTopology(next.id);
+    }
   }
 
   /** Toggle whether `dep` (one of subqueryName's own `deps` — a primitive
