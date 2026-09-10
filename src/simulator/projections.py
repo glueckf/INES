@@ -46,7 +46,7 @@ def optimistic_total_rate(self, projection):  # USE FILTERED RATE FOR ESTIMATION
         # h_rates_data is already the summed rate across every producer of
         # this event type -- multiplying by the producer count again
         # overcounts it by that count (e.g. a 3-producer event type's true
-        # cost inflated 3x). See ISSUES.md for the full writeup.
+        # cost inflated 3x).
         return rates[projection.leafs()[0]]
 
 
@@ -70,7 +70,7 @@ def optimistic_total_rate_single(self, projection):  # USE FILTERED RATE FOR EST
     else:
         # return 40
         # h_rates_data is already the summed rate across every producer of
-        # this event type -- see optimistic_total_rate() above / ISSUES.md.
+        # this event type -- see optimistic_total_rate() above.
         return rates[projection.leafs()[0]]
 
 
@@ -302,7 +302,7 @@ def new_is_partitioning(self, element, combi, proj, projrates: dict):
     for i in [x for x in combi if not x == element]:
         if i in rates.keys():
             # h_rates_data is already the summed rate across every producer
-            # of this event type -- see ISSUES.md.
+            # of this event type -- see optimistic_total_rate() above.
             additional = rates[i]
             mysum += additional
         else:
@@ -425,8 +425,7 @@ def total_rate(self, projection, projrates: dict):
         # this event type -- multiplying by len(nodes[...]) overcounts it
         # by that producer count again. This is what new_is_partitioning()
         # uses on the "cost of not partitioning" side of its decompose
-        # decision -- see ISSUES.md for the full writeup and the
-        # empirical before/after verification on the demo's queries.
+        # decision.
         return rates[proj_str]
     else:
         outrate = projection.evaluate() * get_num_etbs(projection, IndexEventNodes)

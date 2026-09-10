@@ -56,7 +56,7 @@ def optimistic_total_rate(
                     ][0] * get_num_etbs(myproj, IndexEventNodes)  # TODO change
     else:
         # h_rates_data is already the summed rate across every producer of
-        # this event type -- see ISSUES.md / projections.py's sibling
+        # this event type -- see projections.py's sibling
         # optimistic_total_rate() for the full writeup.
         return rates[projection.leafs()[0]]
 
